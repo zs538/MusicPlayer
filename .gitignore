@@ -1,0 +1,31 @@
+# Build artifacts
+/build/
+/build-*/
+/cmake-build-*/
+/CMakeFiles/
+/CMakeCache.txt
+/Testing/
+/Makefile
+/*.user
+*.user
+*.pro.user
+*.qmlc
+*.jsc
+*.o
+*.obj
+*.so
+*.a
+*.dll
+*.dylib
+*.app
+*.exe
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Local
+project_plan.md
