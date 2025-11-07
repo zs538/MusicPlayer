@@ -32,14 +32,23 @@ ApplicationWindow {
 
     ColumnLayout {
         anchors.fill: parent
+        anchors.margins: 12
         spacing: 8
-        padding: 12
 
         RowLayout {
             spacing: 8
             Button { text: "Open"; onClicked: fileDialog.open() }
             Button { text: "Set Next"; onClicked: nextDialog.open() }
             Button { text: player.playing ? "Pause" : "Play"; onClicked: player.playing ? player.pause() : player.play() }
+            ComboBox {
+                id: outputBox
+                Layout.preferredWidth: 240
+                model: player.audioOutputs
+                onActivated: player.selectOutputByIndex(index)
+                Component.onCompleted: currentIndex = Math.max(0, player.audioOutputs.indexOf(player.currentOutput))
+                ToolTip.visible: hovered
+                ToolTip.text: `Output: ${player.currentOutput}`
+            }
             Slider {
                 id: pos
                 Layout.fillWidth: true
@@ -62,6 +71,8 @@ ApplicationWindow {
         Label {
             text: `Position: ${Math.round(player.position/1000)}s / ${Math.round(player.duration/1000)}s`
         }
+
+        // Diagnostics row removed after fix; ComboBox remains for device selection.
 
         Rectangle {
             color: "#202020"
