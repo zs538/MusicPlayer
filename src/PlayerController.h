@@ -9,6 +9,11 @@
 #include <QAudioDevice>
 #include <QStringList>
 #include <QVector>
+#include <QMediaMetaData>
+
+#include "TrackMetadata.h"
+
+class PlaylistModel;
 
 class PlayerController : public QObject {
     Q_OBJECT
@@ -18,6 +23,8 @@ class PlayerController : public QObject {
     Q_PROPERTY(float volume READ volume WRITE setVolume NOTIFY volumeChanged)
     Q_PROPERTY(QStringList audioOutputs READ audioOutputs NOTIFY audioOutputsChanged)
     Q_PROPERTY(QString currentOutput READ currentOutput NOTIFY audioOutputsChanged)
+    Q_PROPERTY(QUrl currentSource READ currentSource NOTIFY currentSourceChanged)
+    Q_PROPERTY(TrackMetadata* currentMetadata READ currentMetadata NOTIFY currentMetadataChanged)
 public:
     explicit PlayerController(QObject* parent = nullptr);
 
@@ -28,6 +35,8 @@ public:
     Q_INVOKABLE void setNextFile(const QUrl& url);
     Q_INVOKABLE void selectOutputByIndex(int index);
     Q_INVOKABLE void refreshAudioDevices();
+    Q_INVOKABLE QUrl currentSource() const { return m_current && m_current->player ? m_current->player->source() : QUrl(); }
+    Q_INVOKABLE TrackMetadata* currentMetadata() const { return m_currentMetadata; }
 
     bool playing() const;
     qint64 position() const;
@@ -45,6 +54,7 @@ signals:
     void volumeChanged();
     void currentSourceChanged();
     void audioOutputsChanged();
+    void currentMetadataChanged();
 
 private slots:
     void onPositionChanged();
@@ -52,6 +62,7 @@ private slots:
     void onMediaStatusChanged(QMediaPlayer::MediaStatus status);
     void onAudioOutputsChanged();
     void onPlayerErrorOccurred(QMediaPlayer::Error error, const QString &errorString);
+    void onMetaDataChanged();
 
 private:
     struct Deck {
@@ -67,9 +78,11 @@ private:
     bool m_gaplessArmed {false};
     QMediaDevices m_devices;
     QVector<QAudioDevice> m_outputDevices;
+    TrackMetadata* m_currentMetadata {nullptr};
 
     void setupDeck(Deck& deck);
     void switchToNext();
     void selectDefaultOutputDevice();
     void refreshOutputs();
+    void updateCurrentMetadataFromSource();
 };
