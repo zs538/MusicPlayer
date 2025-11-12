@@ -151,13 +151,20 @@ void PlayerController::onMediaStatusChanged(QMediaPlayer::MediaStatus status)
         return;
 
     if (status == QMediaPlayer::EndOfMedia) {
-        switchToNext();
+        // If no next track is armed, clear to empty state
+        if (!m_next->player || m_next->player->source().isEmpty()) {
+            clearCurrent();
+        } else {
+            switchToNext();
+        }
     }
 }
 
 void PlayerController::switchToNext()
 {
     if (!m_next->player || m_next->player->source().isEmpty()) {
+        // No next track available, transition to empty state
+        clearCurrent();
         return;
     }
     
@@ -172,6 +179,35 @@ void PlayerController::switchToNext()
     m_gaplessArmed = false;
     emit playingChanged();
     emit currentSourceChanged();
+}
+
+void PlayerController::clearCurrent()
+{
+    // Stop playback and clear sources for both decks to ensure an empty state
+    if (m_a.player) m_a.player->stop();
+    if (m_b.player) m_b.player->stop();
+    if (m_a.player) m_a.player->setSource(QUrl());
+    if (m_b.player) m_b.player->setSource(QUrl());
+    if (m_a.audio) m_a.player->setAudioOutput(m_a.audio);
+    if (m_b.audio) m_b.player->setAudioOutput(m_b.audio);
+
+    // Reset next deck bookkeeping
+    if (m_next) m_next->source = QUrl();
+
+    // Clear metadata object so QML shows "No track playing"
+    if (m_currentMetadata) {
+        m_currentMetadata->deleteLater();
+        m_currentMetadata = nullptr;
+        emit currentMetadataChanged();
+    }
+
+    m_gaplessArmed = false;
+
+    // Notify QML bindings to reset UI state
+    emit playingChanged();
+    emit currentSourceChanged();
+    emit positionChanged();
+    emit durationChanged();
 }
 
 void PlayerController::onAudioOutputsChanged()

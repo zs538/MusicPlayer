@@ -1,0 +1,36 @@
+qt.multimedia.ffmpeg: Using Qt multimedia with FFmpeg version n8.0 GPL version 3 or later
+parseSampleFormat: parse error "Object: size 144, type Spa:Pod:Object:Param:Format (262147), id Spa:Enum:ParamId:EnumFormat (3)" "  Prop: key Spa:Pod:Object:Param:Format:mediaType (1), flags 00000000" "    Id 1        (Spa:Enum:MediaType:audio)" "  Prop: key Spa:Pod:Object:Param:Format:mediaSubtype (2), flags 00000000" "    Id 3        (Spa:Enum:MediaSubtype:iec958)" "  Prop: key Spa:Pod:Object:Param:Format:Audio:iec958Codec (65542), flags 00000000" "    Choice: type Spa:Enum:Choice:Enum, flags 00000000 24 4" "      Id 1        (Spa:Enum:AudioIEC958Codec:PCM)" "      Id 1        (Spa:Enum:AudioIEC958Codec:PCM)" "  Prop: key Spa:Pod:Object:Param:Format:Audio:rate (65539), flags 00000000" "    Choice: type Spa:Enum:Choice:Range, flags 00000000 28 4" "      Int 48000" "      Int 32000" "      Int 48000"
+qrc:/qt/qml/MusicPlayer/qml/Main.qml:434:29: QML GridView: Detected anchors on an item that is managed by a layout. This is undefined behavior; use Layout.alignment instead.
+qrc:/qt/qml/MusicPlayer/qml/Main.qml:508:29: QML GridView: Detected anchors on an item that is managed by a layout. This is undefined behavior; use Layout.alignment instead.
+qrc:/qt/qml/MusicPlayer/qml/Main.qml:118:9: QML RowLayout: Qt Quick Layouts: Detected recursive rearrange. Aborting after two iterations.
+qml: filesGrid clicked 04 Top Gun.mp3
+qml: filesGrid doubleClicked 04 Top Gun.mp3
+qml: filesGrid clicked 02 Gstar.opus
+TagLib: ID3v2.4 no longer supports the frame type TDAT.  It will be discarded from the tag.
+Input #0, mp3, from '/home/username/04 Top Gun.mp3':
+  Metadata:
+    album           : my last disaster
+    artist          : boobie gun
+    album_artist    : boobie gun
+    title           : Top Gun
+    track           : 4
+    date            : 2025-06-15
+  Duration: 00:01:45.03, start: 0.023021, bitrate: 320 kb/s
+Input #0, mp3, from '/home/username/04 Top Gun.mp3':
+  Metadata:
+    album           : my last disaster
+    artist          : boobie gun
+    album_artist    : boobie gun
+    title           : Top Gun
+    track           : 4
+    date            :   Stream #0:0: Audio: mp3 (mp3float), 48000 Hz, stereo, fltp, 320 kb/s, start 0.023021
+    Metadata:
+      encoder         : Lavc61.19
+2025-06-15
+  Duration: 00:01:45.03, start: 0.023021, bitrate: 320 kb/s
+  Stream #0:0: Audio: mp3 (mp3float), 48000 Hz, stereo, fltp, 320 kb/s, start 0.023021
+    Metadata:
+      encoder         : Lavc61.19
+[mp3float @ 0x5601278c4880] Could not update timestamps for skipped samples.
+[mp3float @ 0x560128004f00] Could not update timestamps for skipped samples.
+qml: filesGrid clicked t

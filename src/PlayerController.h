@@ -85,4 +85,5 @@ private:
     void selectDefaultOutputDevice();
     void refreshOutputs();
     void updateCurrentMetadataFromSource();
+    void clearCurrent();
 };

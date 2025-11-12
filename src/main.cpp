@@ -2,6 +2,8 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QtQml>
+#include <QQuickWindow>
+#include <QSGRendererInterface>
 
 #include "PlayerController.h"
 #include "PlaylistModel.h"
@@ -10,6 +12,10 @@
 int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
+    // Force software rendering backend to avoid driver/OpenGL issues
+    QQuickWindow::setGraphicsApi(QSGRendererInterface::Software);
+    qputenv("QSG_RHI_BACKEND", QByteArray("software"));
+    qputenv("QT_QUICK_BACKEND", QByteArray("software"));
     
     // Register TrackMetadata for QML
     qmlRegisterType<TrackMetadata>("MusicPlayer", 1, 0, "TrackMetadata");
