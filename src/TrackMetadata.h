@@ -41,8 +41,8 @@ public:
     QString coverArtUrl() const;
     
     // Collection-friendly methods
-    QString displayTitle() const { return m_title.isEmpty() ? "Unknown Title" : m_title; }
-    QString displayArtist() const { return m_artist.isEmpty() ? "Unknown Artist" : m_artist; }
+    QString displayTitle() const { return m_title; }
+    QString displayArtist() const { return m_artist; }
     QString displayAlbum() const { return m_album.isEmpty() ? "" : m_album; }
     QString displayGenre() const { return m_genre.isEmpty() ? "" : m_genre; }
     QString displayYear() const { return m_year.isEmpty() ? "" : m_year; }

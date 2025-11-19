@@ -23,9 +23,6 @@ void TrackMetadata::loadFromMediaMetaData(const QMediaMetaData& metaData)
     
     // Load title with multiple fallbacks
     m_title = metaData.stringValue(QMediaMetaData::Title);
-    if (m_title.isEmpty()) {
-        m_title = "Unknown Title";
-    }
     
     // Load artist with multiple fallbacks
     m_artist = metaData.stringValue(QMediaMetaData::Author);
@@ -34,9 +31,6 @@ void TrackMetadata::loadFromMediaMetaData(const QMediaMetaData& metaData)
     }
     if (m_artist.isEmpty()) {
         m_artist = metaData.stringValue(QMediaMetaData::Composer);
-    }
-    if (m_artist.isEmpty()) {
-        m_artist = "Unknown Artist";
     }
     
     // Load album

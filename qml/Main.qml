@@ -67,6 +67,13 @@ ApplicationWindow {
     }
 
     function nextFromQueue() {
+        // Stop if playlist is empty
+        if (playlist.count() === 0) {
+            player.stop()
+            currentIdx = -1
+            return
+        }
+        
         const idx = currentIdx
         if (idx === -1) {
             if (playlist.count() > 0) playIndex(0)
@@ -165,62 +172,714 @@ ApplicationWindow {
                         Layout.fillHeight: true
                         currentIndex: playlistTabBar.currentIndex
 
-                        // Queue view
-                        ListView {
-                            id: queueView
-                            clip: true
-                            model: playlist
-                            delegate: Rectangle {
-                                width: queueView.width
-                                height: 48
-                                color: ListView.isCurrentItem ? "#334155" : (index % 2 === 0 ? "#1f2937" : "#111827")
+                        // Queue view - Simple ListView with full-width rows
+                        Rectangle {
+                            color: "#1a1a1a"
+                            
+                            // Column headers
+                            Rectangle {
+                                id: header
+                                anchors.top: parent.top
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                height: 30
+                                color: "#252525"
+                                border.color: "#333"
+                                border.width: 1
+                                z: 10
                                 
-                                ColumnLayout {
+                                Row {
                                     anchors.fill: parent
-                                    anchors.leftMargin: 8
-                                    anchors.rightMargin: 8
-                                    spacing: 2
                                     
-                                    Text { 
-                                        Layout.fillWidth: true
-                                        color: "#e5e7eb"
-                                        text: title ? `${title} - ${artist || "Unknown Artist"}` : display
-                                        font.pixelSize: 13
-                                        font.bold: true
-                                        elide: Text.ElideRight
-                                    }
-                                    
-                                    Text {
-                                        Layout.fillWidth: true
-                                        color: "#9ca3af"
-                                        font.pixelSize: 11
-                                        elide: Text.ElideRight
-                                        text: {
-                                            const parts = []
-                                            if (album) parts.push(album)
-                                            if (year) parts.push(year)
-                                            if (genre) parts.push(genre)
-                                            return parts.join(" • ")
+                                    Rectangle {
+                                        width: parent.width * 0.08
+                                        height: 30
+                                        color: "#252525"
+                                        border.color: "#333"
+                                        border.width: 1
+                                        
+                                        Text {
+                                            anchors.fill: parent
+                                            anchors.leftMargin: 4
+                                            text: "#"
+                                            color: "#ccc"
+                                            font.pixelSize: 12
+                                            font.bold: true
+                                            horizontalAlignment: Qt.AlignRight
+                                            verticalAlignment: Text.AlignVCenter
                                         }
-                                        visible: album || year || genre
                                     }
                                     
-                                    Text {
-                                        color: "#6b7280"
-                                        font.pixelSize: 10
-                                        text: duration > 0 ? 
-                                              `${Math.floor(duration / 60000)}:${String(Math.floor((duration % 60000) / 1000)).padStart(2, '0')}` : 
-                                              ""
-                                        visible: duration > 0
+                                    Rectangle {
+                                        width: parent.width * 0.48
+                                        height: 30
+                                        color: "#252525"
+                                        border.color: "#333"
+                                        border.width: 1
+                                        
+                                        Text {
+                                            anchors.fill: parent
+                                            anchors.leftMargin: 4
+                                            text: "Title"
+                                            color: "#ccc"
+                                            font.pixelSize: 12
+                                            font.bold: true
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
                                     }
-                                }
-                                
-                                MouseArea { 
-                                    anchors.fill: parent
-                                    onClicked: queueView.currentIndex = index 
+                                    
+                                    Rectangle {
+                                        width: parent.width * 0.32
+                                        height: 30
+                                        color: "#252525"
+                                        border.color: "#333"
+                                        border.width: 1
+                                        
+                                        Text {
+                                            anchors.fill: parent
+                                            anchors.leftMargin: 4
+                                            text: "Artist"
+                                            color: "#ccc"
+                                            font.pixelSize: 12
+                                            font.bold: true
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+                                    }
+                                    
+                                    Rectangle {
+                                        width: parent.width * 0.12
+                                        height: 30
+                                        color: "#252525"
+                                        border.color: "#333"
+                                        border.width: 1
+                                        
+                                        Text {
+                                            anchors.fill: parent
+                                            anchors.leftMargin: 4
+                                            text: "Year"
+                                            color: "#ccc"
+                                            font.pixelSize: 12
+                                            font.bold: true
+                                            horizontalAlignment: Qt.AlignCenter
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+                                    }
                                 }
                             }
-                            ScrollBar.vertical: ScrollBar {}
+                            
+                            // Selection overlay - OUTSIDE ScrollView to avoid breaking layout
+                            Rectangle {
+                                id: selectionRect
+                                visible: false
+                                color: "#60a5fa"
+                                border.color: "#3b82f6"
+                                border.width: 2
+                                opacity: 0.3
+                                z: 1000
+                                
+                                function updateRect(startX, startY, endX, endY) {
+                                    x = Math.min(startX, endX)
+                                    y = Math.min(startY, endY) + header.height  // Account for header offset
+                                    width = Math.abs(endX - startX)
+                                    height = Math.abs(endY - startY)
+                                }
+                            }
+                            
+                            MouseArea {
+                                id: areaSelectionMouseArea
+                                anchors.top: header.bottom
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.bottom: parent.bottom
+                                acceptedButtons: Qt.LeftButton
+                                z: 999
+                                
+                                property bool selecting: false
+                                property real selectionStartX
+                                property real selectionStartY
+                                
+                                onPressed: function(mouse) {
+                                    // Map coordinates to ListView content space
+                                    const scrollViewCoords = mapToItem(scrollView, mouse.x, mouse.y)
+                                    const listViewCoords = scrollView.mapToItem(listView, scrollViewCoords.x, scrollViewCoords.y)
+                                    
+                                    // Check if clicking on a row (account for scroll offset)
+                                    const clickedItem = listView.itemAt(listViewCoords.x, listViewCoords.y)
+                                    if (clickedItem) {
+                                        // Let row handle the click
+                                        mouse.accepted = false
+                                        return
+                                    }
+                                    
+                                    // Start area selection on empty space
+                                    selecting = true
+                                    selectionStartX = mouse.x
+                                    selectionStartY = mouse.y
+                                    selectionRect.visible = true
+                                    selectionRect.updateRect(mouse.x, mouse.y, mouse.x, mouse.y)
+                                }
+                                
+                                onPositionChanged: function(mouse) {
+                                    if (selecting) {
+                                        selectionRect.updateRect(selectionStartX, selectionStartY, mouse.x, mouse.y)
+                                        
+                                        // Real-time selection during drag
+                                        const dragDistance = Math.sqrt(
+                                            Math.pow(mouse.x - selectionStartX, 2) + 
+                                            Math.pow(mouse.y - selectionStartY, 2)
+                                        )
+                                        
+                                        if (dragDistance > 5) {
+                                            // Map mouse coordinates to ListView for selection (avoid double offset)
+                                            const mouseTop = mapToItem(scrollView, selectionStartX, selectionStartY)
+                                            const mouseBottom = mapToItem(scrollView, mouse.x, mouse.y)
+                                            const listViewTop = scrollView.mapToItem(listView, mouseTop.x, mouseTop.y)
+                                            const listViewBottom = scrollView.mapToItem(listView, mouseBottom.x, mouseBottom.y)
+                                            
+                                            listView.selectArea(listViewTop.y, listViewBottom.y)
+                                        }
+                                    }
+                                }
+                                
+                                onReleased: function(mouse) {
+                                    if (selecting) {
+                                        selecting = false
+                                        selectionRect.visible = false
+                                    }
+                                }
+                            }
+                            
+                            ScrollView {
+                                id: scrollView
+                                anchors.top: header.bottom
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.bottom: parent.bottom
+                                clip: true
+                                
+                                // NO DRAG SCROLLING - only scrollbar and wheel
+                                contentWidth: availableWidth
+                                
+                                ListView {
+                                    id: listView
+                                    model: playlist
+                                    
+                                    // ABSOLUTELY NO DRAG SCROLLING
+                                    interactive: false
+                                    
+                                    // Track selection state
+                                    property var selectedRows: []
+                                    property int lastSelectedIndex: -1
+                                    property int shiftAnchorIndex: -1  // Most recently clicked row for shift selection
+                                    
+                                    // Drag state
+                                    property bool isDragging: false
+                                    property int dropTargetIndex: -1  // Index of row to drop AFTER
+                                    
+                                    signal selectionChanged()
+                                    
+                                    onSelectedRowsChanged: selectionChanged()
+                                    
+                                    function clearSelection() {
+                                        selectedRows = []
+                                        lastSelectedIndex = -1
+                                        // Don't reset shiftAnchorIndex here - it should persist for shift-clicks
+                                        for (let i = 0; i < count; i++) {
+                                            const item = itemAtIndex(i)
+                                            if (item) item.isSelected = false
+                                        }
+                                        // Force UI update
+                                        selectedRowsChanged()
+                                    }
+                                    
+                                    function selectRow(index, toggle, extend, additive = false) {
+                                        if (toggle) {
+                                            // Ctrl+click: toggle selection
+                                            const pos = selectedRows.indexOf(index)
+                                            if (pos >= 0) {
+                                                selectedRows.splice(pos, 1)
+                                                const item = itemAtIndex(index)
+                                                if (item) item.isSelected = false
+                                            } else {
+                                                selectedRows.push(index)
+                                                const item = itemAtIndex(index)
+                                                if (item) item.isSelected = true
+                                            }
+                                            lastSelectedIndex = index
+                                            shiftAnchorIndex = index  // Update shift anchor to most recent click
+                                        } else if (extend) {
+                                            // Shift+click: extend selection from most recently clicked row
+                                            if (additive) {
+                                                // Ctrl+Shift+click: add range to existing selection
+                                                if (shiftAnchorIndex < 0) {
+                                                    // No shift anchor, just add this row like Ctrl+click
+                                                    if (selectedRows.indexOf(index) < 0) {
+                                                        selectedRows.push(index)
+                                                        const item = itemAtIndex(index)
+                                                        if (item) item.isSelected = true
+                                                    }
+                                                } else {
+                                                    // Add range to existing selection
+                                                    const start = Math.min(shiftAnchorIndex, index)
+                                                    const end = Math.max(shiftAnchorIndex, index)
+                                                    for (let i = start; i <= end; i++) {
+                                                        if (selectedRows.indexOf(i) < 0) {
+                                                            selectedRows.push(i)
+                                                            const item = itemAtIndex(i)
+                                                            if (item) item.isSelected = true
+                                                        }
+                                                    }
+                                                }
+                                                lastSelectedIndex = index
+                                                shiftAnchorIndex = index  // Update anchor like Ctrl+click
+                                                selectedRowsChanged()  // Force UI update for additive selection
+                                            } else {
+                                                // Normal Shift+click: replace selection with range
+                                                if (shiftAnchorIndex < 0) {
+                                                    // No shift anchor, just select this row
+                                                    clearSelection()
+                                                    selectedRows = [index]
+                                                    const item = itemAtIndex(index)
+                                                    if (item) item.isSelected = true
+                                                    lastSelectedIndex = index
+                                                    shiftAnchorIndex = index
+                                                } else {
+                                                    clearSelection()
+                                                    const start = Math.min(shiftAnchorIndex, index)
+                                                    const end = Math.max(shiftAnchorIndex, index)
+                                                    for (let i = start; i <= end; i++) {
+                                                        selectedRows.push(i)
+                                                        const item = itemAtIndex(i)
+                                                        if (item) item.isSelected = true
+                                                    }
+                                                    lastSelectedIndex = index
+                                                    // Don't update shiftAnchorIndex on shift-click to maintain anchor
+                                                }
+                                            }
+                                        } else {
+                                            // Normal click: select single row
+                                            clearSelection()
+                                            selectedRows = [index]
+                                            const item = itemAtIndex(index)
+                                            if (item) item.isSelected = true
+                                            lastSelectedIndex = index
+                                            shiftAnchorIndex = index
+                                        }
+                                        
+                                        // Force UI update
+                                        selectedRowsChanged()
+                                    }
+                                    
+                                    function selectArea(startY, endY) {
+                                        clearSelection()
+                                        const start = Math.min(startY, endY)
+                                        const end = Math.max(startY, endY)
+                                        
+                                        for (let i = 0; i < count; i++) {
+                                            const item = itemAtIndex(i)
+                                            if (item) {
+                                                const itemY = item.y
+                                                const itemBottom = itemY + item.height
+                                                
+                                                if ((itemY >= start && itemY <= end) || 
+                                                    (itemBottom >= start && itemBottom <= end) ||
+                                                    (itemY <= start && itemBottom >= end)) {
+                                                    selectedRows.push(i)
+                                                    item.isSelected = true
+                                                }
+                                            }
+                                        }
+                                        
+                                        if (selectedRows.length > 0) {
+                                            lastSelectedIndex = selectedRows[selectedRows.length - 1]
+                                            shiftAnchorIndex = lastSelectedIndex
+                                        }
+                                        
+                                        // Force UI update
+                                        selectedRowsChanged()
+                                    }
+                                    
+                                    function moveSelectedRows(beforeIndex) {
+                                        if (selectedRows.length === 0) return
+                                        
+                                        console.log("=== moveSelectedRows DEBUG (USER'S EXACT ALGORITHM) ===")
+                                        console.log("beforeIndex:", beforeIndex, "count:", count)
+                                        console.log("selectedRows:", selectedRows)
+                                        
+                                        // Check if currently playing row is being moved
+                                        const playingRowMoved = selectedRows.includes(currentIdx)
+                                        const originalCurrentIdx = currentIdx
+                                        
+                                        // Sort selected rows to maintain order
+                                        const rowsToMove = [...selectedRows].sort((a, b) => a - b)
+                                        console.log("rowsToMove sorted:", rowsToMove)
+                                        
+                                        // STEP 1: Calculate final order array [unmoved_before, moved_block, unmoved_after]
+                                        let finalOrder = []
+                                        let movedBlock = []
+                                        
+                                        // Add unmoved items before target position
+                                        for (let i = 0; i < count; i++) {
+                                            if (!selectedRows.includes(i) && i < beforeIndex) {
+                                                finalOrder.push(i)
+                                            }
+                                        }
+                                        
+                                        // Add moved block
+                                        for (const row of rowsToMove) {
+                                            movedBlock.push(row)
+                                        }
+                                        finalOrder.push(...movedBlock)
+                                        
+                                        // Add unmoved items after target position
+                                        for (let i = 0; i < count; i++) {
+                                            if (!selectedRows.includes(i) && i >= beforeIndex) {
+                                                finalOrder.push(i)
+                                            }
+                                        }
+                                        
+                                        console.log("Final order calculated:", finalOrder)
+                                        
+                                        // STEP 2: Apply final order by tracking current positions
+                                        console.log("STEP 2: Applying final order with position tracking")
+                                        
+                                        // Track where each original index currently is
+                                        let currentPositions = []
+                                        for (let i = 0; i < count; i++) {
+                                            currentPositions[i] = i
+                                        }
+                                        
+                                        // Apply moves from bottom to top to minimize conflicts
+                                        for (let pos = finalOrder.length - 1; pos >= 0; pos--) {
+                                            const originalIdx = finalOrder[pos]
+                                            const currentPos = currentPositions[originalIdx]
+                                            
+                                            if (currentPos !== pos) {
+                                                console.log("Move: playlist.moveRowTo(", currentPos, ",", pos, ") [original:", originalIdx, "]")
+                                                playlist.moveRowTo(currentPos, pos)
+                                                
+                                                // Update position tracking for all affected items
+                                                const movedItem = originalIdx
+                                                const fromPos = currentPos
+                                                const toPos = pos
+                                                
+                                                if (fromPos < toPos) {
+                                                    // Item moved right, shift items between left
+                                                    for (let i = 0; i < currentPositions.length; i++) {
+                                                        if (currentPositions[i] >= fromPos && currentPositions[i] <= toPos) {
+                                                            if (i !== movedItem) {
+                                                                currentPositions[i]--
+                                                            }
+                                                        }
+                                                    }
+                                                } else {
+                                                    // Item moved left, shift items between right
+                                                    for (let i = 0; i < currentPositions.length; i++) {
+                                                        if (currentPositions[i] >= toPos && currentPositions[i] <= fromPos) {
+                                                            if (i !== movedItem) {
+                                                                currentPositions[i]++
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                currentPositions[movedItem] = toPos
+                                            }
+                                        }
+                                        
+                                        // Update currentIdx if needed
+                                        if (playingRowMoved) {
+                                            // Find new position of the moved playing row using final order
+                                            const newCurrentIdx = finalOrder.indexOf(originalCurrentIdx)
+                                            currentIdx = newCurrentIdx
+                                            
+                                            // Reload armed track since playing row moved
+                                            armNextFromQueue()
+                                            console.log("Playing row moved from", originalCurrentIdx, "to", newCurrentIdx, "- reloaded next track")
+                                        }
+                                        
+                                        // Clear selection after move
+                                        clearSelection()
+                                    }
+                                    
+                                    function updateDropPosition(mouseY) {
+                                        if (!isDragging) return
+                                        
+                                        // Find which row the mouse is over
+                                        let targetIndex = -1
+                                        let belowAllRows = true
+                                        
+                                        for (let i = 0; i < count; i++) {
+                                            const item = itemAtIndex(i)
+                                            if (item) {
+                                                const itemTop = item.y
+                                                const itemBottom = item.y + item.height
+                                                
+                                                if (mouseY >= itemTop && mouseY <= itemBottom) {
+                                                    targetIndex = i
+                                                    belowAllRows = false
+                                                    break
+                                                }
+                                                targetIndex = i  // Default to last row if past all items
+                                            }
+                                        }
+                                        
+                                        // Special case: dropping below all rows (at bottom)
+                                        if (belowAllRows) {
+                                            // Place after last row
+                                            dropTargetIndex = count
+                                            return
+                                        }
+                                        
+                                        // Normal case: place BEFORE target row
+                                        // Don't allow dropping before a selected row
+                                        if (targetIndex >= 0 && selectedRows.includes(targetIndex)) {
+                                            // Find the next non-selected row after this
+                                            let nextNonSelected = -1
+                                            for (let i = targetIndex + 1; i < count; i++) {
+                                                if (!selectedRows.includes(i)) {
+                                                    nextNonSelected = i
+                                                    break
+                                                }
+                                            }
+                                            // If no non-selected row found (all remaining rows are selected), drop at end
+                                            if (nextNonSelected === -1) {
+                                                dropTargetIndex = count
+                                            } else {
+                                                dropTargetIndex = nextNonSelected
+                                            }
+                                        } else {
+                                            dropTargetIndex = targetIndex
+                                        }
+                                    }
+                                    
+                                    // Visual drop indicator
+                                    Rectangle {
+                                        id: dropIndicator
+                                        parent: listView
+                                        width: listView.width
+                                        height: 2
+                                        color: "#3b82f6"
+                                        visible: listView.isDragging && listView.dropTargetIndex >= 0
+                                        z: 1000
+                                        
+                                        function updatePosition() {
+                                            if (!listView.isDragging || listView.dropTargetIndex < 0) {
+                                                visible = false
+                                                return
+                                            }
+                                            
+                                            visible = true
+                                            
+                                            if (listView.dropTargetIndex >= listView.count) {
+                                                // Drop at end - show after last row
+                                                if (listView.count > 0) {
+                                                    const lastItem = listView.itemAtIndex(listView.count - 1)
+                                                    y = lastItem.y + lastItem.height
+                                                } else {
+                                                    y = 0
+                                                }
+                                            } else if (listView.dropTargetIndex < 0) {
+                                                // Drop at beginning - show at top
+                                                y = 0
+                                            } else {
+                                                // Drop before target row - show at target row's top
+                                                const targetItem = listView.itemAtIndex(listView.dropTargetIndex)
+                                                if (targetItem) {
+                                                    y = targetItem.y
+                                                }
+                                            }
+                                        }
+                                        
+                                        onVisibleChanged: updatePosition()
+                                        Component.onCompleted: updatePosition()
+                                    }
+                                    
+                                    onDropTargetIndexChanged: dropIndicator.updatePosition()
+                                    
+                                    delegate: Rectangle {
+                                        id: rowDelegate
+                                        width: listView.width
+                                        height: 24
+                                        
+                                        property bool isSelected: false
+                                        property bool isCurrent: index === currentIdx
+                
+                                        color: {
+                                            if (isSelected) return "#4a5568"
+                                            if (isCurrent) return "#334155"
+                                            return index % 2 === 0 ? "#1f2937" : "#111827"
+                                        }
+                                        
+                                        Row {
+                                            anchors.fill: parent
+                                            
+                                            // Track # column
+                                            Rectangle {
+                                                width: parent.width * 0.08
+                                                height: 24
+                                                color: "transparent"
+                                                
+                                                Text {
+                                                    anchors.fill: parent
+                                                    anchors.leftMargin: 4
+                                                    anchors.rightMargin: 4
+                                                    text: trackNumber || ""
+                                                    color: "#e5e7eb"
+                                                    font.pixelSize: 11
+                                                    horizontalAlignment: Qt.AlignRight
+                                                    verticalAlignment: Text.AlignVCenter
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+                                            
+                                            // Title column
+                                            Rectangle {
+                                                width: parent.width * 0.48
+                                                height: 24
+                                                color: "transparent"
+                                                
+                                                Text {
+                                                    anchors.fill: parent
+                                                    anchors.leftMargin: 4
+                                                    anchors.rightMargin: 4
+                                                    text: title || display || ""
+                                                    color: "#e5e7eb"
+                                                    font.pixelSize: 11
+                                                    verticalAlignment: Text.AlignVCenter
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+                                            
+                                            // Artist column
+                                            Rectangle {
+                                                width: parent.width * 0.32
+                                                height: 24
+                                                color: "transparent"
+                                                
+                                                Text {
+                                                    anchors.fill: parent
+                                                    anchors.leftMargin: 4
+                                                    anchors.rightMargin: 4
+                                                    text: artist || ""
+                                                    color: "#e5e7eb"
+                                                    font.pixelSize: 11
+                                                    verticalAlignment: Text.AlignVCenter
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+                                            
+                                            // Year column
+                                            Rectangle {
+                                                width: parent.width * 0.12
+                                                height: 24
+                                                color: "transparent"
+                                                
+                                                Text {
+                                                    anchors.fill: parent
+                                                    anchors.leftMargin: 4
+                                                    anchors.rightMargin: 4
+                                                    text: year || ""
+                                                    color: "#e5e7eb"
+                                                    font.pixelSize: 11
+                                                    horizontalAlignment: Qt.AlignCenter
+                                                    verticalAlignment: Text.AlignVCenter
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+                                        }
+                                        
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            acceptedButtons: Qt.LeftButton
+                                            
+                                            property bool isDragging: false
+                                            property real pressY
+                                            property real dragThreshold: 10
+                                            property bool selectionPreserved: false
+                                            
+                                            onPressed: function(mouse) {
+                                                // Handle selection clicks
+                                                if ((mouse.modifiers & Qt.ControlModifier) && (mouse.modifiers & Qt.ShiftModifier)) {
+                                                    // Ctrl+Shift+click: add range to existing selection
+                                                    listView.selectRow(index, false, true, true)
+                                                } else if (mouse.modifiers & Qt.ControlModifier) {
+                                                    listView.selectRow(index, true, false)
+                                                } else if (mouse.modifiers & Qt.ShiftModifier) {
+                                                    if (listView.shiftAnchorIndex >= 0) {
+                                                        listView.selectRow(index, false, true)
+                                                    } else {
+                                                        listView.selectRow(index, false, false)
+                                                    }
+                                                } else {
+                                                    // Normal click - but preserve selection if clicking already selected row (for drag)
+                                                    if (listView.selectedRows.includes(index)) {
+                                                        // Don't clear selection - allow dragging multiple rows
+                                                        selectionPreserved = true
+                                                        console.log("Preserving multi-row selection for drag")
+                                                    } else {
+                                                        // Clear and select only this row
+                                                        listView.selectRow(index, false, false)
+                                                        selectionPreserved = false
+                                                    }
+                                                }
+                                                
+                                                // Initialize drag tracking
+                                                isDragging = false
+                                                pressY = mouse.y
+                                            }
+                                            
+                                            onPositionChanged: function(mouse) {
+                                                if (!listView.isDragging) {
+                                                    // Check if drag should start
+                                                    const dragDistance = Math.abs(mouse.y - pressY)
+                                                    if (dragDistance > dragThreshold && listView.selectedRows.length > 0) {
+                                                        // Start dragging
+                                                        isDragging = true
+                                                        listView.isDragging = true
+                                                        parent.opacity = 0.7  // Visual feedback
+                                                        
+                                                        // Initialize drop position to current row
+                                                        listView.dropTargetIndex = index
+                                                    }
+                                                }
+                                                
+                                                if (listView.isDragging) {
+                                                    // Update drop position based on mouse Y in ListView coordinates
+                                                    const listViewY = rowDelegate.y + mouse.y
+                                                    listView.updateDropPosition(listViewY)
+                                                }
+                                            }
+                                            
+                                            onReleased: function(mouse) {
+                                                if (listView.isDragging) {
+                                                    // Move selected rows to drop position
+                                                    listView.moveSelectedRows(listView.dropTargetIndex)
+                                                    console.log("Moved rows after index:", listView.dropTargetIndex)
+                                                } else {
+                                                    // No drag occurred - handle click selection
+                                                    const dragDistance = Math.abs(mouse.y - pressY)
+                                                    if (dragDistance < dragThreshold && selectionPreserved) {
+                                                        // Click without drag on selected row - clear other selections
+                                                        listView.selectRow(index, false, false)
+                                                        console.log("Click without drag - cleared other selections")
+                                                    }
+                                                }
+                                                
+                                                // Clean up drag state
+                                                isDragging = false
+                                                parent.opacity = 1.0
+                                                listView.isDragging = false
+                                                listView.dropTargetIndex = -1
+                                                selectionPreserved = false
+                                            }
+                                            
+                                            onDoubleClicked: {
+                                                playIndex(index)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
 
                         // Other playlist tabs (placeholder)
@@ -261,8 +920,29 @@ ApplicationWindow {
                             text: "Remove"
                             Layout.preferredWidth: 70
                             Layout.preferredHeight: 30
-                            enabled: queueView.currentIndex >= 0
-                            onClicked: playlist.removeAt(queueView.currentIndex)
+                            enabled: listView.selectedRows.length > 0
+                            onClicked: {
+                                // Remove selected rows in reverse order to maintain indices
+                                const sortedRows = listView.selectedRows.sort((a, b) => b - a)
+                                for (let i = 0; i < sortedRows.length; i++) {
+                                    playlist.removeAt(sortedRows[i])
+                                    // Update currentIdx if needed
+                                    if (currentIdx > sortedRows[i]) {
+                                        currentIdx--
+                                    } else if (currentIdx === sortedRows[i]) {
+                                        currentIdx = -1
+                                    }
+                                }
+                                
+                                // Stop playback if playlist becomes empty
+                                if (playlist.count() === 0) {
+                                    player.stop()
+                                    currentIdx = -1
+                                }
+                                
+                                // Clear selection after removal
+                                listView.clearSelection()
+                            }
                         }
                         
                         Button {
@@ -284,6 +964,11 @@ ApplicationWindow {
                             text: "Clear"
                             Layout.preferredWidth: 60
                             Layout.preferredHeight: 30
+                            enabled: playlist.count() > 0
+                            onClicked: {
+                                playlist.clear()
+                                currentIdx = -1
+                            }
                         }
                     }
                 }
@@ -890,19 +1575,10 @@ ApplicationWindow {
 
     Connections {
         target: player
-        function onCurrentSourceChanged() {
-            // Resync currentIdx on source changes, prefer next index if duplicates
-            if (currentIdx >= 0)
-                currentIdx = indexOfUrlFrom(player.currentSource, currentIdx)
-            else
-                currentIdx = indexOfUrl(player.currentSource)
-            armNextFromQueue()
-        }
-        function onCurrentMetadataChanged() {
-            // Update playlist metadata when metadata becomes available
-            if (currentIdx >= 0 && player.currentMetadata) {
-                playlist.updateMetadata(currentIdx, player.currentMetadata)
-            }
-        }
+        function onPlayingChanged() { /* Handled by player */ }
+        function onPositionChanged() { /* Handled by player */ }
+        function onDurationChanged() { /* Handled by player */ }
+        function onCurrentSourceChanged() { /* Handled by player */ }
+        function onCurrentMetadataChanged() { /* Metadata is now read on add, no update needed */ }
     }
 }

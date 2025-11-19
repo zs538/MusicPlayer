@@ -16,6 +16,7 @@
 #include <taglib/attachedpictureframe.h>
 #include <QDebug>
 #include <QImage>
+#include <QFileInfo>
 
 MetadataReader::MetadataReader(QObject* parent)
     : QObject(parent)
@@ -84,7 +85,7 @@ TrackMetadata* MetadataReader::readFromTagLib(const QString& filePath, QObject* 
     
     // Extract metadata from properties
     TagLib::PropertyMap properties = file->properties();
-    extractFromProperties(properties, metadata);
+    extractFromProperties(properties, metadata, filePath);
     
     // Extract cover art (format-specific)
     extractCoverArt(file, filePath, metadata);
@@ -99,14 +100,18 @@ TrackMetadata* MetadataReader::readFromTagLib(const QString& filePath, QObject* 
     return metadata;
 }
 
-void MetadataReader::extractFromProperties(const TagLib::PropertyMap& properties, TrackMetadata* metadata)
+void MetadataReader::extractFromProperties(const TagLib::PropertyMap& properties, TrackMetadata* metadata, const QString& filePath)
 {
     // Extract title
     if (properties.contains("TITLE")) {
         QString title = tagLibStringToQString(properties["TITLE"].front());
-        metadata->m_title = title.isEmpty() ? "Unknown Title" : title;
-    } else {
-        metadata->m_title = "Unknown Title";
+        metadata->m_title = title;
+    }
+    
+    // If no title metadata, use filename
+    if (metadata->m_title.isEmpty() && !filePath.isEmpty()) {
+        QFileInfo fileInfo(filePath);
+        metadata->m_title = fileInfo.fileName();
     }
     
     // Extract artist - try multiple keys
@@ -118,7 +123,7 @@ void MetadataReader::extractFromProperties(const TagLib::PropertyMap& properties
     } else if (properties.contains("PERFORMER")) {
         artist = tagLibStringToQString(properties["PERFORMER"].front());
     }
-    metadata->m_artist = artist.isEmpty() ? "Unknown Artist" : artist;
+    metadata->m_artist = artist;
     
     // Extract album
     if (properties.contains("ALBUM")) {
@@ -225,7 +230,7 @@ void MetadataReader::extractCoverArt(TagLib::File* file, const QString& filePath
 TrackMetadata* MetadataReader::extractFromGeneric(TagLib::FileRef& fileRef, TrackMetadata* metadata, const QString& filePath)
 {
     TagLib::PropertyMap properties = fileRef.file()->properties();
-    extractFromProperties(properties, metadata);
+    extractFromProperties(properties, metadata, filePath);
     
     // Try to extract cover art from generic file if possible
     extractCoverArt(fileRef.file(), filePath, metadata);

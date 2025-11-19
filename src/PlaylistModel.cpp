@@ -1,5 +1,6 @@
 #include "PlaylistModel.h"
 #include "TrackMetadata.h"
+#include "MetadataReader.h"
 
 PlaylistModel::PlaylistModel(QObject* parent)
     : QAbstractListModel(parent)
@@ -77,8 +78,11 @@ void PlaylistModel::add(const QUrl& url)
         disp = url.toString();
     }
 
+    // Read metadata immediately when adding to playlist
+    TrackMetadata* metadata = MetadataReader::readMetadataStandalone(url, this);
+
     beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
-    m_items.push_back({url, disp});
+    m_items.push_back({url, disp, metadata});
     endInsertRows();
 }
 
@@ -86,9 +90,10 @@ void PlaylistModel::removeAt(int index)
 {
     if (index < 0 || index >= m_items.size()) return;
     
-    // Don't delete metadata - it belongs to PlayerController
-    // Just clear the reference
-    m_items[index].metadata = nullptr;
+    // Delete metadata since we now own it
+    if (m_items[index].metadata) {
+        m_items[index].metadata->deleteLater();
+    }
     
     beginRemoveRows(QModelIndex(), index, index);
     m_items.removeAt(index);
@@ -113,10 +118,11 @@ void PlaylistModel::clear()
     if (m_items.isEmpty()) return;
     beginResetModel();
     
-    // Don't delete metadata objects - they belong to PlayerController
-    // Just clear the references
+    // Delete metadata since we now own it
     for (auto& item : m_items) {
-        item.metadata = nullptr;
+        if (item.metadata) {
+            item.metadata->deleteLater();
+        }
     }
     
     m_items.clear();
@@ -182,7 +188,10 @@ bool PlaylistModel::importM3U8(const QUrl& url)
             disp = u.toString();
         }
         
-        items.push_back({u, disp});
+        // Read metadata for imported item
+        TrackMetadata* metadata = MetadataReader::readMetadataStandalone(u, this);
+        
+        items.push_back({u, disp, metadata});
     }
     
     beginResetModel();
@@ -193,21 +202,10 @@ bool PlaylistModel::importM3U8(const QUrl& url)
 
 void PlaylistModel::updateMetadata(int index, TrackMetadata* metadata)
 {
-    if (index < 0 || index >= m_items.size() || !metadata) return;
-    
-    // Don't delete old metadata - it belongs to PlayerController
-    // Just clear the reference
-    m_items[index].metadata = nullptr;
-    
-    // Store reference to current metadata (don't copy, don't take ownership)
-    m_items[index].metadata = metadata;
-    
-    // Update display text with current metadata
-    if (!metadata->title().isEmpty() && !metadata->artist().isEmpty()) {
-        m_items[index].display = QString("%1 - %2").arg(metadata->artist(), metadata->title());
-    }
-    
-    emit dataChanged(createIndex(index, 0), createIndex(index, 0));
+    // This method is no longer needed since we read metadata on add
+    // Keep it for compatibility but make it a no-op
+    Q_UNUSED(index)
+    Q_UNUSED(metadata)
 }
 
 TrackMetadata* PlaylistModel::getMetadata(int index) const

@@ -24,7 +24,7 @@ public:
 private:
     static TrackMetadata* readFromTagLib(const QString& filePath, QObject* parent);
     static QString tagLibStringToQString(const TagLib::String& str);
-    static void extractFromProperties(const TagLib::PropertyMap& properties, TrackMetadata* metadata);
+    static void extractFromProperties(const TagLib::PropertyMap& properties, TrackMetadata* metadata, const QString& filePath);
     static void extractCoverArt(TagLib::File* file, const QString& filePath, TrackMetadata* metadata);
     static TrackMetadata* extractFromGeneric(TagLib::FileRef& fileRef, TrackMetadata* metadata, const QString& filePath);
 };
