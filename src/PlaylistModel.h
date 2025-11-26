@@ -44,8 +44,6 @@ public:
     Q_INVOKABLE bool exportM3U8(const QUrl& url) const;
     Q_INVOKABLE bool importM3U8(const QUrl& url);
     
-    // Metadata methods
-    Q_INVOKABLE void updateMetadata(int index, TrackMetadata* metadata);
     Q_INVOKABLE TrackMetadata* getMetadata(int index) const;
 
 private:
@@ -55,4 +53,6 @@ private:
         TrackMetadata* metadata {nullptr}; 
     };
     QVector<Item> m_items;
+    
+    static QString displayStringForUrl(const QUrl& url);
 };

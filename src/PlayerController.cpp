@@ -3,272 +3,275 @@
 #include "TrackMetadata.h"
 #include "PlaylistModel.h"
 
-#include <QFileInfo>
 #include <QDebug>
+#include <QTimer>
 
 PlayerController::PlayerController(QObject* parent)
     : QObject(parent)
     , m_currentMetadata(nullptr)
 {
-    setupDeck(m_a);
-    setupDeck(m_b);
-
-    m_current = &m_a;
-    m_next = &m_b;
-
+    // Create engine and queue
+    m_engine = new PlaybackEngine(this);
+    m_queue = new PlaybackQueue(this);
+    
+    // Connect engine signals
+    connect(m_engine, &PlaybackEngine::stateChanged,
+            this, &PlayerController::onEngineStateChanged);
+    connect(m_engine, &PlaybackEngine::trackChanged,
+            this, &PlayerController::onEngineTrackChanged);
+    connect(m_engine, &PlaybackEngine::trackAboutToFinish,
+            this, &PlayerController::onEngineTrackAboutToFinish);
+    connect(m_engine, &PlaybackEngine::trackFinished,
+            this, &PlayerController::onEngineTrackFinished);
+    connect(m_engine, &PlaybackEngine::positionChanged,
+            this, &PlayerController::onEnginePositionChanged);
+    connect(m_engine, &PlaybackEngine::durationChanged,
+            this, &PlayerController::onEngineDurationChanged);
+    connect(m_engine, &PlaybackEngine::errorOccurred,
+            this, &PlayerController::onEngineError);
+    
+    // Connect queue signals
+    connect(m_queue, &PlaybackQueue::queueModified,
+            this, &PlayerController::onQueueModified);
+    connect(m_queue, &PlaybackQueue::currentIndexChanged,
+            this, &PlayerController::currentIndexChanged);
+    
+    // Audio device monitoring
     connect(&m_devices, &QMediaDevices::audioOutputsChanged,
             this, &PlayerController::onAudioOutputsChanged);
-
+    
     refreshOutputs();
     emit audioOutputsChanged();
-
-    selectDefaultOutputDevice();
 }
 
-void PlayerController::setupDeck(Deck& deck)
+PlayerController::~PlayerController()
 {
-    deck.audio = new QAudioOutput(this);
-    deck.audio->setVolume(0.8f);
+    if (m_currentMetadata) {
+        m_currentMetadata->deleteLater();
+    }
+}
 
-    deck.player = new QMediaPlayer(this);
-    deck.player->setAudioOutput(deck.audio);
-
-    connect(deck.player, &QMediaPlayer::positionChanged, this, &PlayerController::onPositionChanged);
-    connect(deck.player, &QMediaPlayer::durationChanged, this, &PlayerController::onDurationChanged);
-    connect(deck.player, &QMediaPlayer::mediaStatusChanged, this, &PlayerController::onMediaStatusChanged);
-    connect(deck.player, &QMediaPlayer::errorOccurred, this, &PlayerController::onPlayerErrorOccurred);
-    connect(deck.player, &QMediaPlayer::metaDataChanged, this, &PlayerController::onMetaDataChanged);
+void PlayerController::setPlaylistModel(PlaylistModel* model)
+{
+    if (m_playlistModel == model) return;
+    
+    m_playlistModel = model;
+    m_queue->setActivePlaylist(model);
 }
 
 void PlayerController::openFile(const QUrl& url)
 {
-    if (!m_current->player || !m_current->audio) return;
-    
-    // Clear current metadata
-    if (m_currentMetadata) {
-        m_currentMetadata->deleteLater();
-        m_currentMetadata = nullptr;
+    // This is a legacy API - prefer playIndex() for playlist items
+    // openFile is for playing a file that may or may not be in the playlist
+    QUrl validUrl = url;
+    if (validUrl.scheme().isEmpty()) {
+        validUrl = QUrl::fromLocalFile(validUrl.path());
     }
     
-    m_current->audio->setMuted(false);
-    m_current->player->setAudioOutput(m_current->audio);
-    m_current->player->setSource(url);
+    // Create TrackRef without playlist index (standalone file)
+    TrackRef track;
+    track.url = validUrl;
+    track.displayName = validUrl.fileName();
+    track.playlistIndex = -1;
     
-    // Use TagLib to read metadata immediately
+    m_engine->play(track);
+    
     updateCurrentMetadataFromSource();
-    
-    m_current->player->play();
-    m_gaplessArmed = false;
-    emit playingChanged();
     emit currentSourceChanged();
 }
 
-void PlayerController::setNextFile(const QUrl& url)
+void PlayerController::playIndex(int index)
 {
-    if (!m_next->player) return;
+    if (!m_playlistModel || index < 0 || index >= m_playlistModel->rowCount()) {
+        return;
+    }
     
-    m_next->source = url;
-    m_next->player->setSource(url);
-    m_next->player->pause();
-    m_gaplessArmed = false;
+    m_queue->setCurrentIndex(index);
+    
+    TrackRef track = m_queue->current();
+    if (!track.isValid()) return;
+    
+    m_engine->play(track);
+    armNextTrack();
+    
+    updateCurrentMetadataFromSource();
+    emit currentSourceChanged();
 }
 
 void PlayerController::play()
 {
-    if (!m_current->player || !m_current->audio) return;
-    
-    m_current->audio->setMuted(false);
-    m_current->player->setAudioOutput(m_current->audio);
-    m_current->player->play();
-    m_gaplessArmed = false;
+    if (m_engine->state() == PlaybackEngine::State::Paused) {
+        m_engine->resume();
+    } else if (m_engine->state() == PlaybackEngine::State::Stopped) {
+        // If stopped, try to play current track from queue
+        TrackRef track = m_queue->current();
+        if (track.isValid()) {
+            m_engine->play(track);
+            armNextTrack();
+        } else if (!m_queue->isEmpty()) {
+            // No current track, start from beginning
+            m_queue->setCurrentIndex(0);
+            track = m_queue->current();
+            if (track.isValid()) {
+                m_engine->play(track);
+                armNextTrack();
+            }
+        }
+    }
     emit playingChanged();
 }
 
 void PlayerController::pause()
 {
-    if (!m_current->player) return;
-    m_current->player->pause();
+    m_engine->pause();
+    emit playingChanged();
+}
+
+void PlayerController::stop()
+{
+    m_engine->stop();
     emit playingChanged();
 }
 
 void PlayerController::seek(qint64 posMs)
 {
-    if (!m_current->player) return;
-    m_current->player->setPosition(posMs);
+    m_engine->seek(posMs);
+    // Re-arm next track after seek
+    armNextTrack();
+}
+
+void PlayerController::next()
+{
+    if (!m_queue->hasNext()) {
+        // End of playlist
+        return;
+    }
+    
+    m_queue->advance();
+    TrackRef track = m_queue->current();
+    
+    if (track.isValid()) {
+        m_engine->play(track);
+        armNextTrack();
+        updateCurrentMetadataFromSource();
+        emit currentSourceChanged();
+    }
+}
+
+void PlayerController::previous()
+{
+    if (!m_queue->hasPrevious()) {
+        // Beginning of playlist - seek to start of current track
+        m_engine->seek(0);
+        return;
+    }
+    
+    m_queue->goBack();
+    TrackRef track = m_queue->current();
+    
+    if (track.isValid()) {
+        m_engine->play(track);
+        armNextTrack();
+        updateCurrentMetadataFromSource();
+        emit currentSourceChanged();
+    }
 }
 
 bool PlayerController::playing() const
 {
-    return m_current->player ? m_current->player->playbackState() == QMediaPlayer::PlayingState : false;
+    return m_engine->state() == PlaybackEngine::State::Playing;
 }
 
 qint64 PlayerController::position() const
 {
-    return m_current->player ? m_current->player->position() : 0;
+    return m_engine->position();
 }
 
 qint64 PlayerController::duration() const
 {
-    return m_current->player ? m_current->player->duration() : 0;
+    return m_engine->duration();
 }
 
 float PlayerController::volume() const
 {
-    return m_current->audio ? m_current->audio->volume() : 0.0f;
+    return m_targetVolume;
 }
 
 void PlayerController::setVolume(float v)
 {
-    if (m_a.audio) m_a.audio->setVolume(v);
-    if (m_b.audio) m_b.audio->setVolume(v);
+    m_targetVolume = v;
+    m_engine->setVolume(v);
     emit volumeChanged();
 }
 
-void PlayerController::onPositionChanged()
+QUrl PlayerController::currentSource() const
 {
-    // Pre-switch just before end for tighter gapless behavior
-    const qint64 dur = m_current->player->duration();
-    const qint64 pos = m_current->player->position();
-    if (dur > 0 && m_next->player->source().isValid() && !m_gaplessArmed) {
-        const qint64 remaining = dur - pos;
-        if (remaining <= 30) { // ~30ms window
-            m_gaplessArmed = true;
-            switchToNext();
-            return;
-        }
-    }
-    emit positionChanged();
+    return m_engine->currentTrack().url;
 }
 
-void PlayerController::onDurationChanged()
+int PlayerController::repeatMode() const
 {
-    emit durationChanged();
+    return static_cast<int>(m_queue->repeatMode());
 }
 
-void PlayerController::onMediaStatusChanged(QMediaPlayer::MediaStatus status)
+void PlayerController::setRepeatMode(int mode)
 {
-    if (sender() != m_current->player)
-        return;
-
-    if (status == QMediaPlayer::EndOfMedia) {
-        // If no next track is armed, clear to empty state
-        if (!m_next->player || m_next->player->source().isEmpty()) {
-            clearCurrent();
-        } else {
-            switchToNext();
-        }
-    }
+    m_queue->setRepeatMode(static_cast<RepeatMode>(mode));
+    emit repeatModeChanged();
 }
 
-void PlayerController::switchToNext()
+bool PlayerController::shuffle() const
 {
-    if (!m_next->player || m_next->player->source().isEmpty()) {
-        // No next track available, transition to empty state
-        clearCurrent();
-        return;
-    }
-    
-    std::swap(m_current, m_next);
-    
-    // Clear metadata for clean state
-    if (m_currentMetadata) {
-        m_currentMetadata->clear();
-    }
-    
-    m_current->player->play();
-    m_gaplessArmed = false;
-    emit playingChanged();
-    emit currentSourceChanged();
+    return m_queue->shuffle();
 }
 
-void PlayerController::clearCurrent()
+void PlayerController::setShuffle(bool enabled)
 {
-    // Stop playback and clear sources for both decks to ensure an empty state
-    if (m_a.player) m_a.player->stop();
-    if (m_b.player) m_b.player->stop();
-    if (m_a.player) m_a.player->setSource(QUrl());
-    if (m_b.player) m_b.player->setSource(QUrl());
-    if (m_a.audio) m_a.player->setAudioOutput(m_a.audio);
-    if (m_b.audio) m_b.player->setAudioOutput(m_b.audio);
-
-    // Reset next deck bookkeeping
-    if (m_next) m_next->source = QUrl();
-
-    // Clear metadata object so QML shows "No track playing"
-    if (m_currentMetadata) {
-        m_currentMetadata->deleteLater();
-        m_currentMetadata = nullptr;
-        emit currentMetadataChanged();
-    }
-
-    m_gaplessArmed = false;
-
-    // Notify QML bindings to reset UI state
-    emit playingChanged();
-    emit currentSourceChanged();
-    emit positionChanged();
-    emit durationChanged();
-}
-
-void PlayerController::onAudioOutputsChanged()
-{
-    refreshOutputs();
-    selectDefaultOutputDevice();
-    emit audioOutputsChanged();
-}
-
-void PlayerController::selectDefaultOutputDevice()
-{
-    const auto outs = m_devices.audioOutputs();
-    if (outs.isEmpty()) {
-        return;
-    }
-    
-    auto dev = m_devices.defaultAudioOutput();
-    if (m_a.audio) m_a.audio->setDevice(dev);
-    if (m_b.audio) m_b.audio->setDevice(dev);
-    if (m_a.player && m_a.audio) m_a.player->setAudioOutput(m_a.audio);
-    if (m_b.player && m_b.audio) m_b.player->setAudioOutput(m_b.audio);
-    emit audioOutputsChanged();
+    m_queue->setShuffle(enabled);
+    emit shuffleChanged();
 }
 
 QStringList PlayerController::audioOutputs() const
 {
     QStringList names;
-    for (const auto &d : m_outputDevices)
+    for (const auto& d : m_outputDevices) {
         names << d.description();
+    }
     return names;
 }
 
 QString PlayerController::currentOutput() const
 {
-    if (!m_current->audio)
-        return {};
-    return m_current->audio->device().description();
+    return m_engine->outputDevice().description();
+}
+
+int PlayerController::currentIndex() const
+{
+    return m_queue->currentIndex();
+}
+
+int PlayerController::bufferProfile() const
+{
+    return (m_engine->bufferProfile() == BufferProfile::Short) ? 0 : 1;
+}
+
+void PlayerController::setBufferProfile(int profile)
+{
+    BufferProfile newProfile = (profile == 1) ? BufferProfile::Long : BufferProfile::Short;
+    
+    if (newProfile == m_engine->bufferProfile())
+        return;
+    
+    m_engine->setBufferProfile(newProfile);
+    emit bufferProfileChanged();
 }
 
 void PlayerController::selectOutputByIndex(int index)
 {
-    if (index < 0 || index >= m_outputDevices.size())
-        return;
+    if (index < 0 || index >= m_outputDevices.size()) return;
     
-    const auto dev = m_outputDevices.at(index);
-    if (m_a.audio) m_a.audio->setDevice(dev);
-    if (m_b.audio) m_b.audio->setDevice(dev);
-    if (m_a.player && m_a.audio) m_a.player->setAudioOutput(m_a.audio);
-    if (m_b.player && m_b.audio) m_b.player->setAudioOutput(m_b.audio);
+    m_engine->setOutputDevice(m_outputDevices.at(index));
     emit audioOutputsChanged();
-}
-
-void PlayerController::refreshOutputs()
-{
-    m_outputDevices = m_devices.audioOutputs();
-}
-
-void PlayerController::onPlayerErrorOccurred(QMediaPlayer::Error error, const QString &errorString)
-{
-    Q_UNUSED(error)
-    Q_UNUSED(errorString)
 }
 
 void PlayerController::refreshAudioDevices()
@@ -277,20 +280,98 @@ void PlayerController::refreshAudioDevices()
     emit audioOutputsChanged();
 }
 
-void PlayerController::onMetaDataChanged()
+void PlayerController::refreshOutputs()
 {
-    // Don't use Qt metadata - use TagLib instead
-    // This method is now handled by updateCurrentMetadataFromSource()
+    m_outputDevices = m_devices.audioOutputs();
+}
+
+void PlayerController::onEngineStateChanged(PlaybackEngine::State state)
+{
+    Q_UNUSED(state)
+    emit playingChanged();
+}
+
+void PlayerController::onEngineTrackChanged(const TrackRef& track)
+{
+    // Update queue index to match engine's current track using playlistIndex
+    // (This handles gapless transitions where engine advances automatically)
+    if (track.playlistIndex >= 0 && m_queue->currentIndex() != track.playlistIndex) {
+        m_queue->setCurrentIndex(track.playlistIndex);
+    }
+    
+    // Arm the next track for gapless playback
+    armNextTrack();
+    
+    updateCurrentMetadataFromSource();
+    emit currentSourceChanged();
+    emit durationChanged();
+}
+
+void PlayerController::onEngineTrackAboutToFinish(qint64 msRemaining)
+{
+    Q_UNUSED(msRemaining)
+    
+    // Ensure next track is armed
+    // The engine will use whatever is prepared via prepareNext()
+    armNextTrack();
+}
+
+void PlayerController::onEngineTrackFinished()
+{
+    // This is called when playback actually stops (no gapless transition occurred)
+    // For gapless transitions, trackChanged is emitted instead
+    
+    // If engine stopped and there's a next track, start it manually
+    if (m_engine->state() == PlaybackEngine::State::Stopped) {
+        if (m_queue->hasNext()) {
+            m_queue->advance();
+            TrackRef track = m_queue->current();
+            if (track.isValid()) {
+                m_engine->play(track);
+                armNextTrack();
+            }
+        } else {
+            // End of playlist
+            clearCurrent();
+        }
+    }
+}
+
+void PlayerController::onEnginePositionChanged(qint64 positionMs)
+{
+    Q_UNUSED(positionMs)
+    emit positionChanged();
+}
+
+void PlayerController::onEngineDurationChanged(qint64 durationMs)
+{
+    Q_UNUSED(durationMs)
+    emit durationChanged();
+}
+
+void PlayerController::onEngineError(const QString& message)
+{
+    qWarning() << "Playback engine error:" << message;
+}
+
+void PlayerController::onQueueModified()
+{
+    // Playlist changed - update the armed next track
+    armNextTrack();
+}
+
+void PlayerController::onAudioOutputsChanged()
+{
+    refreshOutputs();
+    emit audioOutputsChanged();
 }
 
 void PlayerController::updateCurrentMetadataFromSource()
 {
-    if (!m_current->player || m_current->player->source().isEmpty()) {
-        return;
-    }
+    QUrl source = m_engine->currentTrack().url;
+    if (source.isEmpty()) return;
     
-    // Use TagLib to read metadata from the current source
-    TrackMetadata* newMetadata = MetadataReader::readMetadataStandalone(m_current->player->source(), this);
+    TrackMetadata* newMetadata = MetadataReader::readMetadataStandalone(source, this);
     
     if (newMetadata) {
         if (m_currentMetadata) {
@@ -298,5 +379,32 @@ void PlayerController::updateCurrentMetadataFromSource()
         }
         m_currentMetadata = newMetadata;
         emit currentMetadataChanged();
+    }
+}
+
+void PlayerController::clearCurrent()
+{
+    m_engine->stop();
+    
+    if (m_currentMetadata) {
+        m_currentMetadata->deleteLater();
+        m_currentMetadata = nullptr;
+        emit currentMetadataChanged();
+    }
+    
+    emit playingChanged();
+    emit currentSourceChanged();
+    emit positionChanged();
+    emit durationChanged();
+}
+
+void PlayerController::armNextTrack()
+{
+    TrackRef next = m_queue->peekNext();
+    
+    if (next.isValid()) {
+        m_engine->prepareNext(next);
+    } else {
+        m_engine->clearNext();
     }
 }

@@ -3,7 +3,6 @@
 #include <QObject>
 #include <QString>
 #include <QImage>
-#include <QMediaMetaData>
 
 class TrackMetadata : public QObject {
     Q_OBJECT
@@ -20,12 +19,6 @@ class TrackMetadata : public QObject {
 
 public:
     explicit TrackMetadata(QObject* parent = nullptr);
-    
-    // Static factory method
-    static TrackMetadata* fromMediaMetaData(const QMediaMetaData& metaData, QObject* parent = nullptr);
-    
-    // Load metadata and emit changes
-    void loadFromMediaMetaData(const QMediaMetaData& metaData);
     
     // Clear all metadata
     void clear();

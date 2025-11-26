@@ -67,22 +67,22 @@ Qt::ItemFlags PlaylistModel::flags(const QModelIndex& index) const
     return Qt::ItemIsSelectable | Qt::ItemIsEnabled | Qt::ItemIsDragEnabled | Qt::ItemIsDropEnabled;
 }
 
-void PlaylistModel::add(const QUrl& url)
+QString PlaylistModel::displayStringForUrl(const QUrl& url)
 {
-    QString disp;
     const QString localFile = url.toLocalFile();
     if (!localFile.isEmpty()) {
         QFileInfo fi(localFile);
-        disp = fi.exists() ? fi.fileName() : url.toString();
-    } else {
-        disp = url.toString();
+        return fi.exists() ? fi.fileName() : url.toString();
     }
+    return url.toString();
+}
 
-    // Read metadata immediately when adding to playlist
+void PlaylistModel::add(const QUrl& url)
+{
     TrackMetadata* metadata = MetadataReader::readMetadataStandalone(url, this);
-
+    
     beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
-    m_items.push_back({url, disp, metadata});
+    m_items.push_back({url, displayStringForUrl(url), metadata});
     endInsertRows();
 }
 
@@ -179,33 +179,14 @@ bool PlaylistModel::importM3U8(const QUrl& url)
             u = QUrl::fromLocalFile(line);
         }
         
-        QString disp;
-        const QString localFile = u.toLocalFile();
-        if (!localFile.isEmpty()) {
-            QFileInfo fi(localFile);
-            disp = fi.exists() ? fi.fileName() : u.toString();
-        } else {
-            disp = u.toString();
-        }
-        
-        // Read metadata for imported item
         TrackMetadata* metadata = MetadataReader::readMetadataStandalone(u, this);
-        
-        items.push_back({u, disp, metadata});
+        items.push_back({u, displayStringForUrl(u), metadata});
     }
     
     beginResetModel();
     m_items = std::move(items);
     endResetModel();
     return true;
-}
-
-void PlaylistModel::updateMetadata(int index, TrackMetadata* metadata)
-{
-    // This method is no longer needed since we read metadata on add
-    // Keep it for compatibility but make it a no-op
-    Q_UNUSED(index)
-    Q_UNUSED(metadata)
 }
 
 TrackMetadata* PlaylistModel::getMetadata(int index) const

@@ -1,84 +1,10 @@
 #include "TrackMetadata.h"
 
 #include <QBuffer>
-#include <QImageWriter>
 
 TrackMetadata::TrackMetadata(QObject* parent)
     : QObject(parent)
 {
-}
-
-TrackMetadata* TrackMetadata::fromMediaMetaData(const QMediaMetaData& metaData, QObject* parent)
-{
-    TrackMetadata* metadata = new TrackMetadata(parent);
-    metadata->loadFromMediaMetaData(metaData);
-    return metadata;
-}
-
-void TrackMetadata::loadFromMediaMetaData(const QMediaMetaData& metaData)
-{
-    clear();
-    
-    if (metaData.isEmpty()) return;
-    
-    // Load title with multiple fallbacks
-    m_title = metaData.stringValue(QMediaMetaData::Title);
-    
-    // Load artist with multiple fallbacks
-    m_artist = metaData.stringValue(QMediaMetaData::Author);
-    if (m_artist.isEmpty()) {
-        m_artist = metaData.stringValue(QMediaMetaData::AlbumArtist);
-    }
-    if (m_artist.isEmpty()) {
-        m_artist = metaData.stringValue(QMediaMetaData::Composer);
-    }
-    
-    // Load album
-    m_album = metaData.stringValue(QMediaMetaData::AlbumTitle);
-    
-    // Load genre
-    m_genre = metaData.stringValue(QMediaMetaData::Genre);
-    
-    // Load year/date
-    m_year = metaData.stringValue(QMediaMetaData::Date);
-    
-    // Extract year from date if it's a full date string
-    if (!m_year.isEmpty() && m_year.length() > 4) {
-        m_year = m_year.left(4); // Take first 4 characters (year)
-    }
-    
-    // Numeric metadata with better conversion
-    QVariant trackVar = metaData.value(QMediaMetaData::TrackNumber);
-    if (trackVar.isValid()) {
-        m_trackNumber = trackVar.toInt();
-    }
-    
-    QVariant durationVar = metaData.value(QMediaMetaData::Duration);
-    if (durationVar.isValid()) {
-        m_duration = durationVar.toLongLong();
-    }
-    
-    // Cover art - try multiple keys
-    m_coverArt = QImage();
-    
-    // Try CoverArtImage first (most common)
-    QVariant coverArtVariant = metaData.value(QMediaMetaData::CoverArtImage);
-    if (coverArtVariant.isValid()) {
-        m_coverArt = coverArtVariant.value<QImage>();
-    }
-    
-    // Try ThumbnailImage if CoverArtImage didn't work
-    if (m_coverArt.isNull()) {
-        coverArtVariant = metaData.value(QMediaMetaData::ThumbnailImage);
-        if (coverArtVariant.isValid()) {
-            m_coverArt = coverArtVariant.value<QImage>();
-        }
-    }
-    
-    // Clear cached URL
-    m_coverArtUrl.clear();
-    
-    emit metadataChanged();
 }
 
 void TrackMetadata::clear()
@@ -105,13 +31,21 @@ QString TrackMetadata::coverArtUrl() const
         return m_coverArtUrl;
     }
     
-    // Generate base64 data URL
+    // Scale down large images for efficient data URLs (300px max is plenty for UI)
+    static constexpr int MAX_COVER_SIZE = 300;
+    QImage scaled = m_coverArt;
+    if (scaled.width() > MAX_COVER_SIZE || scaled.height() > MAX_COVER_SIZE) {
+        scaled = scaled.scaled(MAX_COVER_SIZE, MAX_COVER_SIZE, 
+                               Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    }
+    
+    // Use JPEG for smaller data URLs (photos compress much better than PNG)
     QByteArray byteArray;
     QBuffer buffer(&byteArray);
     buffer.open(QIODevice::WriteOnly);
     
-    if (m_coverArt.save(&buffer, "PNG", 85)) {
-        m_coverArtUrl = QString("data:image/png;base64,%1")
+    if (scaled.save(&buffer, "JPEG", 85)) {
+        m_coverArtUrl = QString("data:image/jpeg;base64,%1")
                         .arg(QString::fromLatin1(byteArray.toBase64()));
     }
     

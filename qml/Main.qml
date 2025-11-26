@@ -12,88 +12,17 @@ ApplicationWindow {
     height: 800
     title: "Music Player"
 
-    // Tracks the index of the currently playing item to handle duplicates
-    property int currentIdx: -1
     property int browserMode: 0 // 0 = Collection, 1 = Files
-
-    function indexOfUrl(u) {
-        const s = u.toString()
-        for (let i = 0; i < playlist.count(); ++i) {
-            const it = playlist.get(i)
-            if (it && it.url.toString() === s)
-                return i
-        }
-        return -1
-    }
-
-    function indexOfUrlFrom(u, startAt) {
-        const s = u.toString()
-        // forward search from startAt
-        for (let i = Math.max(0, startAt); i < playlist.count(); ++i) {
-            const it = playlist.get(i)
-            if (it && it.url.toString() === s) return i
-        }
-        // fallback: from 0 to startAt-1
-        for (let j = 0; j < Math.min(startAt, playlist.count()); ++j) {
-            const it2 = playlist.get(j)
-            if (it2 && it2.url.toString() === s) return j
-        }
-        return -1
-    }
-
-    function armNextFromQueue() {
-        const idx = currentIdx
-        if (idx >= 0 && idx + 1 < playlist.count()) {
-            const it = playlist.get(idx + 1)
-            if (it) player.setNextFile(it.url)
-        } else {
-            player.setNextFile("")
-        }
-    }
-
-    function playIndex(i) {
-        if (i < 0 || i >= playlist.count()) return
-        const it = playlist.get(i)
-        if (!it) return
-        const u = it.url
-        player.openFile(u)
-        currentIdx = i
-        if (i + 1 < playlist.count()) {
-            const nx = playlist.get(i + 1)
-            if (nx) player.setNextFile(nx.url)
-        } else {
-            player.setNextFile("")
-        }
-    }
+    
+    // Convenience alias for current playing index (from player controller)
+    readonly property int currentIdx: player.currentIndex
 
     function nextFromQueue() {
-        // Stop if playlist is empty
-        if (playlist.count() === 0) {
-            player.stop()
-            currentIdx = -1
-            return
-        }
-        
-        const idx = currentIdx
-        if (idx === -1) {
-            if (playlist.count() > 0) playIndex(0)
-            return
-        }
-        if (idx + 1 < playlist.count()) {
-            playIndex(idx + 1)
-        } else {
-            player.setNextFile("")
-            const endPos = Math.max(0, player.duration - 1)
-            player.seek(endPos)
-            if (!player.playing) {
-                player.play()
-            }
-        }
+        player.next()
     }
 
     function prevFromQueue() {
-        const idx = currentIdx
-        if (idx > 0) playIndex(idx - 1)
+        player.previous()
     }
 
     function handlePlayToggle() {
@@ -101,16 +30,16 @@ ApplicationWindow {
             player.pause()
             return
         }
-        const idx = currentIdx
+        const idx = player.currentIndex
         const finished = player.duration > 0 && player.position >= (player.duration - 5)
         if (idx === -1) {
             if (playlist.count() > 0) {
-                playIndex(0)
+                player.playIndex(0)
             } else {
                 player.play()
             }
         } else if (idx === playlist.count() - 1 && finished) {
-            playIndex(0)
+            player.playIndex(0)
         } else {
             player.play()
         }
@@ -586,15 +515,11 @@ ApplicationWindow {
                                             }
                                         }
                                         
-                                        // Update currentIdx if needed
+                                        // Note: currentIdx is now managed by PlayerController via PlaybackQueue
+                                        // The queue automatically tracks row moves, so we just log for debugging
                                         if (playingRowMoved) {
-                                            // Find new position of the moved playing row using final order
                                             const newCurrentIdx = finalOrder.indexOf(originalCurrentIdx)
-                                            currentIdx = newCurrentIdx
-                                            
-                                            // Reload armed track since playing row moved
-                                            armNextFromQueue()
-                                            console.log("Playing row moved from", originalCurrentIdx, "to", newCurrentIdx, "- reloaded next track")
+                                            console.log("Playing row moved from", originalCurrentIdx, "to", newCurrentIdx)
                                         }
                                         
                                         // Clear selection after move
@@ -874,7 +799,7 @@ ApplicationWindow {
                                             }
                                             
                                             onDoubleClicked: {
-                                                playIndex(index)
+                                                player.playIndex(index)
                                             }
                                         }
                                     }
@@ -923,21 +848,10 @@ ApplicationWindow {
                             enabled: listView.selectedRows.length > 0
                             onClicked: {
                                 // Remove selected rows in reverse order to maintain indices
+                                // Note: PlaybackQueue automatically tracks index changes
                                 const sortedRows = listView.selectedRows.sort((a, b) => b - a)
                                 for (let i = 0; i < sortedRows.length; i++) {
                                     playlist.removeAt(sortedRows[i])
-                                    // Update currentIdx if needed
-                                    if (currentIdx > sortedRows[i]) {
-                                        currentIdx--
-                                    } else if (currentIdx === sortedRows[i]) {
-                                        currentIdx = -1
-                                    }
-                                }
-                                
-                                // Stop playback if playlist becomes empty
-                                if (playlist.count() === 0) {
-                                    player.stop()
-                                    currentIdx = -1
                                 }
                                 
                                 // Clear selection after removal
@@ -967,7 +881,7 @@ ApplicationWindow {
                             enabled: playlist.count() > 0
                             onClicked: {
                                 playlist.clear()
-                                currentIdx = -1
+                                // Note: PlaybackQueue handles index reset automatically
                             }
                         }
                     }
@@ -1252,12 +1166,8 @@ ApplicationWindow {
                                             if (fileIsDir) {
                                                 filesModel.folder = asString
                                             } else {
-                                                const beforeCount = playlist.count()
                                                 playlist.add(urlRole)
-                                                const idx = currentIdx
-                                                if (idx >= 0 && (idx === beforeCount - 1 || beforeCount === 0)) {
-                                                    player.setNextFile(urlRole)
-                                                }
+                                                // Note: PlayerController automatically arms next track when queue changes
                                             }
                                         }
                                         onDoubleClicked: {
@@ -1268,12 +1178,8 @@ ApplicationWindow {
                                             if (fileIsDir) {
                                                 filesModel.folder = asString
                                             } else {
-                                                const beforeCount = playlist.count()
                                                 playlist.add(urlRole)
-                                                const idx = currentIdx
-                                                if (idx >= 0 && (idx === beforeCount - 1 || beforeCount === 0)) {
-                                                    player.setNextFile(urlRole)
-                                                }
+                                                // Note: PlayerController automatically arms next track when queue changes
                                             }
                                         }
                                     }
@@ -1403,8 +1309,30 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         from: 0
                         to: player.duration
-                        value: player.position
-                        onMoved: player.seek(value)
+                        
+                        // Use tentative position while dragging, actual position otherwise
+                        value: pressed ? tentativePosition : player.position
+                        
+                        // Store tentative position while dragging
+                        property real tentativePosition: player.position
+                        
+                        onPressedChanged: {
+                            if (!pressed) {
+                                // User released - seek to final position
+                                player.seek(value)
+                                tentativePosition = player.position
+                            } else {
+                                // User started dragging - initialize tentative position
+                                tentativePosition = value
+                            }
+                        }
+                        
+                        onMoved: {
+                            // Only update tentative position while dragging
+                            if (pressed) {
+                                tentativePosition = value
+                            }
+                        }
                     }
 
                     Text {
@@ -1524,7 +1452,10 @@ ApplicationWindow {
             "Audio files (*.wav *.flac *.mp3 *.ogg *.opus *.aac *.m4a *.mp4 *.mkv)",
             "All files (*)"
         ]
-        onAccepted: player.setNextFile(selectedFile)
+        onAccepted: {
+            // Add to playlist and it will be armed automatically
+            playlist.add(selectedFile)
+        }
     }
 
     FileDialog {
@@ -1535,12 +1466,8 @@ ApplicationWindow {
             "All files (*)"
         ]
         onAccepted: {
-            const beforeCount = playlist.count()
             playlist.add(selectedFile)
-            const idx = currentIdx
-            if (idx >= 0 && (idx === beforeCount - 1 || beforeCount === 0)) {
-                player.setNextFile(selectedFile)
-            }
+            // Note: PlayerController automatically arms next track when queue changes
         }
     }
 
@@ -1578,7 +1505,8 @@ ApplicationWindow {
         function onPlayingChanged() { /* Handled by player */ }
         function onPositionChanged() { /* Handled by player */ }
         function onDurationChanged() { /* Handled by player */ }
-        function onCurrentSourceChanged() { /* Handled by player */ }
+        function onCurrentSourceChanged() { /* currentIndex is now managed by PlayerController */ }
         function onCurrentMetadataChanged() { /* Metadata is now read on add, no update needed */ }
+        function onCurrentIndexChanged() { /* Index updates are automatic */ }
     }
 }

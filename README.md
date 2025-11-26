@@ -1,13 +1,11 @@
 # MusicPlayer (MVP)
-
-Qt 6 + QML desktop music player (MVP playback). Target: Linux (Arch), Windows later.
+Qt 6 + QML desktop music player with a light-weight minimal FFmpeg-based audio engine. Native Linux support, Windows support comming soon.
 
 ## Requirements
-- Qt 6.10 (base, declarative, multimedia)
+- Qt 6.10 (Quick, Multimedia)
 - CMake >= 3.21
-
-Arch packages (example):
-- qt6-base qt6-declarative qt6-multimedia
+- TagLib
+- FFmpeg libraries: libavformat, libavcodec, libavutil, libswresample
 
 ## Build
 ```bash
@@ -18,5 +16,4 @@ cmake --build . -j
 ```
 
 ## Notes
-- Formats depend on your multimedia backend (GStreamer on Linux). Install GStreamer plugins for MP3/AAC/FLAC/Opus, etc.
-- Gapless playback: initial implementation prepares the next track; precise gapless will be refined in later milestones.
+- Supported formats depend on Qt Multimedia and the installed FFmpeg codecs on your system.

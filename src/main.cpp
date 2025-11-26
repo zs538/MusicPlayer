@@ -22,6 +22,7 @@ int main(int argc, char *argv[])
 
     PlayerController controller;
     PlaylistModel playlist;
+    controller.setPlaylistModel(&playlist);
 
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("player", &controller);
