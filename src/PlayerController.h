@@ -12,6 +12,7 @@
 #include "TrackMetadata.h"
 
 class PlaylistModel;
+class PlaylistManager;
 
 /**
  * @brief Orchestrates playback between PlaybackEngine and PlaybackQueue.
@@ -59,7 +60,9 @@ public:
     
     // Playlist integration
     void setPlaylistModel(PlaylistModel* model);
+    void setPlaylistManager(PlaylistManager* manager);
     PlaybackQueue* queue() { return m_queue; }
+    PlaylistManager* playlistManager() const { return m_playlistManager; }
 
     // Property getters
     bool playing() const;
@@ -122,8 +125,11 @@ private:
     void clearCurrent();
     void armNextTrack();
 
+    void connectToActivePlaylist();
+
     PlaybackEngine* m_engine {nullptr};
     PlaybackQueue* m_queue {nullptr};
+    PlaylistManager* m_playlistManager {nullptr};
     
     float m_targetVolume {0.8f};
     QMediaDevices m_devices;

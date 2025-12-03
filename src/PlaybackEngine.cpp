@@ -856,10 +856,30 @@ void PlaybackEngine::updatePosition()
 {
     if (m_state != State::Playing) return;
     
+    // Snapshot current track before checking transitions
+    TrackRef trackBefore = m_currentTrack;
+    
     qint64 pos = position();
     emit positionChanged(pos);
     
     checkTrackTransition();
+    
+    // If a gapless transition just occurred, don't run the trackFinished logic
+    // on this tick - the position and duration have changed to the new track
+    if (m_currentTrack != trackBefore) {
+        return;
+    }
+    
+    // Handle seek-to-end case: if we're at or past duration and no gapless transition will occur,
+    // emit trackFinished so PlayerController can advance to next track.
+    // Critical: Must stop() before emitting trackFinished() because PlayerController ignores
+    // the signal if the engine is not in Stopped state.
+    if (m_currentDurationMs > 0 && pos >= m_currentDurationMs) {
+        if (!m_nextLocked || !m_nextTrack.isValid()) {
+            stop();
+            emit trackFinished();
+        }
+    }
 }
 
 void PlaybackEngine::checkTrackTransition()
@@ -893,17 +913,16 @@ void PlaybackEngine::checkTrackTransition()
 
 void PlaybackEngine::performTrackTransition()
 {
-    // Calculate samples for the old track based on its duration (accounting for seek offset)
-    qint64 oldTrackDurationSamples = msToSamples(m_currentDurationMs - m_seekOffsetMs);
-    
     // Transition to next track
     m_currentTrack = m_nextTrack;
     m_nextTrack = TrackRef();
     m_hasNextPrepared = false;
     m_nextLocked = false;
     
-    // Update track start sample for position calculation
-    m_trackStartSample += oldTrackDurationSamples;
+    // CRITICAL: Set track start sample to the ACTUAL current processed samples,
+    // not an accumulated estimate. This ensures position() returns ~0 for the new track.
+    qint64 processedUs = m_audioSink ? m_audioSink->processedUSecs() : 0;
+    m_trackStartSample = processedUs * m_sessionFormat.sampleRate() / 1000000;
     m_seekOffsetMs = 0;  // Reset seek offset for new track
     
     // Update duration and format from stored next track info
@@ -958,8 +977,8 @@ void PlaybackEngine::onAudioStateChanged(QAudio::State state)
             if (processedSamples >= m_trackStartSample + m_currentTrackSamples) {
                 // Actually finished
                 if (!m_hasNextPrepared) {
-                    emit trackFinished();
                     stop();
+                    emit trackFinished();
                 }
             }
         }

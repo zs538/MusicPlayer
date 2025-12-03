@@ -2,6 +2,7 @@
 #include "MetadataReader.h"
 #include "TrackMetadata.h"
 #include "PlaylistModel.h"
+#include "PlaylistManager.h"
 
 #include <QDebug>
 #include <QTimer>
@@ -57,6 +58,30 @@ void PlayerController::setPlaylistModel(PlaylistModel* model)
     
     m_playlistModel = model;
     m_queue->setActivePlaylist(model);
+}
+
+void PlayerController::setPlaylistManager(PlaylistManager* manager)
+{
+    if (m_playlistManager == manager) return;
+    
+    m_playlistManager = manager;
+    
+    if (m_playlistManager) {
+        // Connect to active playlist changes
+        connect(m_playlistManager, &PlaylistManager::activePlaylistChanged,
+                this, &PlayerController::connectToActivePlaylist);
+        
+        // Set initial active playlist
+        connectToActivePlaylist();
+    }
+}
+
+void PlayerController::connectToActivePlaylist()
+{
+    if (!m_playlistManager) return;
+    
+    PlaylistModel* activePlaylist = m_playlistManager->activePlaylist();
+    setPlaylistModel(activePlaylist);
 }
 
 void PlayerController::openFile(const QUrl& url)

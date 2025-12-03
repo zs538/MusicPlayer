@@ -34,6 +34,8 @@ set(SOURCES
     src/PlayerController.h
     src/PlaylistModel.cpp
     src/PlaylistModel.h
+    src/PlaylistManager.cpp
+    src/PlaylistManager.h
     src/TrackMetadata.cpp
     src/TrackMetadata.h
     src/MetadataReader.cpp
