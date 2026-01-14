@@ -1,28 +1,35 @@
 # Build artifacts
-/build/
-/build-*/
-/cmake-build-*/
-/CMakeFiles/
-/CMakeCache.txt
-/Testing/
-/Makefile
-/*.user
-*.user
-*.pro.user
-*.qmlc
-*.jsc
+build/
+CMakeCache.txt
+CMakeFiles/
+Makefile
+cmake_install.cmake
 *.o
-*.obj
-*.so
 *.a
-*.dll
-*.dylib
-*.app
-*.exe
+appmusicplayer
+*_autogen/
+*.qmltypes
+meta_types/
+.qsb/
+.qt/
+.rcc/
 
-# IDE
+# Runtime files
+*.db
+*.log
+session.json
+
+# IDE files
 .vscode/
 .idea/
+.windsurf/
 
-# OS
+# OS files
 .DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~

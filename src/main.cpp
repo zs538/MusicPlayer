@@ -1,64 +1,41 @@
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
-#include <QQmlContext>
-#include <QtQml>
-#include <QQuickWindow>
-#include <QSGRendererInterface>
-
-#include "PlayerController.h"
-#include "PlaylistModel.h"
-#include "PlaylistManager.h"
-#include "TrackMetadata.h"
+#include <QQuickStyle>
+#include "CoverImageProvider.h"
+#include "AppViewModel.h"
 
 int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
     
-    // Set application info for QStandardPaths
-    app.setOrganizationName("MusicPlayer");
-    app.setApplicationName("MusicPlayer");
+    QCoreApplication::setOrganizationName("MusicPlayer");
+    QCoreApplication::setApplicationName("MusicPlayer-");
     
-    // Force software rendering backend to avoid driver/OpenGL issues
-    QQuickWindow::setGraphicsApi(QSGRendererInterface::Software);
-    qputenv("QSG_RHI_BACKEND", QByteArray("software"));
-    qputenv("QT_QUICK_BACKEND", QByteArray("software"));
+    QQuickStyle::setStyle("Fusion");
     
-    // Register TrackMetadata for QML
-    qmlRegisterType<TrackMetadata>("MusicPlayer", 1, 0, "TrackMetadata");
-    qmlRegisterUncreatableType<PlaylistModel>("MusicPlayer", 1, 0, "PlaylistModel",
-        "PlaylistModel is created by PlaylistManager");
-
-    // Create playlist manager and player controller
-    PlaylistManager playlistManager;
-    playlistManager.loadSession();
-    
-    PlayerController controller;
-    controller.setPlaylistManager(&playlistManager);
-
     QQmlApplicationEngine engine;
-    engine.rootContext()->setContextProperty("player", &controller);
-    engine.rootContext()->setContextProperty("playlistManager", &playlistManager);
-    // Expose the displayed playlist for backward compatibility
-    engine.rootContext()->setContextProperty("playlist", playlistManager.displayedPlaylist());
     
-    // Update playlist context property when displayed playlist changes
-    QObject::connect(&playlistManager, &PlaylistManager::displayedPlaylistChanged,
-                     [&engine, &playlistManager](const QString&) {
-        engine.rootContext()->setContextProperty("playlist", playlistManager.displayedPlaylist());
+    // Register cover image provider (with null db initially, will be set later)
+    auto *coverProvider = new CoverImageProvider(nullptr);
+    CoverImageProvider::setInstance(coverProvider);
+    engine.addImageProvider("cover", coverProvider);
+    
+    QObject::connect(
+        &engine,
+        &QQmlApplicationEngine::objectCreationFailed,
+        &app,
+        []() { QCoreApplication::exit(-1); },
+        Qt::QueuedConnection);
+    
+    // After QML loads, the AppViewModel singleton will be created
+    // We can then update the cover provider with the database
+    QObject::connect(&engine, &QQmlApplicationEngine::objectCreated, [coverProvider]() {
+        if (AppViewModel::instance()) {
+            coverProvider->setDatabase(AppViewModel::instance()->libraryDatabase());
+        }
     });
     
-    // Save session on quit
-    QObject::connect(&app, &QGuiApplication::aboutToQuit, [&playlistManager]() {
-        playlistManager.saveSession();
-    });
-
-    const QUrl url(QStringLiteral("qrc:/qt/qml/MusicPlayer/qml/Main.qml"));
-    QObject::connect(&engine, &QQmlApplicationEngine::objectCreated,
-                     &app, [url](QObject *obj, const QUrl &objUrl) {
-        if (!obj && url == objUrl)
-            QCoreApplication::exit(-1);
-    }, Qt::QueuedConnection);
-    engine.load(url);
-
+    engine.loadFromModule("MusicPlayer", "Main");
+    
     return app.exec();
 }
