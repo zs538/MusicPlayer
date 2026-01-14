@@ -9,7 +9,7 @@
 
 ## Build
 
-### Linux (Ubuntu/Debian)
+### Linux
 ```bash
 sudo apt install qt6-base-dev qt6-declarative-dev qt6-multimedia-dev qt6-tools-dev libavformat-dev libavcodec-dev libavutil-dev libswresample-dev libtag1-dev cmake build-essential pkg-config
 cd MusicPlayer
