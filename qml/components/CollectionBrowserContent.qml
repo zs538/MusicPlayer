@@ -18,9 +18,15 @@ Item {
 
     // Optional properties with defaults
     property bool showHeader: false
-    property string viewMode: "grid"  // "grid", "list", "tracks"
+    property string viewMode: Settings.groupTypeViewMode(groupBy)  // "grid", "list", "tracks"
     property bool canGoBack: false
     property string windowTitle: ""  // For window mode, prepended to title
+    
+    // Persist view mode changes to Settings
+    onViewModeChanged: Settings.setGroupTypeViewMode(groupBy, viewMode)
+    
+    // Update view mode when groupBy changes (load from settings)
+    onGroupByChanged: viewMode = Settings.groupTypeViewMode(groupBy)
 
     // Expandable groups (window mode feature)
     property bool expandableGroups: false
@@ -256,32 +262,18 @@ Item {
                             ButtonGroup { id: openActionGroup }
 
                             MenuItem {
-                                text: "Open in new panel"
+                                text: "Further explore"
                                 ButtonGroup.group: openActionGroup
                                 checkable: true
-                                checked: Settings.groupTypeOpenAction(root.groupBy) === "openPanel"
+                                checked: Settings.groupTypeOpenAction(root.groupBy) !== "queueTracks"
                                 onTriggered: Settings.setGroupTypeOpenAction(root.groupBy, "openPanel")
                             }
                             MenuItem {
-                                text: "Replace current panel"
+                                text: "Queue tracks"
                                 ButtonGroup.group: openActionGroup
                                 checkable: true
-                                checked: Settings.groupTypeOpenAction(root.groupBy) === "replacePanel"
-                                onTriggered: Settings.setGroupTypeOpenAction(root.groupBy, "replacePanel")
-                            }
-                            MenuItem {
-                                text: "Add to playlist"
-                                ButtonGroup.group: openActionGroup
-                                checkable: true
-                                checked: Settings.groupTypeOpenAction(root.groupBy) === "addToPlaylist"
-                                onTriggered: Settings.setGroupTypeOpenAction(root.groupBy, "addToPlaylist")
-                            }
-                            MenuItem {
-                                text: "Play now"
-                                ButtonGroup.group: openActionGroup
-                                checkable: true
-                                checked: Settings.groupTypeOpenAction(root.groupBy) === "playNow"
-                                onTriggered: Settings.setGroupTypeOpenAction(root.groupBy, "playNow")
+                                checked: Settings.groupTypeOpenAction(root.groupBy) === "queueTracks"
+                                onTriggered: Settings.setGroupTypeOpenAction(root.groupBy, "queueTracks")
                             }
                         }
                     }
@@ -421,15 +413,17 @@ Item {
                         onDoubleClicked: {
                             if (gridDel.entryType === "group") {
                                 let openAction = Settings.groupTypeOpenAction(gridDel.groupType)
-                                if (openAction === "replacePanel") {
-                                    let newFilter = root.filter.slice()
-                                    newFilter.push({field: gridDel.groupType, op: "=", value: gridDel.groupValue})
-                                    root.navigateRequested(newFilter, Settings.groupTypeNextGroupBy(gridDel.groupType))
+                                if (openAction === "queueTracks") {
+                                    // Queue tracks from this group
+                                    AppViewModel.browseActivation.addFilteredTracksToViewed(
+                                        root.filter, gridDel.groupType, gridDel.groupValue)
                                 } else {
+                                    // Further explore - open in new panel
                                     AppViewModel.browseActivation.openCollectionGroup(
                                         root.panelState, gridDel.groupType, gridDel.groupValue)
                                 }
                             } else {
+                                // Track - always queue it
                                 AppViewModel.browseActivation.activateCollectionEntry("t:" + gridDel.filePath)
                             }
                         }
@@ -439,25 +433,37 @@ Item {
                         id: gridContextMenu
 
                         MenuItem {
-                            text: qsTr("Add to playlist")
+                            text: qsTr("Append to viewed playlist")
                             onTriggered: {
                                 if (gridDel.entryType === "group") {
-                                    AppViewModel.browseActivation.addFilteredTracksToViewed(
+                                    AppViewModel.browseActivation.appendFilteredTracksToViewed(
                                         root.filter, gridDel.groupType, gridDel.groupValue)
                                 } else {
-                                    AppViewModel.browseActivation.addCollectionEntryToViewed("t:" + gridDel.filePath)
+                                    AppViewModel.browseActivation.appendCollectionEntryToViewed("t:" + gridDel.filePath)
                                 }
                             }
                         }
 
                         MenuItem {
-                            text: qsTr("Play now")
+                            text: qsTr("Append after currently playing")
                             onTriggered: {
                                 if (gridDel.entryType === "group") {
-                                    AppViewModel.browseActivation.playFilteredTracksNow(
+                                    AppViewModel.browseActivation.appendFilteredTracksAfterPlaying(
                                         root.filter, gridDel.groupType, gridDel.groupValue)
                                 } else {
-                                    AppViewModel.browseActivation.playCollectionEntryNow("t:" + gridDel.filePath)
+                                    AppViewModel.browseActivation.appendCollectionEntryAfterPlaying("t:" + gridDel.filePath)
+                                }
+                            }
+                        }
+
+                        MenuItem {
+                            text: qsTr("Open in new playlist")
+                            onTriggered: {
+                                if (gridDel.entryType === "group") {
+                                    AppViewModel.browseActivation.openFilteredTracksInNewPlaylist(
+                                        root.filter, gridDel.groupType, gridDel.groupValue)
+                                } else {
+                                    AppViewModel.browseActivation.openCollectionEntryInNewPlaylist("t:" + gridDel.filePath)
                                 }
                             }
                         }
@@ -605,15 +611,17 @@ Item {
                         onDoubleClicked: {
                             if (listDel.isGroup && !root.expandableGroups) {
                                 let openAction = Settings.groupTypeOpenAction(listDel.groupType)
-                                if (openAction === "replacePanel") {
-                                    let newFilter = root.filter.slice()
-                                    newFilter.push({field: listDel.groupType, op: "=", value: listDel.groupValue})
-                                    root.navigateRequested(newFilter, Settings.groupTypeNextGroupBy(listDel.groupType))
+                                if (openAction === "queueTracks") {
+                                    // Queue tracks from this group
+                                    AppViewModel.browseActivation.addFilteredTracksToViewed(
+                                        root.filter, listDel.groupType, listDel.groupValue)
                                 } else {
+                                    // Further explore - open in new panel
                                     AppViewModel.browseActivation.openCollectionGroup(
                                         root.panelState, listDel.groupType, listDel.groupValue)
                                 }
                             } else if (!listDel.isGroup) {
+                                // Track - always queue it
                                 AppViewModel.browseActivation.activateCollectionEntry("t:" + listDel.filePath)
                             }
                         }
@@ -622,24 +630,35 @@ Item {
                     Menu {
                         id: listContextMenu
                         MenuItem {
-                            text: "Add to playlist"
+                            text: "Append to viewed playlist"
                             onTriggered: {
                                 if (listDel.isGroup) {
-                                    AppViewModel.browseActivation.addFilteredTracksToViewed(
+                                    AppViewModel.browseActivation.appendFilteredTracksToViewed(
                                         root.filter, listDel.groupType, listDel.groupValue)
                                 } else {
-                                    AppViewModel.browseActivation.addCollectionEntryToViewed("t:" + listDel.filePath)
+                                    AppViewModel.browseActivation.appendCollectionEntryToViewed("t:" + listDel.filePath)
                                 }
                             }
                         }
                         MenuItem {
-                            text: "Play now"
+                            text: "Append after currently playing"
                             onTriggered: {
                                 if (listDel.isGroup) {
-                                    AppViewModel.browseActivation.playFilteredTracksNow(
+                                    AppViewModel.browseActivation.appendFilteredTracksAfterPlaying(
                                         root.filter, listDel.groupType, listDel.groupValue)
                                 } else {
-                                    AppViewModel.browseActivation.playCollectionEntryNow("t:" + listDel.filePath)
+                                    AppViewModel.browseActivation.appendCollectionEntryAfterPlaying("t:" + listDel.filePath)
+                                }
+                            }
+                        }
+                        MenuItem {
+                            text: "Open in new playlist"
+                            onTriggered: {
+                                if (listDel.isGroup) {
+                                    AppViewModel.browseActivation.openFilteredTracksInNewPlaylist(
+                                        root.filter, listDel.groupType, listDel.groupValue)
+                                } else {
+                                    AppViewModel.browseActivation.openCollectionEntryInNewPlaylist("t:" + listDel.filePath)
                                 }
                             }
                         }
@@ -708,12 +727,16 @@ Item {
                         Menu {
                             id: expandedTrackMenu
                             MenuItem {
-                                text: "Add to playlist"
-                                onTriggered: AppViewModel.browseActivation.addCollectionEntryToViewed("t:" + modelData.filePath)
+                                text: "Append to viewed playlist"
+                                onTriggered: AppViewModel.browseActivation.appendCollectionEntryToViewed("t:" + modelData.filePath)
                             }
                             MenuItem {
-                                text: "Play now"
-                                onTriggered: AppViewModel.browseActivation.playCollectionEntryNow("t:" + modelData.filePath)
+                                text: "Append after currently playing"
+                                onTriggered: AppViewModel.browseActivation.appendCollectionEntryAfterPlaying("t:" + modelData.filePath)
+                            }
+                            MenuItem {
+                                text: "Open in new playlist"
+                                onTriggered: AppViewModel.browseActivation.openCollectionEntryInNewPlaylist("t:" + modelData.filePath)
                             }
                         }
                     }

@@ -2,14 +2,11 @@
 #define AUDIOENGINE_H
 
 #include <QObject>
-#include <QAudioSink>
 #include <QAudioFormat>
-#include <QIODevice>
+#include <QAudio>
 #include <QThread>
 #include <QMutex>
-#include <QWaitCondition>
 #include <QTimer>
-#include <QMediaDevices>
 #include <atomic>
 #include <memory>
 
@@ -20,7 +17,7 @@ struct AVFrame;
 struct AVPacket;
 
 class SPSCRingBuffer;
-class BufferIODevice;
+class AudioOutputWorker;
 
 class AudioEngine : public QObject
 {
@@ -87,6 +84,8 @@ signals:
 
 private slots:
     void onAudioStateChanged(QAudio::State state);
+    void onAudioWorkerInitialized(bool success);
+    void onPositionUpdated(qint64 processedUSecs);
     void updatePosition();
 
 private:
@@ -117,11 +116,13 @@ private:
     int m_nextAudioStreamIndex = -1;
     QString m_nextPreopenedPath;
     
-    std::unique_ptr<QAudioSink> m_audioSink;
-    QAudioFormat m_audioFormat;
+    // Audio output runs in dedicated thread for GUI-independence
+    std::unique_ptr<QThread> m_audioThread;
+    AudioOutputWorker *m_audioWorker = nullptr;  // Owned by m_audioThread
+    std::atomic<qint64> m_cachedProcessedUSecs{0};  // Pushed from audio thread
+    std::atomic<bool> m_audioInitialized{false};
     
     std::unique_ptr<SPSCRingBuffer> m_ringBuffer;
-    std::unique_ptr<BufferIODevice> m_bufferDevice;
     std::unique_ptr<QThread> m_decodeThread;
     std::atomic<bool> m_stopDecoding{false};
     

@@ -72,11 +72,6 @@ public:
 
     Q_INVOKABLE QString openCollectionWindow(const QVariantMap &panelState);
     Q_INVOKABLE void closeWindow(const QString &windowId);
-    Q_INVOKABLE void updateWindowGeometry(const QString &windowId, int x, int y, int width, int height);
-
-    // Session persistence
-    QVariantList windowsToVariant() const;
-    void restoreWindowsFromVariant(const QVariantList &list);
 
 signals:
     void windowOpened(const QString &windowId, const QVariantMap &panelState);

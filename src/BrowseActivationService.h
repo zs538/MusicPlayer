@@ -33,30 +33,39 @@ public:
     // Playlist entry activation (double-click on playlist row)
     Q_INVOKABLE void activatePlaylistRow(int row);
 
-    // Library/collection activation (entryId format: "t:filePath" for tracks, "g:nodeKey" for groups)
+    // Library/collection activation (entryId format: "t:filePath" for tracks)
     Q_INVOKABLE void activateCollectionEntry(const QString &entryId);
-
-    // Explicit context menu commands
-    Q_INVOKABLE void addCollectionEntryToViewed(const QString &entryId);
-    Q_INVOKABLE void playCollectionEntryNow(const QString &entryId);
-    
-    // Add tracks directly (for nested groups that store tracks inline)
-    Q_INVOKABLE void addTracksToViewed(const QVariantList &tracks);
-    Q_INVOKABLE void playTracksNow(const QVariantList &tracks);
 
     // Drop handling
     Q_INVOKABLE void dropUrlsToViewed(const QList<QUrl> &urls);
 
-    // New collection browsing API (filter-based)
+    // Collection browsing - open group for further exploration
     Q_INVOKABLE void openCollectionGroup(const QVariantMap &currentPanelState,
                                           const QString &groupType,
                                           const QVariant &groupValue);
+    
+    // Double-click queue action (uses settings for target playlist and autoplay)
     Q_INVOKABLE void addFilteredTracksToViewed(const QVariantList &filter,
                                                 const QString &groupType,
                                                 const QVariant &groupValue);
-    Q_INVOKABLE void playFilteredTracksNow(const QVariantList &filter,
-                                            const QString &groupType,
-                                            const QVariant &groupValue);
+    
+    // Context menu: append to viewed playlist (no autoplay)
+    Q_INVOKABLE void appendFilteredTracksToViewed(const QVariantList &filter,
+                                                   const QString &groupType,
+                                                   const QVariant &groupValue);
+    Q_INVOKABLE void appendCollectionEntryToViewed(const QString &entryId);
+    
+    // Context menu: append after currently playing track
+    Q_INVOKABLE void appendFilteredTracksAfterPlaying(const QVariantList &filter,
+                                                       const QString &groupType,
+                                                       const QVariant &groupValue);
+    Q_INVOKABLE void appendCollectionEntryAfterPlaying(const QString &entryId);
+    
+    // Context menu: open in new generated playlist (follows autoplay setting)
+    Q_INVOKABLE void openFilteredTracksInNewPlaylist(const QVariantList &filter,
+                                                      const QString &groupType,
+                                                      const QVariant &groupValue);
+    Q_INVOKABLE void openCollectionEntryInNewPlaylist(const QString &entryId);
 
 signals:
     void openCollectionPanelRequested(const QVariantMap &panelState);
@@ -64,7 +73,7 @@ signals:
 
 private:
     void applyTracksToPlaylist(const QStringList &filePaths, int startRow = 0);
-    QString resolveTargetPlaylistId();
+    QString resolveTargetPlaylistId(const QString &generatedName = QString());
     bool shouldAutoplay() const;
     ViewedPlaylistRouter *router() const;
     

@@ -34,6 +34,8 @@ qt_add_executable(appmusicplayer
     src/QueueManager.cpp
     src/audio/AudioEngine.h
     src/audio/AudioEngine.cpp
+    src/audio/AudioOutputWorker.h
+    src/audio/AudioOutputWorker.cpp
     src/audio/SPSCRingBuffer.h
     src/audio/SPSCRingBuffer.cpp
     src/audio/BufferIODevice.h
@@ -112,7 +114,7 @@ qt_add_qml_module(appmusicplayer
         qml/panels/CoverPanel.qml
         qml/panels/ControlsStrip.qml
         qml/windows/CollectionWindow.qml
-        qml/windows/SettingsWindow.qml
+        qml/settings/SettingsWindow.qml
     SOURCES
         src/AppViewModel.h src/AppViewModel.cpp
         src/FileBrowserModel.h src/FileBrowserModel.cpp

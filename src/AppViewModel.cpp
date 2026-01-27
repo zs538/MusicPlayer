@@ -36,6 +36,10 @@ AppViewModel::AppViewModel(QObject *parent)
     connect(m_libraryScanner, &LibraryScanner::scanningChanged, this, &AppViewModel::libraryScanningChanged);
     connect(m_libraryScanner, &LibraryScanner::progressChanged, this, &AppViewModel::libraryScanProgressChanged);
     connect(m_libraryScanner, &LibraryScanner::scanFinished, this, [this]() {
+        // Notify database changed so all models (CollectionBrowseModel, etc.) refresh
+        if (m_libraryDb) {
+            m_libraryDb->notifyDatabaseChanged();
+        }
         if (m_libraryTreeModel) {
             m_libraryTreeModel->refresh();
         }
@@ -85,6 +89,25 @@ AppViewModel::AppViewModel(QObject *parent)
     Settings *settings = Settings::instance();
     if (!settings) {
         settings = new Settings(this);
+    }
+    
+    // Connect Settings to AudioEngine
+    if (settings && m_audioEngine) {
+        m_audioEngine->setPlaybackMode(static_cast<AudioEngine::PlaybackMode>(settings->playbackMode()));
+        m_audioEngine->setSinkBufferMs(settings->bufferSizeMs());
+        
+        connect(settings, &Settings::playbackModeChanged, this, [this]() {
+            Settings *s = Settings::instance();
+            if (s && m_audioEngine) {
+                m_audioEngine->setPlaybackMode(static_cast<AudioEngine::PlaybackMode>(s->playbackMode()));
+            }
+        });
+        connect(settings, &Settings::bufferSizeMsChanged, this, [this]() {
+            Settings *s = Settings::instance();
+            if (s && m_audioEngine) {
+                m_audioEngine->setSinkBufferMs(s->bufferSizeMs());
+            }
+        });
     }
     
     // Initialize SessionManager and load session if enabled
@@ -280,6 +303,18 @@ void AppViewModel::next()
 
 void AppViewModel::previous()
 {
+    Settings *settings = Settings::instance();
+    
+    // Check if we should restart the current track first
+    if (settings && settings->previousButtonAction() == Settings::RestartThenJump) {
+        // If position > 3 seconds, restart current track instead of jumping
+        if (m_positionMs > 3000) {
+            m_audioEngine->seek(0);
+            return;
+        }
+    }
+    
+    // Jump to previous track
     if (m_queueManager->canRetreat()) {
         m_queueManager->retreat();
         TrackInfo track = m_queueManager->currentTrack();
@@ -288,8 +323,12 @@ void AppViewModel::previous()
             m_audioEngine->play(track.filePath);
         }
     } else {
-        // No previous track - stop playback
-        stop();
+        // No previous track - restart current track or stop
+        if (m_playbackState == Playing || m_playbackState == Paused) {
+            m_audioEngine->seek(0);
+        } else {
+            stop();
+        }
     }
 }
 
@@ -399,12 +438,14 @@ void AppViewModel::addLibraryFolder(const QString &path)
 {
     m_libraryDb->addWatchFolder(path);
     m_libraryScanner->scanFolder(path);
+    emit libraryFoldersChanged();
 }
 
 void AppViewModel::removeLibraryFolder(const QString &path)
 {
     m_libraryDb->removeWatchFolder(path);
     m_libraryDb->removeTracksInFolder(path);
+    emit libraryFoldersChanged();
 }
 
 void AppViewModel::rescanLibrary()
@@ -511,12 +552,8 @@ void AppViewModel::updateNowPlaying(const TrackInfo &track)
         m_nowPlayingTitle = track.title.isEmpty() ? QFileInfo(track.filePath).fileName() : track.title;
         m_nowPlayingArtist = track.artist;
         
-        CoverArtProvider *coverProvider = CoverArtProvider::instance();
-        if (coverProvider) {
-            m_nowPlayingCoverUrl = coverProvider->coverUrlForFile(track.filePath, track.album, track.artist);
-        } else {
-            m_nowPlayingCoverUrl.clear();
-        }
+        // Use async image provider to avoid blocking GUI thread with TagLib/QImage work
+        m_nowPlayingCoverUrl = QStringLiteral("image://cover/") + track.filePath;
         
         emit nowPlayingChanged();
     }

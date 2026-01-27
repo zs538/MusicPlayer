@@ -108,7 +108,6 @@ WindowManager *WindowManager::instance()
 
 QString WindowManager::openCollectionWindow(const QVariantMap &panelState)
 {
-    // Create new window (no deduplication - each call creates a new window)
     QString windowId = QString("win_%1").arg(m_nextWindowId++);
     
     WindowListModel::WindowInfo info;
@@ -116,12 +115,6 @@ QString WindowManager::openCollectionWindow(const QVariantMap &panelState)
     info.windowType = "collection";
     info.title = panelState.value("title").toString();
     info.panelState = panelState;
-    info.geometry = {
-        {"x", 100 + (m_windowsModel->rowCount() * 30)},
-        {"y", 100 + (m_windowsModel->rowCount() * 30)},
-        {"width", 350},
-        {"height", 400}
-    };
     
     m_windowsModel->addWindow(info);
     emit windowOpened(windowId, panelState);
@@ -133,55 +126,4 @@ void WindowManager::closeWindow(const QString &windowId)
 {
     m_windowsModel->removeWindow(windowId);
     emit windowClosed(windowId);
-}
-
-void WindowManager::updateWindowGeometry(const QString &windowId, int x, int y, int width, int height)
-{
-    QVariantMap geometry;
-    geometry["x"] = x;
-    geometry["y"] = y;
-    geometry["width"] = width;
-    geometry["height"] = height;
-    m_windowsModel->updateGeometry(windowId, geometry);
-}
-
-QVariantList WindowManager::windowsToVariant() const
-{
-    QVariantList list;
-    for (const auto &w : m_windowsModel->windows()) {
-        QVariantMap map;
-        map["windowId"] = w.windowId;
-        map["windowType"] = w.windowType;
-        map["title"] = w.title;
-        map["panelState"] = w.panelState;
-        map["geometry"] = w.geometry;
-        list.append(map);
-    }
-    return list;
-}
-
-void WindowManager::restoreWindowsFromVariant(const QVariantList &list)
-{
-    for (const QVariant &v : list) {
-        QVariantMap map = v.toMap();
-        
-        WindowListModel::WindowInfo info;
-        info.windowId = map.value("windowId").toString();
-        info.windowType = map.value("windowType").toString();
-        info.title = map.value("title").toString();
-        info.panelState = map.value("panelState").toMap();
-        info.geometry = map.value("geometry").toMap();
-        
-        // Update next window ID to avoid collisions
-        if (info.windowId.startsWith("win_")) {
-            bool ok;
-            int id = info.windowId.mid(4).toInt(&ok);
-            if (ok && id >= m_nextWindowId) {
-                m_nextWindowId = id + 1;
-            }
-        }
-        
-        m_windowsModel->addWindow(info);
-        emit windowOpened(info.windowId, info.panelState);
-    }
 }

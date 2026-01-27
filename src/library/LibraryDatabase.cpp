@@ -34,6 +34,11 @@ bool LibraryDatabase::open(const QString &path)
         return false;
     }
     
+    // Enable WAL mode and busy timeout for better concurrency with scanner thread
+    QSqlQuery pragma(m_db);
+    pragma.exec("PRAGMA journal_mode=WAL");
+    pragma.exec("PRAGMA busy_timeout=5000");
+    
     return createTables();
 }
 
@@ -107,6 +112,26 @@ bool LibraryDatabase::createTables()
         qWarning() << "Failed to create watch_folders table:" << query.lastError().text();
         return false;
     }
+    
+    // Playlists tables
+    query.exec(R"(
+        CREATE TABLE IF NOT EXISTS playlists (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            uuid TEXT UNIQUE NOT NULL,
+            name TEXT NOT NULL,
+            created_time INTEGER DEFAULT 0
+        )
+    )");
+    
+    query.exec(R"(
+        CREATE TABLE IF NOT EXISTS playlist_tracks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            playlist_id INTEGER NOT NULL,
+            position INTEGER NOT NULL,
+            file_path TEXT NOT NULL,
+            FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE
+        )
+    )");
     
     return true;
 }

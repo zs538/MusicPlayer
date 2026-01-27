@@ -81,36 +81,40 @@ Rectangle {
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                 cursorShape: Qt.PointingHandCursor
                 hoverEnabled: true
-                onClicked: function(mouse) {
-                    if (mouse.button === Qt.LeftButton)
-                        playlistSwitchMenu.popup()
-                    else if (mouse.button === Qt.RightButton)
-                        playlistActionsMenu.popup()
+            }
+
+            WheelHandler {
+                // Build ordered playlist list (user first, then generated) - same as menu
+                function getOrderedPlaylists() {
+                    let userPlaylists = []
+                    let genPlaylists = []
+                    for (let i = 0; i < AppViewModel.playlistTabsModel.rowCount(); i++) {
+                        let idx = AppViewModel.playlistTabsModel.index(i, 0)
+                        let item = {
+                            uuid: AppViewModel.playlistTabsModel.data(idx, 257),
+                            isUserCreated: AppViewModel.playlistTabsModel.data(idx, 262)
+                        }
+                        if (item.isUserCreated) userPlaylists.push(item.uuid)
+                        else genPlaylists.push(item.uuid)
+                    }
+                    return userPlaylists.concat(genPlaylists)
                 }
                 
-                onWheel: function(wheel) {
-                    let currentIndex = AppViewModel.playlistStore.indexOfUuid(root.playlistId)
-                    let newIndex = currentIndex
+                onWheel: (wheel) => {
+                    let ordered = getOrderedPlaylists()
+                    let currentIdx = ordered.indexOf(root.playlistId)
+                    if (currentIdx < 0) currentIdx = 0
                     
+                    let newIdx = currentIdx
                     if (wheel.angleDelta.y > 0) {
-                        // Scroll up - previous playlist
-                        if (currentIndex > 0)
-                            newIndex = currentIndex - 1
+                        if (currentIdx > 0) newIdx = currentIdx - 1
                     } else {
-                        // Scroll down - next playlist
-                        if (currentIndex < AppViewModel.playlistStore.tabCount - 1)
-                            newIndex = currentIndex + 1
+                        if (currentIdx < ordered.length - 1) newIdx = currentIdx + 1
                     }
                     
-                    if (newIndex !== currentIndex) {
-                        // Get UUID from the model like the menu does
-                        let idx = AppViewModel.playlistTabsModel.index(newIndex, 0)
-                        let newUuid = AppViewModel.playlistTabsModel.data(idx, 257) // UuidRole
-                        if (newUuid) {
-                            ViewedPlaylistRouter.viewedPlaylistId = newUuid
-                        }
+                    if (newIdx !== currentIdx && ordered[newIdx]) {
+                        ViewedPlaylistRouter.viewedPlaylistId = ordered[newIdx]
                     }
-                    
                     wheel.accepted = true
                 }
             }
@@ -118,6 +122,51 @@ Rectangle {
             // Left-click: switch playlist menu
             Menu {
                 id: playlistSwitchMenu
+                
+                // Build menu items dynamically when opened
+                onAboutToShow: {
+                    // Clear existing dynamic items
+                    while (playlistSwitchMenu.count > 2) {
+                        playlistSwitchMenu.removeItem(playlistSwitchMenu.itemAt(2))
+                    }
+                    
+                    let userPlaylists = []
+                    let genPlaylists = []
+                    
+                    // Separate playlists by type
+                    for (let i = 0; i < AppViewModel.playlistTabsModel.rowCount(); i++) {
+                        let idx = AppViewModel.playlistTabsModel.index(i, 0)
+                        let item = {
+                            uuid: AppViewModel.playlistTabsModel.data(idx, 257),
+                            name: AppViewModel.playlistTabsModel.data(idx, 258),
+                            isUserCreated: AppViewModel.playlistTabsModel.data(idx, 262)
+                        }
+                        if (item.isUserCreated) userPlaylists.push(item)
+                        else genPlaylists.push(item)
+                    }
+                    
+                    // Add user playlists
+                    for (let pl of userPlaylists) {
+                        let menuItem = playlistItemComponent.createObject(playlistSwitchMenu, {
+                            plUuid: pl.uuid, plName: pl.name
+                        })
+                        playlistSwitchMenu.addItem(menuItem)
+                    }
+                    
+                    // Add separator if both types exist
+                    if (userPlaylists.length > 0 && genPlaylists.length > 0) {
+                        playlistSwitchMenu.addItem(separatorComponent.createObject(playlistSwitchMenu))
+                    }
+                    
+                    // Add generated playlists
+                    for (let pl of genPlaylists) {
+                        let menuItem = playlistItemComponent.createObject(playlistSwitchMenu, {
+                            plUuid: pl.uuid, plName: pl.name
+                        })
+                        playlistSwitchMenu.addItem(menuItem)
+                    }
+                }
+                
                 MenuItem {
                     text: "New playlist"
                     onTriggered: {
@@ -126,73 +175,37 @@ Rectangle {
                     }
                 }
                 MenuSeparator {}
-                Repeater {
-                    model: AppViewModel.playlistTabsModel
-                    MenuItem {
-                        required property string uuid
-                        required property string name
-                        required property bool isUserCreated
-                        visible: isUserCreated
-                        height: isUserCreated ? implicitHeight : 0
-                        
-                        contentItem: Row {
-                            spacing: 8
-                            Image {
-                                source: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M1 1l6 3-6 3z' fill='%23currentColor'/%3E%3C/svg%3E"
-                                visible: uuid === ViewedPlaylistRouter.activePlaylistId && AppViewModel.playbackState !== AppViewModel.Stopped
-                                sourceSize.width: 8
-                                sourceSize.height: 8
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
-                            Label {
-                                text: name
-                                font.bold: uuid === root.playlistId
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
+            }
+            
+            Component {
+                id: playlistItemComponent
+                MenuItem {
+                    property string plUuid
+                    property string plName
+                    
+                    contentItem: Row {
+                        spacing: 8
+                        Image {
+                            source: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M1 1l6 3-6 3z' fill='%23currentColor'/%3E%3C/svg%3E"
+                            visible: plUuid === ViewedPlaylistRouter.activePlaylistId && AppViewModel.playbackState !== AppViewModel.Stopped
+                            sourceSize.width: 8
+                            sourceSize.height: 8
+                            anchors.verticalCenter: parent.verticalCenter
                         }
-                        
-                        onTriggered: ViewedPlaylistRouter.viewedPlaylistId = uuid
-                    }
-                }
-                MenuSeparator {
-                    visible: {
-                        let hasUser = false, hasGen = false
-                        for (let i = 0; i < AppViewModel.playlistTabsModel.rowCount(); i++) {
-                            let idx = AppViewModel.playlistTabsModel.index(i, 0)
-                            if (AppViewModel.playlistTabsModel.data(idx, 262)) hasUser = true
-                            else hasGen = true
+                        Label {
+                            text: plName
+                            font.bold: plUuid === root.playlistId
+                            anchors.verticalCenter: parent.verticalCenter
                         }
-                        return hasUser && hasGen
                     }
+                    
+                    onTriggered: ViewedPlaylistRouter.viewedPlaylistId = plUuid
                 }
-                Repeater {
-                    model: AppViewModel.playlistTabsModel
-                    MenuItem {
-                        required property string uuid
-                        required property string name
-                        required property bool isUserCreated
-                        visible: !isUserCreated
-                        height: !isUserCreated ? implicitHeight : 0
-                        
-                        contentItem: Row {
-                            spacing: 8
-                            Image {
-                                source: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M1 1l6 3-6 3z' fill='%23currentColor'/%3E%3C/svg%3E"
-                                visible: uuid === ViewedPlaylistRouter.activePlaylistId && AppViewModel.playbackState !== AppViewModel.Stopped
-                                sourceSize.width: 8
-                                sourceSize.height: 8
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
-                            Label {
-                                text: name
-                                font.bold: uuid === root.playlistId
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
-                        }
-                        
-                        onTriggered: ViewedPlaylistRouter.viewedPlaylistId = uuid
-                    }
-                }
+            }
+            
+            Component {
+                id: separatorComponent
+                MenuSeparator {}
             }
 
             // Right-click: playlist actions menu

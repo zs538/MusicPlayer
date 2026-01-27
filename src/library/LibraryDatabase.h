@@ -80,6 +80,10 @@ public:
     static QString upsertTrackSql();
     static void bindTrackToQuery(QSqlQuery &query, const LibraryTrack &track);
 
+    // Call this to notify listeners that the database content has changed externally
+    // (e.g., after scanner finishes using its own connection)
+    void notifyDatabaseChanged() { emit databaseChanged(); }
+
 signals:
     void databaseChanged();
 

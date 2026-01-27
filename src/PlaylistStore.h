@@ -37,7 +37,6 @@ public:
 
     // Tab management
     Q_INVOKABLE QString createNewTab(const QString &name = QString(), bool isUserCreated = true);
-    Q_INVOKABLE QString createGeneratedTab(const QString &name = QString());
     Q_INVOKABLE bool closeTab(const QString &uuid);
     Q_INVOKABLE bool renameTab(const QString &uuid, const QString &newName);
     Q_INVOKABLE bool moveTab(int fromIndex, int toIndex);
@@ -63,8 +62,12 @@ public:
     Q_INVOKABLE QString tabName(int index) const;
     Q_INVOKABLE bool tabIsUserCreated(int index) const;
     
-    // Find a generated playlist (for browse activation policy)
-    Q_INVOKABLE QString findGeneratedPlaylistId() const;
+    // Generated playlist management
+    Q_INVOKABLE QString getOrCreateGeneratedPlaylist(const QString &name = QString());
+    Q_INVOKABLE int generatedPlaylistCount() const;
+    
+public slots:
+    void enforceGeneratedPlaylistCount();
 
     // Tab data access (for PlaylistTabsModel)
     const QVector<Tab> &tabs() const { return m_tabs; }

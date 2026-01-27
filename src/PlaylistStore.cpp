@@ -1,6 +1,7 @@
 #include "PlaylistStore.h"
 #include "TrackListModel.h"
 #include "MetadataExtractor.h"
+#include "Settings.h"
 #include <QFileInfo>
 #include <QDir>
 #include <QFile>
@@ -10,6 +11,42 @@ PlaylistStore::PlaylistStore(QObject *parent)
     : QObject(parent)
 {
     createNewTab(QStringLiteral("Playlist 1"));
+    
+    // Connect to settings to enforce generated playlist count when it changes
+    Settings *settings = Settings::instance();
+    if (settings) {
+        connect(settings, &Settings::generatedPlaylistCountChanged, this, &PlaylistStore::enforceGeneratedPlaylistCount);
+    }
+}
+
+void PlaylistStore::enforceGeneratedPlaylistCount()
+{
+    Settings *settings = Settings::instance();
+    if (!settings)
+        return;
+    
+    int maxCount = settings->generatedPlaylistCount();
+    
+    // Count generated playlists and collect their indices (oldest first)
+    QVector<int> generatedIndices;
+    for (int i = 0; i < m_tabs.size(); ++i) {
+        if (!m_tabs[i].isUserCreated)
+            generatedIndices.append(i);
+    }
+    
+    // Remove oldest generated playlists until we're at or below the limit
+    while (generatedIndices.size() > maxCount) {
+        int oldestIdx = generatedIndices.takeFirst();
+        QString oldestId = m_tabs[oldestIdx].uuid.toString();
+        closeTab(oldestId);
+        
+        // Recalculate indices after removal (they shift down)
+        generatedIndices.clear();
+        for (int i = 0; i < m_tabs.size(); ++i) {
+            if (!m_tabs[i].isUserCreated)
+                generatedIndices.append(i);
+        }
+    }
 }
 
 PlaylistStore::~PlaylistStore()
@@ -44,12 +81,6 @@ QString PlaylistStore::createNewTab(const QString &name, bool isUserCreated)
     return tab.uuid.toString();
 }
 
-QString PlaylistStore::createGeneratedTab(const QString &name)
-{
-    QString tabName = name.isEmpty() ? QStringLiteral("Generated") : name;
-    return createNewTab(tabName, false);
-}
-
 bool PlaylistStore::closeTab(const QString &uuid)
 {
     if (m_tabs.size() <= 1)
@@ -64,8 +95,9 @@ bool PlaylistStore::closeTab(const QString &uuid)
     m_tabs.removeAt(idx);
     emit tabRemoved(idx);
     
-    if (m_activeId == tab.uuid && !m_tabs.isEmpty()) {
-        m_activeId = m_tabs[qBound(0, idx - 1, m_tabs.size() - 1)].uuid;
+    // Don't transfer active status - let it become invalid (playing indicator will disappear)
+    if (m_activeId == tab.uuid) {
+        m_activeId = QUuid();
         emit activePlaylistChanged(m_activeId);
     }
     if (m_displayedId == tab.uuid && !m_tabs.isEmpty()) {
@@ -182,13 +214,51 @@ bool PlaylistStore::tabIsUserCreated(int index) const
     return true;
 }
 
-QString PlaylistStore::findGeneratedPlaylistId() const
+int PlaylistStore::generatedPlaylistCount() const
 {
+    int count = 0;
     for (const Tab &tab : m_tabs) {
         if (!tab.isUserCreated)
-            return tab.uuid.toString();
+            ++count;
     }
-    return QString();
+    return count;
+}
+
+QString PlaylistStore::getOrCreateGeneratedPlaylist(const QString &name)
+{
+    QString tabName = name.isEmpty() ? QStringLiteral("Generated") : name;
+    
+    // Check if a generated playlist with this name already exists
+    for (int i = 0; i < m_tabs.size(); ++i) {
+        if (!m_tabs[i].isUserCreated && m_tabs[i].name == tabName) {
+            // Found existing generated playlist with same name - reuse it
+            return m_tabs[i].uuid.toString();
+        }
+    }
+    
+    // Get max count from Settings
+    Settings *settings = Settings::instance();
+    int maxCount = settings ? settings->generatedPlaylistCount() : 5;
+    
+    // Count existing generated playlists and find oldest
+    int genCount = 0;
+    int oldestGenIdx = -1;
+    for (int i = 0; i < m_tabs.size(); ++i) {
+        if (!m_tabs[i].isUserCreated) {
+            ++genCount;
+            if (oldestGenIdx < 0)
+                oldestGenIdx = i;  // First generated = oldest
+        }
+    }
+    
+    // If at max, remove oldest generated playlist
+    if (genCount >= maxCount && oldestGenIdx >= 0) {
+        QString oldestId = m_tabs[oldestGenIdx].uuid.toString();
+        closeTab(oldestId);
+    }
+    
+    // Create new generated playlist
+    return createNewTab(tabName, false);
 }
 
 int PlaylistStore::indexOfUuid(const QUuid &uuid) const

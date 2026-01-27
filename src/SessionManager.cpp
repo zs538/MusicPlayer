@@ -152,7 +152,7 @@ void SessionManager::setWindowGeometry(const QRect &rect)
 {
     if (m_windowGeometry != rect) {
         m_windowGeometry = rect;
-        scheduleAutoSave();
+        // Note: geometry persistence disabled - no auto-save
     }
 }
 
@@ -255,14 +255,6 @@ QJsonObject SessionManager::buildSessionJson() const
     // Version 2 adds floating windows support
     json["version"] = 2;
     
-    // Window geometry
-    QJsonObject geometry;
-    geometry["x"] = m_windowGeometry.x();
-    geometry["y"] = m_windowGeometry.y();
-    geometry["width"] = m_windowGeometry.width();
-    geometry["height"] = m_windowGeometry.height();
-    json["windowGeometry"] = geometry;
-    
     // UI state
     QJsonObject uiState;
     uiState["currentPanel"] = m_currentPanel;
@@ -286,9 +278,6 @@ QJsonObject SessionManager::buildSessionJson() const
         json["displayedPlaylistId"] = m_playlistStore->displayedPlaylistId().toString();
     }
     
-    // Floating windows (v2)
-    json["floatingWindows"] = QJsonArray::fromVariantList(m_floatingWindows);
-    
     return json;
 }
 
@@ -299,17 +288,6 @@ bool SessionManager::parseSessionJson(const QJsonObject &json)
     if (version < 1) {
         qWarning() << "Unknown session version";
         // Continue anyway, try to load what we can
-    }
-    
-    // Window geometry
-    if (json.contains("windowGeometry")) {
-        QJsonObject geo = json["windowGeometry"].toObject();
-        m_windowGeometry = QRect(
-            geo["x"].toInt(100),
-            geo["y"].toInt(100),
-            geo["width"].toInt(1000),
-            geo["height"].toInt(700)
-        );
     }
     
     // UI state
@@ -330,12 +308,6 @@ bool SessionManager::parseSessionJson(const QJsonObject &json)
         emit fileBrowserPathChanged();
         emit playlistColumnsChanged();
         emit libraryGroupingLevelsChanged();
-    }
-    
-    // Floating windows (v2)
-    if (json.contains("floatingWindows")) {
-        m_floatingWindows = json["floatingWindows"].toArray().toVariantList();
-        emit floatingWindowsChanged();
     }
     
     // Playback state

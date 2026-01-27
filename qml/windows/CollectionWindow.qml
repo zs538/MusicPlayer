@@ -13,6 +13,10 @@ Window {
     // Window identity (for WindowManager tracking)
     property string windowId: ""
 
+    // Fixed size
+    width: 350
+    height: 400
+
     // Filter-based state properties
     property string panelContextType: "all"
     property var filter: []
@@ -39,28 +43,10 @@ Window {
         filter: root.filter,
         groupBy: root.groupBy
     })
-
-    width: 350
-    height: 400
     visible: true
     flags: Qt.Dialog | Qt.WindowTitleHint | Qt.WindowCloseButtonHint
     title: root.title
     color: Theme.background
-
-    // Geometry persistence
-    onXChanged: geometrySaveTimer.restart()
-    onYChanged: geometrySaveTimer.restart()
-    onWidthChanged: geometrySaveTimer.restart()
-    onHeightChanged: geometrySaveTimer.restart()
-
-    Timer {
-        id: geometrySaveTimer
-        interval: 300
-        onTriggered: {
-            if (root.windowId)
-                WindowManager.updateWindowGeometry(root.windowId, root.x, root.y, root.width, root.height)
-        }
-    }
 
     onClosing: {
         if (root.windowId) WindowManager.closeWindow(root.windowId)

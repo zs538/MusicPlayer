@@ -1,4 +1,5 @@
 #include "AudioEngine.h"
+#include "AudioOutputWorker.h"
 #include "SPSCRingBuffer.h"
 #include "BufferIODevice.h"
 #include <QElapsedTimer>
@@ -44,11 +45,11 @@ AudioEngine::~AudioEngine()
 
 qint64 AudioEngine::positionMs() const
 {
-    if (m_outputSampleRate <= 0 || !m_audioSink)
+    if (m_outputSampleRate <= 0 || !m_audioInitialized)
         return 0;
     
-    // Use processedUSecs for accurate playback position (what's actually been played)
-    qint64 processedUs = m_audioSink->processedUSecs();
+    // Use cached processedUSecs pushed from audio thread (thread-safe)
+    qint64 processedUs = m_cachedProcessedUSecs.load();
     qint64 processedSamples = (processedUs * m_outputSampleRate) / 1000000;
     
     // Subtract track start offset and add seek offset
@@ -95,9 +96,8 @@ bool AudioEngine::play(const QString &filePath)
     
     startDecodeThread();
 
-    if (m_audioSink) {
-        m_audioSink->resume();
-    }
+    // Resume audio output via worker (queued call to audio thread)
+    QMetaObject::invokeMethod(m_audioWorker, "resume", Qt::QueuedConnection);
     setState(Playing);
     m_positionTimer->start();
     
@@ -190,8 +190,8 @@ bool AudioEngine::preopenNextFile(const QString &filePath, qint64 *outDurationMs
 void AudioEngine::pause()
 {
     if (m_state == Playing) {
-        if (m_audioSink)
-            m_audioSink->suspend();
+        if (m_audioWorker)
+            QMetaObject::invokeMethod(m_audioWorker, "suspend", Qt::QueuedConnection);
         setState(Paused);
         m_positionTimer->stop();
     }
@@ -200,8 +200,8 @@ void AudioEngine::pause()
 void AudioEngine::resume()
 {
     if (m_state == Paused) {
-        if (m_audioSink)
-            m_audioSink->resume();
+        if (m_audioWorker)
+            QMetaObject::invokeMethod(m_audioWorker, "resume", Qt::QueuedConnection);
         setState(Playing);
         m_positionTimer->start();
     }
@@ -214,11 +214,16 @@ void AudioEngine::stop()
     
     stopDecodeThread();
     
-    if (m_audioSink) {
-        m_audioSink->stop();
-        m_audioSink.reset();
+    // Stop audio output thread
+    if (m_audioThread && m_audioThread->isRunning()) {
+        QMetaObject::invokeMethod(m_audioWorker, "stop", Qt::BlockingQueuedConnection);
+        m_audioThread->quit();
+        m_audioThread->wait(1000);
     }
-    m_bufferDevice.reset();
+    m_audioThread.reset();
+    m_audioWorker = nullptr;
+    m_audioInitialized = false;
+    m_cachedProcessedUSecs = 0;
 
     closeNextFile();
     closeFile();
@@ -270,10 +275,15 @@ void AudioEngine::seek(qint64 positionMs)
     
     // Stop audio output and clear buffers for clean seek
     bool wasPlaying = (m_state == Playing);
-    if (m_audioSink) {
-        m_audioSink->stop();
-        m_audioSink->reset();
+    if (m_audioThread && m_audioThread->isRunning()) {
+        QMetaObject::invokeMethod(m_audioWorker, "stop", Qt::BlockingQueuedConnection);
+        m_audioThread->quit();
+        m_audioThread->wait(1000);
     }
+    m_audioThread.reset();
+    m_audioWorker = nullptr;
+    m_audioInitialized = false;
+    m_cachedProcessedUSecs = 0;
     
     m_ringBuffer->clear();
     m_ringBuffer->reset();  // Clear abort state
@@ -296,12 +306,10 @@ void AudioEngine::seek(qint64 positionMs)
     
     // Restart audio output
     if (wasPlaying) {
-        // Recreate audio sink and buffer device for clean state
-        m_bufferDevice.reset();
-        m_audioSink.reset();
+        // Recreate audio output in new thread for clean state
         initAudioOutput(m_outputSampleRate, 2);
-        if (m_audioSink) {
-            m_audioSink->resume();
+        if (m_audioWorker) {
+            QMetaObject::invokeMethod(m_audioWorker, "resume", Qt::QueuedConnection);
         }
     }
 
@@ -338,7 +346,13 @@ void AudioEngine::setVolume(double volume)
 
 void AudioEngine::setPlaybackMode(PlaybackMode mode)
 {
+    if (m_playbackMode == mode)
+        return;
+    
+    qCDebug(lcAudioEngine) << "setPlaybackMode:" << mode;
     m_playbackMode = mode;
+    
+    // Bit-perfect mode requires volume at 1.0 (no software volume control)
     if (mode == BitPerfectSameRate) {
         m_volume = 1.0;
     }
@@ -504,29 +518,40 @@ void AudioEngine::closeNextFile()
 
 bool AudioEngine::initAudioOutput(int sampleRate, int channels)
 {
-    m_audioFormat.setSampleRate(sampleRate);
-    m_audioFormat.setChannelCount(channels);
-    m_audioFormat.setSampleFormat(QAudioFormat::Int16);
+    // Create dedicated audio output thread with high priority
+    m_audioThread = std::make_unique<QThread>();
+    m_audioThread->setObjectName(QStringLiteral("AudioOutputThread"));
     
-    QAudioDevice defaultDevice = QMediaDevices::defaultAudioOutput();
-    if (!defaultDevice.isFormatSupported(m_audioFormat)) {
-        qCCritical(lcAudioEngine) << "Audio format S16/" << sampleRate << "/" << channels << " not supported";
-        return false;
-    }
+    // Create worker (will be moved to audio thread)
+    m_audioWorker = new AudioOutputWorker(m_ringBuffer.get());
+    m_audioWorker->moveToThread(m_audioThread.get());
     
-    m_audioSink = std::make_unique<QAudioSink>(defaultDevice, m_audioFormat);
-    int bufferBytes = (sampleRate * m_sinkBufferMs / 1000) * m_audioFormat.bytesPerFrame();
-    m_audioSink->setBufferSize(bufferBytes);
+    // Connect worker signals to engine slots (queued connections for thread safety)
+    connect(m_audioWorker, &AudioOutputWorker::initialized,
+            this, &AudioEngine::onAudioWorkerInitialized, Qt::QueuedConnection);
+    connect(m_audioWorker, &AudioOutputWorker::stateChanged,
+            this, &AudioEngine::onAudioStateChanged, Qt::QueuedConnection);
+    connect(m_audioWorker, &AudioOutputWorker::positionUpdated,
+            this, &AudioEngine::onPositionUpdated, Qt::QueuedConnection);
     
-    connect(m_audioSink.get(), &QAudioSink::stateChanged,
-            this, &AudioEngine::onAudioStateChanged);
+    // Clean up worker when thread finishes
+    connect(m_audioThread.get(), &QThread::finished, m_audioWorker, &QObject::deleteLater);
     
-    m_bufferDevice = std::make_unique<BufferIODevice>(m_ringBuffer.get());
-    m_audioSink->start(m_bufferDevice.get());
-    m_audioSink->suspend();
-
+    // Start the audio thread with high priority
+    m_audioThread->start(QThread::HighPriority);
+    
+    // Initialize the worker (queued call to audio thread)
+    QMetaObject::invokeMethod(m_audioWorker, "initialize", Qt::QueuedConnection,
+                              Q_ARG(int, sampleRate), Q_ARG(int, channels), Q_ARG(int, m_sinkBufferMs));
+    
+    // Start the audio sink (suspended initially)
+    QMetaObject::invokeMethod(m_audioWorker, "start", Qt::QueuedConnection);
+    
+    m_audioInitialized = true;
+    
     qCDebug(lcAudioEngine) << "initAudioOutput()" << "rate=" << sampleRate
-                           << "ch=" << channels << "bufferMs=" << m_sinkBufferMs;
+                           << "ch=" << channels << "bufferMs=" << m_sinkBufferMs
+                           << "(audio thread started)";
     
     return true;
 }
@@ -546,7 +571,7 @@ void AudioEngine::startDecodeThread()
         decodeLoop();
         qCDebug(lcAudioEngine) << "decodeLoop() exited";
     }));
-    m_decodeThread->start();
+    m_decodeThread->start(QThread::HighPriority);
 }
 
 void AudioEngine::stopDecodeThread()
@@ -773,10 +798,6 @@ void AudioEngine::onAudioStateChanged(QAudio::State state)
         nextLockedSnapshot = m_nextLocked;
     }
 
-    if (state == QAudio::StoppedState && m_audioSink) {
-        qCDebug(lcAudioEngine) << "QAudioSink state=Stopped" << "error=" << m_audioSink->error();
-    }
-
     qCDebug(lcAudioEngine) << "QAudioSink stateChanged" << state
                            << "engineState=" << m_state
                            << "finished=" << m_ringBuffer->isFinished()
@@ -795,6 +816,20 @@ void AudioEngine::onAudioStateChanged(QAudio::State state)
             emit trackFinished();
         }
     }
+}
+
+void AudioEngine::onAudioWorkerInitialized(bool success)
+{
+    if (!success) {
+        qCWarning(lcAudioEngine) << "Audio worker initialization failed";
+        m_audioInitialized = false;
+    }
+}
+
+void AudioEngine::onPositionUpdated(qint64 processedUSecs)
+{
+    // Cache the position pushed from audio thread (thread-safe atomic store)
+    m_cachedProcessedUSecs.store(processedUSecs);
 }
 
 void AudioEngine::updatePosition()
@@ -845,11 +880,11 @@ void AudioEngine::checkGaplessTransition()
         // We'll unlock while doing the processedUSecs check (no shared state needed).
     }
     
-    if (!m_audioSink)
+    if (!m_audioInitialized)
         return;
     
-    // Calculate current playback position in samples
-    qint64 processedUs = m_audioSink->processedUSecs();
+    // Calculate current playback position in samples (using cached value from audio thread)
+    qint64 processedUs = m_cachedProcessedUSecs.load();
     qint64 playedSamples = (processedUs * m_outputSampleRate) / 1000000;
     
     // Check if we've crossed the track boundary (played past current track's samples)

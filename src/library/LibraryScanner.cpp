@@ -122,9 +122,7 @@ void LibraryScanner::doScan(const QStringList &paths)
         pragma.exec("PRAGMA journal_mode=WAL");
         pragma.exec("PRAGMA busy_timeout=5000");
         
-        // Prepare query once and reuse
-        QSqlQuery query(db);
-        query.prepare(LibraryDatabase::upsertTrackSql());
+        QString upsertSql = LibraryDatabase::upsertTrackSql();
         
         // Wrap in transaction for much better performance
         db.transaction();
@@ -138,6 +136,8 @@ void LibraryScanner::doScan(const QStringList &paths)
             
             LibraryTrack track = MetadataExtractor::extractLibraryTrack(filePath);
             if (!track.filePath.isEmpty()) {
+                QSqlQuery query(db);
+                query.prepare(upsertSql);
                 LibraryDatabase::bindTrackToQuery(query, track);
                 if (!query.exec()) {
                     qWarning() << "Scanner: Failed to insert track:" << query.lastError().text();

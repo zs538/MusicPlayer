@@ -133,8 +133,10 @@ void Settings::save()
     m_settings.setValue("audio/bufferSizeMs", m_bufferSizeMs);
     m_settings.setValue("session/restore", m_restoreSession);
     m_settings.setValue("coverArt/patterns", m_coverArtPatterns);
-    m_settings.setValue("browse/targetPolicy", m_browseTargetPolicy);
-    m_settings.setValue("browse/autoplayPolicy", m_browseAutoplayPolicy);
+    m_settings.setValue("behavior/addTracksPolicy", m_addTracksPolicy);
+    m_settings.setValue("behavior/previousButtonAction", m_previousButtonAction);
+    m_settings.setValue("behavior/openingTracksAction", m_openingTracksAction);
+    m_settings.setValue("behavior/generatedPlaylistCount", m_generatedPlaylistCount);
     m_settings.sync();
 }
 
@@ -145,8 +147,10 @@ void Settings::load()
     m_outputDevice = m_settings.value("audio/outputDevice", "").toString();
     m_bufferSizeMs = m_settings.value("audio/bufferSizeMs", 100).toInt();
     m_restoreSession = m_settings.value("session/restore", true).toBool();
-    m_browseTargetPolicy = m_settings.value("browse/targetPolicy", AppendToViewed).toInt();
-    m_browseAutoplayPolicy = m_settings.value("browse/autoplayPolicy", StartIfStopped).toInt();
+    m_addTracksPolicy = m_settings.value("behavior/addTracksPolicy", AddNeverStart).toInt();
+    m_previousButtonAction = m_settings.value("behavior/previousButtonAction", RestartThenJump).toInt();
+    m_openingTracksAction = m_settings.value("behavior/openingTracksAction", OpeningAppendToViewed).toInt();
+    m_generatedPlaylistCount = m_settings.value("behavior/generatedPlaylistCount", 5).toInt();
     
     // Load cover art patterns with defaults
     QStringList defaultPatterns = {
@@ -165,32 +169,64 @@ void Settings::load()
     }
 }
 
-int Settings::browseTargetPolicy() const
+
+int Settings::addTracksPolicy() const
 {
-    return m_browseTargetPolicy;
+    return m_addTracksPolicy;
 }
 
-void Settings::setBrowseTargetPolicy(int policy)
+void Settings::setAddTracksPolicy(int policy)
 {
-    if (m_browseTargetPolicy != policy) {
-        m_browseTargetPolicy = policy;
-        m_settings.setValue("browse/targetPolicy", policy);
-        emit browseTargetPolicyChanged();
+    if (m_addTracksPolicy != policy) {
+        m_addTracksPolicy = policy;
+        m_settings.setValue("behavior/addTracksPolicy", policy);
+        emit addTracksPolicyChanged();
         emit settingsChanged();
     }
 }
 
-int Settings::browseAutoplayPolicy() const
+int Settings::previousButtonAction() const
 {
-    return m_browseAutoplayPolicy;
+    return m_previousButtonAction;
 }
 
-void Settings::setBrowseAutoplayPolicy(int policy)
+void Settings::setPreviousButtonAction(int action)
 {
-    if (m_browseAutoplayPolicy != policy) {
-        m_browseAutoplayPolicy = policy;
-        m_settings.setValue("browse/autoplayPolicy", policy);
-        emit browseAutoplayPolicyChanged();
+    if (m_previousButtonAction != action) {
+        m_previousButtonAction = action;
+        m_settings.setValue("behavior/previousButtonAction", action);
+        emit previousButtonActionChanged();
+        emit settingsChanged();
+    }
+}
+
+int Settings::openingTracksAction() const
+{
+    return m_openingTracksAction;
+}
+
+void Settings::setOpeningTracksAction(int action)
+{
+    if (m_openingTracksAction != action) {
+        m_openingTracksAction = action;
+        m_settings.setValue("behavior/openingTracksAction", action);
+        emit openingTracksActionChanged();
+        emit settingsChanged();
+    }
+}
+
+int Settings::generatedPlaylistCount() const
+{
+    return m_generatedPlaylistCount;
+}
+
+void Settings::setGeneratedPlaylistCount(int count)
+{
+    count = qBound(1, count, 20);
+    if (m_generatedPlaylistCount != count) {
+        m_generatedPlaylistCount = count;
+        m_settings.setValue("behavior/generatedPlaylistCount", count);
+        emit generatedPlaylistCountChanged();
         emit settingsChanged();
     }
 }

@@ -7,39 +7,11 @@ import MusicPlayer
 ApplicationWindow {
     id: root
     visible: true
-    width: SessionManager.windowGeometry.width || 1000
-    height: SessionManager.windowGeometry.height || 700
-    x: SessionManager.windowGeometry.x || 100
-    y: SessionManager.windowGeometry.y || 100
+    width: 1000
+    height: 700
     title: qsTr("MusicPlayer")
 
     color: Theme.background
-
-    Component.onCompleted: {
-        // Restore floating windows from session
-        let windows = SessionManager.floatingWindows
-        if (windows && windows.length > 0) {
-            WindowManager.restoreWindowsFromVariant(windows)
-        }
-    }
-
-    onXChanged: saveGeometryTimer.restart()
-    onYChanged: saveGeometryTimer.restart()
-    onWidthChanged: saveGeometryTimer.restart()
-    onHeightChanged: saveGeometryTimer.restart()
-
-    Timer {
-        id: saveGeometryTimer
-        interval: 500
-        onTriggered: {
-            SessionManager.setWindowGeometry(root.x, root.y, root.width, root.height)
-        }
-    }
-
-    onClosing: {
-        // Save floating windows to session
-        SessionManager.floatingWindows = WindowManager.windowsToVariant()
-    }
 
     Connections {
         target: AppViewModel.browseActivation

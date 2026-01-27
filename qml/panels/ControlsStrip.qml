@@ -9,6 +9,8 @@ Rectangle {
     border.color: Theme.border
     border.width: 1
 
+    implicitHeight: 32
+
     RowLayout {
         anchors.fill: parent
         anchors.leftMargin: 4
