@@ -63,8 +63,10 @@ public:
     Q_INVOKABLE bool tabIsUserCreated(int index) const;
     
     // Generated playlist management
+    Q_INVOKABLE QString findGeneratedPlaylistByName(const QString &name) const;
     Q_INVOKABLE QString getOrCreateGeneratedPlaylist(const QString &name = QString());
     Q_INVOKABLE int generatedPlaylistCount() const;
+    Q_INVOKABLE bool setPlaylistUserCreated(const QString &uuid, bool isUserCreated);
     
 public slots:
     void enforceGeneratedPlaylistCount();

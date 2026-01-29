@@ -23,6 +23,8 @@ class Settings : public QObject
     Q_PROPERTY(int previousButtonAction READ previousButtonAction WRITE setPreviousButtonAction NOTIFY previousButtonActionChanged)
     Q_PROPERTY(int openingTracksAction READ openingTracksAction WRITE setOpeningTracksAction NOTIFY openingTracksActionChanged)
     Q_PROPERTY(int generatedPlaylistCount READ generatedPlaylistCount WRITE setGeneratedPlaylistCount NOTIFY generatedPlaylistCountChanged)
+    Q_PROPERTY(int gridCellMinWidth READ gridCellMinWidth WRITE setGridCellMinWidth NOTIFY gridCellMinWidthChanged)
+    Q_PROPERTY(int gridCellMaxWidth READ gridCellMaxWidth WRITE setGridCellMaxWidth NOTIFY gridCellMaxWidthChanged)
 
 public:
     enum PlaybackMode {
@@ -87,6 +89,12 @@ public:
     int generatedPlaylistCount() const;
     void setGeneratedPlaylistCount(int count);
     
+    int gridCellMinWidth() const;
+    void setGridCellMinWidth(int width);
+    
+    int gridCellMaxWidth() const;
+    void setGridCellMaxWidth(int width);
+    
     Q_INVOKABLE void save();
     Q_INVOKABLE void load();
 
@@ -109,6 +117,8 @@ signals:
     void previousButtonActionChanged();
     void openingTracksActionChanged();
     void generatedPlaylistCountChanged();
+    void gridCellMinWidthChanged();
+    void gridCellMaxWidthChanged();
     void settingsChanged();
 
 private:
@@ -124,6 +134,8 @@ private:
     int m_previousButtonAction = RestartThenJump;
     int m_openingTracksAction = OpeningAppendToViewed;
     int m_generatedPlaylistCount = 5;
+    int m_gridCellMinWidth = 100;
+    int m_gridCellMaxWidth = 200;
 };
 
 #endif // SETTINGS_H

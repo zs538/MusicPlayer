@@ -137,6 +137,8 @@ void Settings::save()
     m_settings.setValue("behavior/previousButtonAction", m_previousButtonAction);
     m_settings.setValue("behavior/openingTracksAction", m_openingTracksAction);
     m_settings.setValue("behavior/generatedPlaylistCount", m_generatedPlaylistCount);
+    m_settings.setValue("appearance/gridCellMinWidth", m_gridCellMinWidth);
+    m_settings.setValue("appearance/gridCellMaxWidth", m_gridCellMaxWidth);
     m_settings.sync();
 }
 
@@ -151,6 +153,8 @@ void Settings::load()
     m_previousButtonAction = m_settings.value("behavior/previousButtonAction", RestartThenJump).toInt();
     m_openingTracksAction = m_settings.value("behavior/openingTracksAction", OpeningAppendToViewed).toInt();
     m_generatedPlaylistCount = m_settings.value("behavior/generatedPlaylistCount", 5).toInt();
+    m_gridCellMinWidth = m_settings.value("appearance/gridCellMinWidth", 100).toInt();
+    m_gridCellMaxWidth = m_settings.value("appearance/gridCellMaxWidth", 200).toInt();
     
     // Load cover art patterns with defaults
     QStringList defaultPatterns = {
@@ -227,6 +231,38 @@ void Settings::setGeneratedPlaylistCount(int count)
         m_generatedPlaylistCount = count;
         m_settings.setValue("behavior/generatedPlaylistCount", count);
         emit generatedPlaylistCountChanged();
+        emit settingsChanged();
+    }
+}
+
+int Settings::gridCellMinWidth() const
+{
+    return m_gridCellMinWidth;
+}
+
+void Settings::setGridCellMinWidth(int width)
+{
+    width = qBound(60, width, 300);
+    if (m_gridCellMinWidth != width) {
+        m_gridCellMinWidth = width;
+        m_settings.setValue("appearance/gridCellMinWidth", width);
+        emit gridCellMinWidthChanged();
+        emit settingsChanged();
+    }
+}
+
+int Settings::gridCellMaxWidth() const
+{
+    return m_gridCellMaxWidth;
+}
+
+void Settings::setGridCellMaxWidth(int width)
+{
+    width = qBound(80, width, 400);
+    if (m_gridCellMaxWidth != width) {
+        m_gridCellMaxWidth = width;
+        m_settings.setValue("appearance/gridCellMaxWidth", width);
+        emit gridCellMaxWidthChanged();
         emit settingsChanged();
     }
 }

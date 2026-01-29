@@ -16,7 +16,7 @@ Window {
     color: Theme.background
 
     property int currentPage: 0
-    readonly property var pages: ["Behavior", "Playback", "Library", "Session"]
+    readonly property var pages: ["Behavior", "Appearance", "Playback", "Library", "Session"]
     
     onVisibleChanged: {
         if (visible) {
@@ -177,7 +177,54 @@ Window {
                 }
             }
 
-            // Page 1: Playback
+            // Page 1: Appearance
+            ColumnLayout {
+                spacing: 12
+                
+                Label { text: "Grid View"; font.bold: true }
+                
+                GridLayout {
+                    columns: 2
+                    columnSpacing: 12
+                    rowSpacing: 8
+                    
+                    Label { text: "Minimum cell width:" }
+                    RowLayout {
+                        SpinBox {
+                            from: 60
+                            to: 300
+                            stepSize: 10
+                            value: Settings.gridCellMinWidth
+                            onValueModified: Settings.gridCellMinWidth = value
+                        }
+                        Label { text: "px"; color: Theme.textSecondary }
+                    }
+                    
+                    Label { text: "Maximum cell width:" }
+                    RowLayout {
+                        SpinBox {
+                            from: 80
+                            to: 400
+                            stepSize: 10
+                            value: Settings.gridCellMaxWidth
+                            onValueModified: Settings.gridCellMaxWidth = value
+                        }
+                        Label { text: "px"; color: Theme.textSecondary }
+                    }
+                }
+                
+                Label {
+                    text: "Grid cells expand to fill width, clamped between min and max."
+                    color: Theme.textSecondary
+                    font.pixelSize: 11
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+                
+                Item { Layout.fillHeight: true }
+            }
+
+            // Page 2: Playback
             ColumnLayout {
                 spacing: 12
                 
@@ -210,7 +257,7 @@ Window {
                 Item { Layout.fillHeight: true }
             }
 
-            // Page 2: Library
+            // Page 3: Library
             ColumnLayout {
                 id: libraryPage
                 spacing: 12
@@ -313,7 +360,7 @@ Window {
                 }
             }
 
-            // Page 3: Session
+            // Page 4: Session
             ColumnLayout {
                 spacing: 12
                 

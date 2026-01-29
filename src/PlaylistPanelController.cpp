@@ -98,6 +98,19 @@ void PlaylistPanelController::selectAll()
     m_selectionModel->select(selection, QItemSelectionModel::ClearAndSelect);
 }
 
+void PlaylistPanelController::selectRange(int fromRow, int toRow)
+{
+    if (!m_model || m_model->rowCount() == 0)
+        return;
+    
+    int start = qBound(0, qMin(fromRow, toRow), m_model->rowCount() - 1);
+    int end = qBound(0, qMax(fromRow, toRow), m_model->rowCount() - 1);
+    
+    QItemSelection selection;
+    selection.select(m_model->index(start, 0), m_model->index(end, 0));
+    m_selectionModel->select(selection, QItemSelectionModel::ClearAndSelect);
+}
+
 bool PlaylistPanelController::isRowSelected(int row) const
 {
     if (!m_model || row < 0 || row >= m_model->rowCount())

@@ -309,9 +309,30 @@ Item {
             Layout.margins: 4
             clip: true
             interactive: false
+            cacheBuffer: 500
 
-            cellWidth: 120
-            cellHeight: 150
+            // Debounced cell sizing - recalculates after resize stops to avoid per-frame re-layout
+            property int stableCellWidth: Settings.gridCellMinWidth
+            property int stableCellHeight: Math.round(stableCellWidth * 1.25)
+            
+            function recalculateCellSize() {
+                let cols = Math.max(1, Math.floor(width / Settings.gridCellMinWidth))
+                let optimal = Math.floor(width / cols)
+                stableCellWidth = Math.min(optimal, Settings.gridCellMaxWidth)
+                stableCellHeight = Math.round(stableCellWidth * 1.25)
+            }
+            
+            Timer { id: resizeDebounce; interval: 150; onTriggered: gridView.recalculateCellSize() }
+            onWidthChanged: resizeDebounce.restart()
+            Component.onCompleted: recalculateCellSize()
+            Connections {
+                target: Settings
+                function onGridCellMinWidthChanged() { gridView.recalculateCellSize() }
+                function onGridCellMaxWidthChanged() { gridView.recalculateCellSize() }
+            }
+            
+            cellWidth: stableCellWidth
+            cellHeight: stableCellHeight
 
             model: browserModel
 
@@ -322,8 +343,8 @@ Item {
 
             delegate: Item {
                 id: gridDel
-                width: gridView.cellWidth
-                height: gridView.cellHeight
+                width: gridView.stableCellWidth
+                height: gridView.stableCellHeight
 
                 required property int index
                 required property string entryType
@@ -360,11 +381,9 @@ Item {
                                 fillMode: Image.PreserveAspectCrop
                                 asynchronous: true
                                 cache: true
-                                sourceSize.width: 512
-                                sourceSize.height: 512
-                                layer.enabled: true
-                                layer.smooth: true
-                                layer.textureSize: Qt.size(width * 2, height * 2)
+                                sourceSize.width: 256
+                                sourceSize.height: 256
+                                smooth: true
 
                                 Label {
                                     anchors.centerIn: parent
@@ -491,6 +510,7 @@ Item {
             interactive: false
             model: browserModel
             boundsBehavior: Flickable.StopAtBounds
+            cacheBuffer: 300
             ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
             delegate: Column {
@@ -549,11 +569,9 @@ Item {
                                 fillMode: Image.PreserveAspectCrop
                                 asynchronous: true
                                 cache: true
-                                sourceSize.width: 128
-                                sourceSize.height: 128
-                                layer.enabled: true
-                                layer.smooth: true
-                                layer.textureSize: Qt.size(width * 2, height * 2)
+                                sourceSize.width: 64
+                                sourceSize.height: 64
+                                smooth: true
                             }
                         }
 

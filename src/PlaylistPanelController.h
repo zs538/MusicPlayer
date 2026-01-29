@@ -40,6 +40,7 @@ public:
     Q_INVOKABLE void clickRow(int row, bool ctrl, bool shift);
     Q_INVOKABLE void clearSelection();
     Q_INVOKABLE void selectAll();
+    Q_INVOKABLE void selectRange(int fromRow, int toRow);
     Q_INVOKABLE bool isRowSelected(int row) const;
     Q_INVOKABLE QVariantList selectedRows() const; // sorted
 

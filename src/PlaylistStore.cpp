@@ -224,17 +224,38 @@ int PlaylistStore::generatedPlaylistCount() const
     return count;
 }
 
+QString PlaylistStore::findGeneratedPlaylistByName(const QString &name) const
+{
+    QString tabName = name.isEmpty() ? QStringLiteral("Generated") : name;
+    for (int i = 0; i < m_tabs.size(); ++i) {
+        if (!m_tabs[i].isUserCreated && m_tabs[i].name == tabName) {
+            return m_tabs[i].uuid.toString();
+        }
+    }
+    return QString();
+}
+
+bool PlaylistStore::setPlaylistUserCreated(const QString &uuid, bool isUserCreated)
+{
+    int idx = indexOfUuid(QUuid(uuid));
+    if (idx < 0)
+        return false;
+    
+    if (m_tabs[idx].isUserCreated != isUserCreated) {
+        m_tabs[idx].isUserCreated = isUserCreated;
+        emit tabDataChanged(idx);
+    }
+    return true;
+}
+
 QString PlaylistStore::getOrCreateGeneratedPlaylist(const QString &name)
 {
     QString tabName = name.isEmpty() ? QStringLiteral("Generated") : name;
     
     // Check if a generated playlist with this name already exists
-    for (int i = 0; i < m_tabs.size(); ++i) {
-        if (!m_tabs[i].isUserCreated && m_tabs[i].name == tabName) {
-            // Found existing generated playlist with same name - reuse it
-            return m_tabs[i].uuid.toString();
-        }
-    }
+    QString existingId = findGeneratedPlaylistByName(tabName);
+    if (!existingId.isEmpty())
+        return existingId;
     
     // Get max count from Settings
     Settings *settings = Settings::instance();

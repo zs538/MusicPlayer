@@ -260,6 +260,21 @@ void BrowseActivationService::addFilteredTracksToViewed(const QVariantList &filt
             playlistName = artist + " - " + groupValue.toString();
     }
     
+    // Check if OpeningCreateNewPlaylist and a playlist with this name already exists
+    Settings *settings = Settings::instance();
+    if (settings && settings->openingTracksAction() == Settings::OpeningCreateNewPlaylist) {
+        QString existingId = m_store->findGeneratedPlaylistByName(playlistName);
+        if (!existingId.isEmpty()) {
+            // Playlist already exists - just redirect to it and play from start
+            router()->setViewedPlaylistId(existingId);
+            if (shouldAutoplay() && m_app) {
+                router()->setActiveToViewed();
+                m_app->playIndex(0);
+            }
+            return;
+        }
+    }
+    
     // Resolve target playlist based on OpeningTracksAction setting
     QString targetId = resolveTargetPlaylistId(playlistName);
     if (targetId.isEmpty())

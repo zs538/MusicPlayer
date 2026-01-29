@@ -9,6 +9,10 @@ Rectangle {
     color: Theme.surface
 
     property string playlistId: ViewedPlaylistRouter.viewedPlaylistId
+    property bool isUserCreated: {
+        let idx = AppViewModel.playlistStore.indexOfUuid(playlistId)
+        return idx >= 0 ? AppViewModel.playlistStore.tabIsUserCreated(idx) : true
+    }
 
     PlaylistPanelController {
         id: controller
@@ -81,6 +85,12 @@ Rectangle {
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                 cursorShape: Qt.PointingHandCursor
                 hoverEnabled: true
+                onClicked: (mouse) => {
+                    if (mouse.button === Qt.LeftButton)
+                        playlistSwitchMenu.popup()
+                    else if (mouse.button === Qt.RightButton)
+                        playlistActionsMenu.popup()
+                }
             }
 
             WheelHandler {
@@ -183,21 +193,8 @@ Rectangle {
                     property string plUuid
                     property string plName
                     
-                    contentItem: Row {
-                        spacing: 8
-                        Image {
-                            source: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M1 1l6 3-6 3z' fill='%23currentColor'/%3E%3C/svg%3E"
-                            visible: plUuid === ViewedPlaylistRouter.activePlaylistId && AppViewModel.playbackState !== AppViewModel.Stopped
-                            sourceSize.width: 8
-                            sourceSize.height: 8
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-                        Label {
-                            text: plName
-                            font.bold: plUuid === root.playlistId
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-                    }
+                    text: (plUuid === ViewedPlaylistRouter.activePlaylistId && AppViewModel.playbackState !== AppViewModel.Stopped ? "▶ " : "") + plName
+                    font.bold: plUuid === root.playlistId
                     
                     onTriggered: ViewedPlaylistRouter.viewedPlaylistId = plUuid
                 }
@@ -221,6 +218,12 @@ Rectangle {
                 MenuItem {
                     text: "Clear"
                     onTriggered: controller.model?.clear()
+                }
+                MenuItem {
+                    text: "Make permanent"
+                    visible: !root.isUserCreated
+                    height: visible ? implicitHeight : 0
+                    onTriggered: AppViewModel.playlistStore.setPlaylistUserCreated(root.playlistId, true)
                 }
                 MenuSeparator {}
                 MenuItem {
@@ -254,8 +257,50 @@ Rectangle {
         interactive: false
         model: controller.model
         boundsBehavior: Flickable.StopAtBounds
+        
+        // Bottom margin so user can click below entries
+        footer: Item { width: 1; height: 20 }
 
         ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+        
+        // Click on empty area to deselect, drag to select from bottom
+        MouseArea {
+            anchors.fill: parent
+            z: -1
+            property bool isDragSelecting: false
+            
+            onPressed: {
+                // Check if click is below all entries (in empty space)
+                let clickY = mouseY + listView.contentY
+                let lastEntryBottom = listView.count * 18
+                if (clickY >= lastEntryBottom) {
+                    isDragSelecting = true
+                    controller.clearSelection()
+                }
+            }
+            
+            onPositionChanged: (mouse) => {
+                if (pressed && isDragSelecting && listView.count > 0) {
+                    let globalY = mouse.y + listView.contentY
+                    let lastEntryBottom = listView.count * 18
+                    // Only select if dragging into entry area
+                    if (globalY < lastEntryBottom) {
+                        let hoverIndex = Math.floor(globalY / 18)
+                        hoverIndex = Math.max(0, Math.min(listView.count - 1, hoverIndex))
+                        controller.selectRange(hoverIndex, listView.count - 1)
+                    } else {
+                        controller.clearSelection()
+                    }
+                }
+            }
+            
+            onReleased: isDragSelecting = false
+            onCanceled: isDragSelecting = false
+            
+            onClicked: {
+                if (!isDragSelecting) controller.clearSelection()
+            }
+        }
 
         // Drop indicator
         Rectangle {
@@ -445,19 +490,6 @@ Rectangle {
             }
         }
 
-        Menu {
-            title: "Switch playlist"
-            Repeater {
-                model: AppViewModel.playlistTabsModel
-                MenuItem {
-                    required property string uuid
-                    required property string name
-                    text: name
-                    font.bold: uuid === root.playlistId
-                    onTriggered: ViewedPlaylistRouter.viewedPlaylistId = uuid
-                }
-            }
-        }
     }
 
     // Rename dialog
