@@ -4,6 +4,7 @@
 #include <QAbstractListModel>
 #include <QVariantMap>
 #include <QStringList>
+#include <QTimer>
 #include "LibraryDatabase.h"
 
 class LibraryTreeModel : public QAbstractListModel
@@ -97,6 +98,7 @@ private:
     TreeNode m_rootNode;
     QString m_searchQuery;
     QStringList m_groupingLevels;
+    QTimer *m_rebuildDebounceTimer = nullptr;
 };
 
 #endif // LIBRARYTREEMODEL_H

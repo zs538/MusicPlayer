@@ -9,7 +9,6 @@
 #include "PlaylistStore.h"
 #include "PlaylistTabsModel.h"
 #include "FileBrowserModel.h"
-#include "library/LibraryTreeModel.h"
 #include "CoverArtProvider.h"
 #include "BrowseActivationService.h"
 
@@ -17,6 +16,7 @@ class QueueManager;
 class AudioEngine;
 class LibraryDatabase;
 class LibraryScanner;
+class LibraryWatcher;
 
 class AppViewModel : public QObject
 {
@@ -36,7 +36,6 @@ class AppViewModel : public QObject
     Q_PROPERTY(QAbstractItemModel* playlistTabsModel READ playlistTabsModel CONSTANT)
     Q_PROPERTY(PlaylistStore* playlistStore READ playlistStore CONSTANT)
     Q_PROPERTY(int currentIndex READ currentIndex NOTIFY currentIndexChanged)
-    Q_PROPERTY(LibraryTreeModel* libraryTreeModel READ libraryTreeModel CONSTANT)
     Q_PROPERTY(FileBrowserModel* fileBrowserModel READ fileBrowserModel CONSTANT)
     Q_PROPERTY(bool libraryScanning READ libraryScanning NOTIFY libraryScanningChanged)
     Q_PROPERTY(int libraryScanProgress READ libraryScanProgress NOTIFY libraryScanProgressChanged)
@@ -74,7 +73,6 @@ public:
     QAbstractItemModel *playlistTabsModel() const;
     PlaylistStore *playlistStore() const;
     int currentIndex() const { return m_currentIndex; }
-    LibraryTreeModel *libraryTreeModel() const;
     FileBrowserModel *fileBrowserModel() const;
     bool libraryScanning() const;
     int libraryScanProgress() const;
@@ -146,7 +144,7 @@ private:
     AudioEngine *m_audioEngine = nullptr;
     LibraryDatabase *m_libraryDb = nullptr;
     LibraryScanner *m_libraryScanner = nullptr;
-    LibraryTreeModel *m_libraryTreeModel = nullptr;
+    LibraryWatcher *m_libraryWatcher = nullptr;
     FileBrowserModel *m_fileBrowserModel = nullptr;
     BrowseActivationService *m_browseActivation = nullptr;
 };

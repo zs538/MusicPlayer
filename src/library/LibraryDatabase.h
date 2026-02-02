@@ -60,10 +60,8 @@ public:
     
     bool upsertTrack(const LibraryTrack &track);
     bool removeTrack(qint64 id);
-    bool removeTrackByPath(const QString &filePath);
     bool removeTracksInFolder(const QString &folderPath);
     
-    std::optional<LibraryTrack> trackById(qint64 id) const;
     std::optional<LibraryTrack> trackByPath(const QString &filePath) const;
     
     QVector<LibraryTrack> allTracks() const;

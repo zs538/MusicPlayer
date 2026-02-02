@@ -239,15 +239,6 @@ bool LibraryDatabase::removeTrack(qint64 id)
     return true;
 }
 
-bool LibraryDatabase::removeTrackByPath(const QString &filePath)
-{
-    auto track = trackByPath(filePath);
-    if (track) {
-        return removeTrack(track->id);
-    }
-    return false;
-}
-
 bool LibraryDatabase::removeTracksInFolder(const QString &folderPath)
 {
     QSqlQuery query(m_db);
@@ -259,9 +250,10 @@ bool LibraryDatabase::removeTracksInFolder(const QString &folderPath)
         return false;
     }
     
-    if (query.numRowsAffected() > 0) {
-        emit databaseChanged();
-    }
+    int affected = query.numRowsAffected();
+    qDebug() << "removeTracksInFolder:" << folderPath << "- removed" << affected << "tracks";
+    
+    emit databaseChanged();
     return true;
 }
 
@@ -297,18 +289,6 @@ LibraryTrack LibraryDatabase::trackFromQuery(const QSqlQuery &query) const
     track.initialKey = query.value("initial_key").toString();
     track.codec = query.value("codec").toString();
     return track;
-}
-
-std::optional<LibraryTrack> LibraryDatabase::trackById(qint64 id) const
-{
-    QSqlQuery query(m_db);
-    query.prepare("SELECT * FROM tracks WHERE id = :id");
-    query.bindValue(":id", id);
-    
-    if (query.exec() && query.next()) {
-        return trackFromQuery(query);
-    }
-    return std::nullopt;
 }
 
 std::optional<LibraryTrack> LibraryDatabase::trackByPath(const QString &filePath) const

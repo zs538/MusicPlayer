@@ -45,7 +45,8 @@ inline QVariantList trackFilterToVariant(const TrackFilter &filter)
 
 inline QString groupTypeToColumn(const QString &groupType)
 {
-    if (groupType == "albumartist") return "album_artist";
+    // Use COALESCE for albumartist to fall back to artist when album_artist is empty
+    if (groupType == "albumartist") return "COALESCE(NULLIF(album_artist, ''), artist)";
     if (groupType == "artist") return "artist";
     if (groupType == "album") return "album";
     if (groupType == "disc") return "disc_number";

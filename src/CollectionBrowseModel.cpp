@@ -147,17 +147,101 @@ void CollectionBrowseModel::setSearchFilter(const QString &filter)
     applySearchAndSort();
 }
 
-void CollectionBrowseModel::applySearchAndSort()
+QString CollectionBrowseModel::entryKey(const Entry &e)
 {
-    beginResetModel();
+    // Unique key: for groups it's groupType+groupValue, for tracks it's filePath
+    if (e.entryType == "group")
+        return QStringLiteral("g:") + e.groupType + QStringLiteral(":") + e.groupValue.toString();
+    return QStringLiteral("t:") + e.filePath;
+}
+
+bool CollectionBrowseModel::entriesEqual(const Entry &a, const Entry &b)
+{
+    // Compare all visible fields that would cause a visual change
+    return a.entryType == b.entryType &&
+           a.displayText == b.displayText &&
+           a.subtitle == b.subtitle &&
+           a.childCount == b.childCount &&
+           a.year == b.year &&
+           a.representativeFilePath == b.representativeFilePath;
+}
+
+void CollectionBrowseModel::applyIncrementalUpdate(const QVector<Entry> &newEntries)
+{
+    // Build maps for O(1) lookup
+    QHash<QString, int> oldIndexByKey;
+    for (int i = 0; i < m_entries.size(); ++i)
+        oldIndexByKey.insert(entryKey(m_entries[i]), i);
     
-    // Start with all entries
-    m_entries = m_allEntries;
+    QHash<QString, int> newIndexByKey;
+    for (int i = 0; i < newEntries.size(); ++i)
+        newIndexByKey.insert(entryKey(newEntries[i]), i);
+    
+    // Phase 1: Remove entries that no longer exist (iterate backwards to preserve indices)
+    for (int i = m_entries.size() - 1; i >= 0; --i) {
+        QString key = entryKey(m_entries[i]);
+        if (!newIndexByKey.contains(key)) {
+            beginRemoveRows(QModelIndex(), i, i);
+            m_entries.remove(i);
+            endRemoveRows();
+        }
+    }
+    
+    // Rebuild old index map after removals
+    oldIndexByKey.clear();
+    for (int i = 0; i < m_entries.size(); ++i)
+        oldIndexByKey.insert(entryKey(m_entries[i]), i);
+    
+    // Phase 2: Insert new entries and update existing ones
+    for (int newIdx = 0; newIdx < newEntries.size(); ++newIdx) {
+        const Entry &newEntry = newEntries[newIdx];
+        QString key = entryKey(newEntry);
+        
+        if (!oldIndexByKey.contains(key)) {
+            // New entry - insert at correct position
+            beginInsertRows(QModelIndex(), newIdx, newIdx);
+            m_entries.insert(newIdx, newEntry);
+            endInsertRows();
+            
+            // Update indices for entries after insertion
+            oldIndexByKey.clear();
+            for (int i = 0; i < m_entries.size(); ++i)
+                oldIndexByKey.insert(entryKey(m_entries[i]), i);
+        } else {
+            int oldIdx = oldIndexByKey.value(key);
+            
+            // Check if content changed
+            if (!entriesEqual(m_entries[oldIdx], newEntry)) {
+                m_entries[oldIdx] = newEntry;
+                emit dataChanged(index(oldIdx), index(oldIdx));
+            }
+            
+            // Check if position changed (needs move)
+            if (oldIdx != newIdx && oldIdx < m_entries.size() && newIdx < m_entries.size()) {
+                // Move to correct position
+                if (beginMoveRows(QModelIndex(), oldIdx, oldIdx, QModelIndex(), newIdx > oldIdx ? newIdx + 1 : newIdx)) {
+                    m_entries.move(oldIdx, newIdx);
+                    endMoveRows();
+                    
+                    // Rebuild index map after move
+                    oldIndexByKey.clear();
+                    for (int i = 0; i < m_entries.size(); ++i)
+                        oldIndexByKey.insert(entryKey(m_entries[i]), i);
+                }
+            }
+        }
+    }
+}
+
+void CollectionBrowseModel::applySearchAndSort(bool forceReset)
+{
+    // Build the new entries list
+    QVector<Entry> newEntries = m_allEntries;
     
     // Apply search filter
     if (!m_searchFilter.isEmpty()) {
         QVector<Entry> filtered;
-        for (const Entry &e : m_entries) {
+        for (const Entry &e : newEntries) {
             if (e.displayText.contains(m_searchFilter, Qt::CaseInsensitive) ||
                 e.subtitle.contains(m_searchFilter, Qt::CaseInsensitive) ||
                 e.artist.contains(m_searchFilter, Qt::CaseInsensitive) ||
@@ -165,11 +249,11 @@ void CollectionBrowseModel::applySearchAndSort()
                 filtered.append(e);
             }
         }
-        m_entries = filtered;
+        newEntries = filtered;
     }
     
     // Apply sorting
-    std::sort(m_entries.begin(), m_entries.end(), [this](const Entry &a, const Entry &b) {
+    std::sort(newEntries.begin(), newEntries.end(), [this](const Entry &a, const Entry &b) {
         int cmp = 0;
         if (m_sortBy == "name") {
             cmp = a.displayText.compare(b.displayText, Qt::CaseInsensitive);
@@ -187,7 +271,19 @@ void CollectionBrowseModel::applySearchAndSort()
         return m_sortAscending ? (cmp < 0) : (cmp > 0);
     });
     
-    endResetModel();
+    // Decide: incremental update or full reset?
+    // Use incremental if not forced and we have existing data (typical rescan case)
+    bool useIncremental = !forceReset && !m_entries.isEmpty() && 
+                          qAbs(newEntries.size() - m_entries.size()) < m_entries.size();
+    
+    if (useIncremental) {
+        applyIncrementalUpdate(newEntries);
+    } else {
+        beginResetModel();
+        m_entries = newEntries;
+        endResetModel();
+    }
+    
     emit countChanged();
 }
 

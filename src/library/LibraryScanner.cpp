@@ -31,10 +31,10 @@ LibraryScanner::~LibraryScanner()
 
 void LibraryScanner::scanFolder(const QString &path)
 {
-    scanFolders(QStringList{path});
+    scanFolders(QStringList{path}, false);
 }
 
-void LibraryScanner::scanFolders(const QStringList &paths)
+void LibraryScanner::scanFolders(const QStringList &paths, bool detectDeletions)
 {
     if (m_scanning)
         return;
@@ -58,15 +58,17 @@ void LibraryScanner::scanFolders(const QStringList &paths)
     m_scanThread = new QThread();
     
     // Use QtConcurrent-style: run doScan in the thread
-    connect(m_scanThread, &QThread::started, this, [this, paths]() {
-        doScan(paths);
+    connect(m_scanThread, &QThread::started, this, [this, paths, detectDeletions]() {
+        doScan(paths, detectDeletions);
         
         QMetaObject::invokeMethod(this, [this]() {
             m_scanning = false;
             emit scanningChanged(false);
             if (m_cancelRequested) {
+                qDebug() << "LibraryScanner: Scan cancelled after" << m_progress << "of" << m_totalFiles << "files";
                 emit scanCancelled();
             } else {
+                qDebug() << "LibraryScanner: Scan finished -" << m_progress << "files processed, library now has" << m_db->trackCount() << "tracks";
                 emit scanFinished();
             }
         }, Qt::QueuedConnection);
@@ -90,7 +92,7 @@ void LibraryScanner::cancelScan()
     m_cancelRequested = true;
 }
 
-void LibraryScanner::doScan(const QStringList &paths)
+void LibraryScanner::doScan(const QStringList &paths, bool detectDeletions)
 {
     QStringList allFiles;
     for (const QString &path : paths) {
@@ -154,6 +156,32 @@ void LibraryScanner::doScan(const QStringList &paths)
                 QMetaObject::invokeMethod(this, [this, processed]() {
                     emit progressChanged(processed);
                 }, Qt::QueuedConnection);
+            }
+        }
+        
+        // Deletion detection: remove DB entries for files no longer on disk
+        if (detectDeletions && !m_cancelRequested) {
+            QSet<QString> diskSet(allFiles.begin(), allFiles.end());
+            
+            for (const QString &folderPath : paths) {
+                QString pattern = folderPath + "/%";
+                QSqlQuery selectQuery(db);
+                selectQuery.prepare("SELECT file_path FROM tracks WHERE file_path LIKE :pattern");
+                selectQuery.bindValue(":pattern", pattern);
+                
+                if (selectQuery.exec()) {
+                    QSqlQuery delQuery(db);
+                    delQuery.prepare("DELETE FROM tracks WHERE file_path = :path");
+                    while (selectQuery.next()) {
+                        QString dbPath = selectQuery.value(0).toString();
+                        if (!diskSet.contains(dbPath)) {
+                            delQuery.bindValue(":path", dbPath);
+                            if (delQuery.exec()) {
+                                qDebug() << "Scanner: Removed deleted file:" << dbPath;
+                            }
+                        }
+                    }
+                }
             }
         }
         

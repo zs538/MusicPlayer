@@ -35,6 +35,7 @@ public slots:
     void suspend();
     void resume();
     void stop();
+    void setVolume(qreal volume);
 
 signals:
     // Emitted to AudioEngine (queued connection to GUI thread)

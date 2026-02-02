@@ -9,7 +9,7 @@
 #include "audio/AudioEngine.h"
 #include "library/LibraryDatabase.h"
 #include "library/LibraryScanner.h"
-#include "library/LibraryTreeModel.h"
+#include "library/LibraryWatcher.h"
 #include "ViewedPlaylistRouter.h"
 #include "BrowseActivationService.h"
 #include <QFileInfo>
@@ -31,17 +31,44 @@ AppViewModel::AppViewModel(QObject *parent)
     
     m_libraryDb->open();
     m_libraryScanner = new LibraryScanner(m_libraryDb, this);
-    m_libraryTreeModel = new LibraryTreeModel(m_libraryDb, this);
+    m_libraryWatcher = new LibraryWatcher(m_libraryScanner, this);
+    // Initialize watcher with current folders (settings will be applied when Settings singleton is created)
+    m_libraryWatcher->setWatchFolders(m_libraryDb->watchFolders());
     
     connect(m_libraryScanner, &LibraryScanner::scanningChanged, this, &AppViewModel::libraryScanningChanged);
     connect(m_libraryScanner, &LibraryScanner::progressChanged, this, &AppViewModel::libraryScanProgressChanged);
+    
+    // Defer Settings connection until Settings singleton exists
+    QTimer::singleShot(0, this, [this]() {
+        Settings *settings = Settings::instance();
+        if (!settings) {
+            qWarning() << "AppViewModel: Settings not available for watcher initialization";
+            return;
+        }
+        
+        // Apply initial settings to watcher
+        m_libraryWatcher->setEnabled(settings->watcherEnabled());
+        m_libraryWatcher->setPeriodicRescanMinutes(settings->periodicRescanMinutes());
+        
+        // Connect Settings changes to watcher
+        connect(settings, &Settings::watcherEnabledChanged, this, [this]() {
+            if (m_libraryWatcher && Settings::instance()) {
+                m_libraryWatcher->setEnabled(Settings::instance()->watcherEnabled());
+            }
+        });
+        connect(settings, &Settings::periodicRescanMinutesChanged, this, [this]() {
+            if (m_libraryWatcher && Settings::instance()) {
+                m_libraryWatcher->setPeriodicRescanMinutes(Settings::instance()->periodicRescanMinutes());
+            }
+        });
+        
+        qDebug() << "LibraryWatcher: Settings applied - enabled:" << settings->watcherEnabled()
+                 << ", periodic:" << settings->periodicRescanMinutes() << "min";
+    });
     connect(m_libraryScanner, &LibraryScanner::scanFinished, this, [this]() {
         // Notify database changed so all models (CollectionBrowseModel, etc.) refresh
         if (m_libraryDb) {
             m_libraryDb->notifyDatabaseChanged();
-        }
-        if (m_libraryTreeModel) {
-            m_libraryTreeModel->refresh();
         }
         emit libraryTrackCountChanged();
 
@@ -108,6 +135,15 @@ AppViewModel::AppViewModel(QObject *parent)
                 m_audioEngine->setSinkBufferMs(s->bufferSizeMs());
             }
         });
+        connect(settings, &Settings::volumeChanged, this, [this]() {
+            Settings *s = Settings::instance();
+            if (s && m_audioEngine) {
+                m_audioEngine->setVolume(s->volume());
+            }
+        });
+        
+        // Apply initial volume from settings
+        m_audioEngine->setVolume(settings->volume());
     }
     
     // Initialize SessionManager and load session if enabled
@@ -123,26 +159,12 @@ AppViewModel::AppViewModel(QObject *parent)
     
     // Initialize BrowseActivationService
     m_browseActivation = new BrowseActivationService(this);
-    m_browseActivation->initialize(this, m_playlistStore, nullptr, m_libraryDb, m_libraryTreeModel);
+    m_browseActivation->initialize(this, m_playlistStore, nullptr, m_libraryDb);
     
     // Load session if restore is enabled
     if (settings->restoreSession()) {
         sessionMgr->loadSession();
         
-        // Apply library grouping levels from session
-        QStringList groupingLevels = sessionMgr->libraryGroupingLevels();
-        if (!groupingLevels.isEmpty() && m_libraryTreeModel) {
-            m_libraryTreeModel->setGroupingLevels(groupingLevels);
-        }
-    }
-    
-    // Connect library grouping changes to session auto-save
-    if (m_libraryTreeModel) {
-        connect(m_libraryTreeModel, &LibraryTreeModel::groupingLevelsChanged, this, [sessionMgr, this]() {
-            if (m_libraryTreeModel) {
-                sessionMgr->setLibraryGroupingLevels(m_libraryTreeModel->groupingLevels());
-            }
-        });
     }
     
     // Note: We don't connect to currentTrackChanged for now playing display
@@ -414,11 +436,6 @@ void AppViewModel::clearPlaylist()
     // Do NOT stop playback - user may be playing from a different playlist
 }
 
-LibraryTreeModel *AppViewModel::libraryTreeModel() const
-{
-    return m_libraryTreeModel;
-}
-
 FileBrowserModel *AppViewModel::fileBrowserModel() const
 {
     return m_fileBrowserModel;
@@ -436,7 +453,9 @@ int AppViewModel::libraryScanProgress() const
 
 void AppViewModel::addLibraryFolder(const QString &path)
 {
+    qDebug() << "AppViewModel::addLibraryFolder:" << path;
     m_libraryDb->addWatchFolder(path);
+    m_libraryWatcher->setWatchFolders(m_libraryDb->watchFolders());
     m_libraryScanner->scanFolder(path);
     emit libraryFoldersChanged();
 }
@@ -445,7 +464,10 @@ void AppViewModel::removeLibraryFolder(const QString &path)
 {
     m_libraryDb->removeWatchFolder(path);
     m_libraryDb->removeTracksInFolder(path);
+    m_libraryWatcher->setWatchFolders(m_libraryDb->watchFolders());
+    m_libraryDb->notifyDatabaseChanged();
     emit libraryFoldersChanged();
+    emit libraryTrackCountChanged();
 }
 
 void AppViewModel::rescanLibrary()
@@ -466,6 +488,7 @@ QStringList AppViewModel::watchFolders() const
 void AppViewModel::addWatchFolder(const QString &path)
 {
     m_libraryDb->addWatchFolder(path);
+    m_libraryWatcher->setWatchFolders(m_libraryDb->watchFolders());
     m_libraryScanner->scanFolder(path);
     emit libraryFoldersChanged();
 }
@@ -474,7 +497,10 @@ void AppViewModel::removeWatchFolder(const QString &path)
 {
     m_libraryDb->removeWatchFolder(path);
     m_libraryDb->removeTracksInFolder(path);
+    m_libraryWatcher->setWatchFolders(m_libraryDb->watchFolders());
+    m_libraryDb->notifyDatabaseChanged();
     emit libraryFoldersChanged();
+    emit libraryTrackCountChanged();
 }
 
 int AppViewModel::libraryTrackCount() const

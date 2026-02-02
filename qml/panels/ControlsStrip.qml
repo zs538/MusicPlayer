@@ -125,10 +125,7 @@ Rectangle {
             from: 0
             to: 1
             value: Settings.volume
-
-            onMoved: {
-                Settings.volume = value
-            }
+            onMoved: Settings.volume = value
         }
 
         Label {

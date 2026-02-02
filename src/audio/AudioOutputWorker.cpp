@@ -44,6 +44,9 @@ void AudioOutputWorker::initialize(int sampleRate, int channels, int bufferMs)
     int bufferBytes = (sampleRate * bufferMs / 1000) * m_audioFormat.bytesPerFrame();
     m_audioSink->setBufferSize(bufferBytes);
     
+    // Use software volume control in BufferIODevice, keep sink at 1.0
+    m_audioSink->setVolume(1.0);
+    
     connect(m_audioSink.get(), &QAudioSink::stateChanged,
             this, &AudioOutputWorker::onAudioStateChanged);
     
@@ -83,7 +86,44 @@ void AudioOutputWorker::resume()
     if (m_audioSink && m_running) {
         m_audioSink->resume();
         m_positionTimer->start();
-        qCDebug(lcAudioWorker) << "resume()";
+        
+        // Aggressively force QAudioSink to 1.0 to combat PipeWire's stream-restore
+        // which may apply stored volume at any point after stream activation
+        m_audioSink->setVolume(1.0);
+        
+        // Start a temporary timer that forces volume to 1.0 repeatedly for 15 seconds
+        // to override any delayed PipeWire restoration
+        QTimer *forceVolumeTimer = new QTimer(this);
+        forceVolumeTimer->setInterval(500);  // Every 500ms
+        int *counter = new int(0);
+        connect(forceVolumeTimer, &QTimer::timeout, this, [this, forceVolumeTimer, counter]() {
+            if (m_audioSink) {
+                qreal currentVol = m_audioSink->volume();
+                if (currentVol < 0.99) {
+                    qCDebug(lcAudioWorker) << "PipeWire changed sink volume to" << currentVol << "- forcing back to 1.0";
+                }
+                m_audioSink->setVolume(1.0);
+            }
+            (*counter)++;
+            if (*counter >= 30) {  // 30 * 500ms = 15 seconds
+                forceVolumeTimer->stop();
+                forceVolumeTimer->deleteLater();
+                delete counter;
+            }
+        });
+        forceVolumeTimer->start();
+        
+        qCDebug(lcAudioWorker) << "resume() - started 15s volume enforcement timer";
+    }
+}
+
+void AudioOutputWorker::setVolume(qreal volume)
+{
+    qCDebug(lcAudioWorker) << "setVolume:" << volume;
+    // Software volume control via BufferIODevice sample scaling
+    // QAudioSink is kept at 1.0 to avoid PipeWire volume stacking
+    if (m_bufferDevice) {
+        m_bufferDevice->setVolume(static_cast<float>(volume));
     }
 }
 

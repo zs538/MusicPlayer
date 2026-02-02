@@ -24,7 +24,7 @@ public:
 
 public slots:
     void scanFolder(const QString &path);
-    void scanFolders(const QStringList &paths);
+    void scanFolders(const QStringList &paths, bool detectDeletions = false);
     void rescanAll();
     void cancelScan();
 
@@ -38,7 +38,7 @@ signals:
     void errorOccurred(const QString &message);
 
 private:
-    void doScan(const QStringList &paths);
+    void doScan(const QStringList &paths, bool detectDeletions);
     QStringList collectAudioFiles(const QString &path);
     bool isAudioFile(const QString &path) const;
     

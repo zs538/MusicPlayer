@@ -280,6 +280,11 @@ Window {
                         anchors.margins: 2
                         model: folderModel
                         interactive: false
+                        Behavior on contentY { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+                        WheelHandler {
+                            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                            onWheel: (e) => folderListView.contentY = Math.max(0, Math.min(folderListView.contentHeight - folderListView.height, folderListView.contentY - e.angleDelta.y))
+                        }
                         
                         delegate: Rectangle {
                             width: folderListView.width
@@ -309,6 +314,7 @@ Window {
                             color: Theme.textSecondary
                             visible: folderListView.count === 0
                         }
+                        
                     }
                 }
                 

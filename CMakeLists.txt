@@ -44,8 +44,8 @@ qt_add_executable(appmusicplayer
     src/library/LibraryDatabase.cpp
     src/library/LibraryScanner.h
     src/library/LibraryScanner.cpp
-    src/library/LibraryTreeModel.h
-    src/library/LibraryTreeModel.cpp
+    src/library/LibraryWatcher.h
+    src/library/LibraryWatcher.cpp
     src/Settings.h
     src/Settings.cpp
     src/CoverArtProvider.h

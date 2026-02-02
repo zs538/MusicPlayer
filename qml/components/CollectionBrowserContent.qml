@@ -336,9 +336,11 @@ Item {
 
             model: browserModel
 
-            ScrollBar.vertical: ScrollBar {
-                active: true
-                policy: ScrollBar.AsNeeded
+            ScrollBar.vertical: ScrollBar { active: true; policy: ScrollBar.AsNeeded }
+            Behavior on contentY { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+            WheelHandler {
+                acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                onWheel: (e) => gridView.contentY = Math.max(0, Math.min(gridView.contentHeight - gridView.height, gridView.contentY - e.angleDelta.y))
             }
 
             delegate: Item {
@@ -381,9 +383,11 @@ Item {
                                 fillMode: Image.PreserveAspectCrop
                                 asynchronous: true
                                 cache: true
-                                sourceSize.width: 256
-                                sourceSize.height: 256
-                                smooth: true
+                                sourceSize.width: 512
+                                sourceSize.height: 512
+                                layer.enabled: true
+                                layer.smooth: true
+                                layer.textureSize: Qt.size(width * 2, height * 2)
 
                                 Label {
                                     anchors.centerIn: parent
@@ -489,15 +493,7 @@ Item {
                     }
                 }
             }
-
-            // Wheel scrolling
-            WheelHandler {
-                onWheel: (event) => {
-                    gridView.contentY = Math.max(0,
-                        Math.min(gridView.contentHeight - gridView.height,
-                            gridView.contentY - event.angleDelta.y))
-                }
-            }
+            
         }
 
         // List view (for list/tracks mode)
@@ -512,6 +508,11 @@ Item {
             boundsBehavior: Flickable.StopAtBounds
             cacheBuffer: 300
             ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+            Behavior on contentY { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+            WheelHandler {
+                acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                onWheel: (e) => listView.contentY = Math.max(0, Math.min(listView.contentHeight - listView.height, listView.contentY - e.angleDelta.y))
+            }
 
             delegate: Column {
                 id: listDel
@@ -569,9 +570,11 @@ Item {
                                 fillMode: Image.PreserveAspectCrop
                                 asynchronous: true
                                 cache: true
-                                sourceSize.width: 64
-                                sourceSize.height: 64
-                                smooth: true
+                                sourceSize.width: 128
+                                sourceSize.height: 128
+                                layer.enabled: true
+                                layer.smooth: true
+                                layer.textureSize: Qt.size(width * 2, height * 2)
                             }
                         }
 
@@ -761,9 +764,6 @@ Item {
                 }
             }
 
-            WheelHandler {
-                onWheel: (e) => listView.contentY = Math.max(0, Math.min(listView.contentHeight - listView.height, listView.contentY - e.angleDelta.y))
-            }
         }
     }
 }

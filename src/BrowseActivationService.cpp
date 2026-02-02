@@ -6,7 +6,6 @@
 #include "MetadataExtractor.h"
 #include "Settings.h"
 #include "library/LibraryDatabase.h"
-#include "library/LibraryTreeModel.h"
 #include "TrackFilter.h"
 #include <QFileInfo>
 
@@ -16,14 +15,12 @@ BrowseActivationService::BrowseActivationService(QObject *parent)
 }
 
 void BrowseActivationService::initialize(AppViewModel *app, PlaylistStore *store,
-                                          ViewedPlaylistRouter *router, LibraryDatabase *libraryDb,
-                                          LibraryTreeModel *libraryTreeModel)
+                                          ViewedPlaylistRouter *router, LibraryDatabase *libraryDb)
 {
     m_app = app;
     m_store = store;
     m_router = router;  // Can be null - will use ViewedPlaylistRouter::instance() as fallback
     m_libraryDb = libraryDb;
-    m_libraryTreeModel = libraryTreeModel;
 }
 
 ViewedPlaylistRouter *BrowseActivationService::router() const

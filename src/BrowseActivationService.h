@@ -10,8 +10,9 @@
 class AppViewModel;
 class PlaylistStore;
 class ViewedPlaylistRouter;
-class LibraryDatabase;
-class LibraryTreeModel;
+struct LibraryTrack;
+
+#include "library/LibraryDatabase.h"
 
 /**
  * @brief BrowseActivationService implements the global "double click play/queue" policy.
@@ -27,8 +28,7 @@ public:
     explicit BrowseActivationService(QObject *parent = nullptr);
 
     void initialize(AppViewModel *app, PlaylistStore *store, 
-                    ViewedPlaylistRouter *router, LibraryDatabase *libraryDb,
-                    LibraryTreeModel *libraryTreeModel);
+                    ViewedPlaylistRouter *router, LibraryDatabase *libraryDb);
 
     // Playlist entry activation (double-click on playlist row)
     Q_INVOKABLE void activatePlaylistRow(int row);
@@ -81,7 +81,6 @@ private:
     PlaylistStore *m_store = nullptr;
     ViewedPlaylistRouter *m_router = nullptr;
     LibraryDatabase *m_libraryDb = nullptr;
-    LibraryTreeModel *m_libraryTreeModel = nullptr;
 };
 
 #endif // BROWSEACTIVATIONSERVICE_H

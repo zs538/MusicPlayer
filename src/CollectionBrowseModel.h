@@ -89,12 +89,6 @@ private slots:
     void refresh();
 
 private:
-    void applySearchAndSort();
-    void buildGroups(const QVector<struct LibraryTrack> &tracks);
-    void buildTracks(const QVector<struct LibraryTrack> &tracks);
-    QString formatGroupDisplay(const QString &groupType, const QVariant &value) const;
-    QVariant getGroupValue(const struct LibraryTrack &track, const QString &groupType) const;
-
     struct Entry {
         QString entryType;
         QString groupType;
@@ -117,6 +111,15 @@ private:
         int bitrate = 0;
         QString fileType;
     };
+
+    void applySearchAndSort(bool forceReset = false);
+    void applyIncrementalUpdate(const QVector<Entry> &newEntries);
+    static QString entryKey(const Entry &e);
+    static bool entriesEqual(const Entry &a, const Entry &b);
+    void buildGroups(const QVector<struct LibraryTrack> &tracks);
+    void buildTracks(const QVector<struct LibraryTrack> &tracks);
+    QString formatGroupDisplay(const QString &groupType, const QVariant &value) const;
+    QVariant getGroupValue(const struct LibraryTrack &track, const QString &groupType) const;
 
     LibraryDatabase *m_database = nullptr;
     TrackFilter m_filter;

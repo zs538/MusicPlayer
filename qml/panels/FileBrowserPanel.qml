@@ -88,14 +88,10 @@ Item {
                 interactive: false
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-                
+                Behavior on contentY { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
                 WheelHandler {
-                    onWheel: function(event) {
-                        fileListView.contentY = Math.max(0, Math.min(
-                            fileListView.contentY - event.angleDelta.y,
-                            fileListView.contentHeight - fileListView.height
-                        ))
-                    }
+                    acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                    onWheel: (e) => fileListView.contentY = Math.max(0, Math.min(fileListView.contentHeight - fileListView.height, fileListView.contentY - e.angleDelta.y))
                 }
                 
                 delegate: Rectangle {

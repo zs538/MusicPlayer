@@ -338,10 +338,13 @@ void AudioEngine::clearNext()
 
 void AudioEngine::setVolume(double volume)
 {
-    if (m_playbackMode == BitPerfectSameRate) {
-        return;
-    }
     m_volume = qBound(0.0, volume, 1.0);
+    qCDebug(lcAudioEngine) << "setVolume:" << m_volume << "worker:" << (m_audioWorker ? "yes" : "no");
+    // Software volume control via sample scaling in BufferIODevice
+    if (m_audioWorker) {
+        QMetaObject::invokeMethod(m_audioWorker, "setVolume", Qt::QueuedConnection,
+                                  Q_ARG(qreal, m_volume));
+    }
 }
 
 void AudioEngine::setPlaybackMode(PlaybackMode mode)
@@ -351,11 +354,6 @@ void AudioEngine::setPlaybackMode(PlaybackMode mode)
     
     qCDebug(lcAudioEngine) << "setPlaybackMode:" << mode;
     m_playbackMode = mode;
-    
-    // Bit-perfect mode requires volume at 1.0 (no software volume control)
-    if (mode == BitPerfectSameRate) {
-        m_volume = 1.0;
-    }
 }
 
 void AudioEngine::setSinkBufferMs(int ms)
@@ -644,12 +642,7 @@ void AudioEngine::decodeLoop()
                     int flushed = swr_convert(m_swrCtx, &outPtr, outputBuffer.size() / 4, nullptr, 0);
                     if (flushed > 0) {
                         size_t bytesToWrite = flushed * 2 * sizeof(int16_t);
-                        if (m_volume < 1.0) {
-                            int16_t *samples = reinterpret_cast<int16_t*>(outputBuffer.data());
-                            for (int i = 0; i < flushed * 2; i++) {
-                                samples[i] = static_cast<int16_t>(samples[i] * m_volume);
-                            }
-                        }
+                        // Volume scaling moved to BufferIODevice::readData() to avoid double-application
                         m_ringBuffer->write(outputBuffer.data(), bytesToWrite);
                         m_samplesWritten += flushed;
                         m_currentTrackSamples = m_samplesWritten.load();
@@ -770,14 +763,7 @@ void AudioEngine::decodeLoop()
             
             if (converted > 0) {
                 size_t bytesToWrite = converted * 2 * sizeof(int16_t);
-                
-                if (m_volume < 1.0) {
-                    int16_t *samples = reinterpret_cast<int16_t*>(outputBuffer.data());
-                    for (int i = 0; i < converted * 2; i++) {
-                        samples[i] = static_cast<int16_t>(samples[i] * m_volume);
-                    }
-                }
-                
+                // Volume scaling moved to BufferIODevice::readData() to avoid double-application
                 m_samplesWritten += converted;
                 m_ringBuffer->write(outputBuffer.data(), bytesToWrite);
             }
@@ -823,6 +809,10 @@ void AudioEngine::onAudioWorkerInitialized(bool success)
     if (!success) {
         qCWarning(lcAudioEngine) << "Audio worker initialization failed";
         m_audioInitialized = false;
+    } else {
+        // Apply current volume to the newly initialized audio sink
+        QMetaObject::invokeMethod(m_audioWorker, "setVolume", Qt::QueuedConnection,
+                                  Q_ARG(qreal, m_volume));
     }
 }
 

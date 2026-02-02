@@ -196,39 +196,50 @@ QQuickTextureFactory *CoverImageResponse::textureFactory() const
 
 void CoverImageResponse::run()
 {
-    // Build cache key including size
-    QString cacheKey = m_id;
-    if (m_requestedSize.isValid() && m_requestedSize.width() > 0) {
-        cacheKey = QString("%1@%2x%3").arg(m_id).arg(m_requestedSize.width()).arg(m_requestedSize.height());
-    }
-    
-    // Check cache first
-    m_image = CoverImageProvider::getCached(cacheKey);
-    if (!m_image.isNull()) {
-        emit finished();
-        return;
-    }
-    
-    // Load the image (runs on worker thread, not blocking render)
-    if (QFileInfo::exists(m_id)) {
-        m_image = CoverImageProvider::loadCoverForPath(m_id, m_requestedSize);
-    }
-    
-    // Create placeholder if no image found
-    if (m_image.isNull()) {
+    try {
+        // Build cache key including size
+        QString cacheKey = m_id;
+        if (m_requestedSize.isValid() && m_requestedSize.width() > 0) {
+            cacheKey = QString("%1@%2x%3").arg(m_id).arg(m_requestedSize.width()).arg(m_requestedSize.height());
+        }
+        
+        // Check cache first
+        m_image = CoverImageProvider::getCached(cacheKey);
+        if (!m_image.isNull()) {
+            emit finished();
+            return;
+        }
+        
+        // Load the image (runs on worker thread, not blocking render)
+        if (!m_id.isEmpty() && QFileInfo::exists(m_id)) {
+            m_image = CoverImageProvider::loadCoverForPath(m_id, m_requestedSize);
+        }
+        
+        // Create placeholder if no image found
+        if (m_image.isNull()) {
+            int w = m_requestedSize.width() > 0 ? m_requestedSize.width() : 96;
+            int h = m_requestedSize.height() > 0 ? m_requestedSize.height() : 96;
+            m_image = QImage(w, h, QImage::Format_ARGB32);
+            m_image.fill(Qt::transparent);
+        } else {
+            // Scale if needed - use SmoothTransformation for quality
+            if (m_requestedSize.isValid() && m_requestedSize.width() > 0 && m_requestedSize.height() > 0) {
+                m_image = m_image.scaled(m_requestedSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+            }
+        }
+        
+        // Cache the result
+        if (!cacheKey.isEmpty()) {
+            CoverImageProvider::putCached(cacheKey, m_image);
+        }
+    } catch (...) {
+        // Catch any exceptions from TagLib or image processing
+        qWarning() << "CoverImageResponse: Exception loading cover for" << m_id;
         int w = m_requestedSize.width() > 0 ? m_requestedSize.width() : 96;
         int h = m_requestedSize.height() > 0 ? m_requestedSize.height() : 96;
         m_image = QImage(w, h, QImage::Format_ARGB32);
         m_image.fill(Qt::transparent);
-    } else {
-        // Scale if needed - use SmoothTransformation for quality
-        if (m_requestedSize.isValid() && m_requestedSize.width() > 0 && m_requestedSize.height() > 0) {
-            m_image = m_image.scaled(m_requestedSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-        }
     }
-    
-    // Cache the result
-    CoverImageProvider::putCached(cacheKey, m_image);
     
     emit finished();
 }

@@ -7,7 +7,15 @@ LibraryTreeModel::LibraryTreeModel(LibraryDatabase *db, QObject *parent)
     , m_db(db)
     , m_groupingLevels({"albumartist", "year-album", "disc"})
 {
-    connect(m_db, &LibraryDatabase::databaseChanged, this, &LibraryTreeModel::onDatabaseChanged);
+    // Debounce timer to prevent rebuild spam during batch operations
+    m_rebuildDebounceTimer = new QTimer(this);
+    m_rebuildDebounceTimer->setSingleShot(true);
+    m_rebuildDebounceTimer->setInterval(500);
+    connect(m_rebuildDebounceTimer, &QTimer::timeout, this, &LibraryTreeModel::rebuildTree);
+    
+    connect(m_db, &LibraryDatabase::databaseChanged, this, [this]() {
+        m_rebuildDebounceTimer->start();
+    });
     rebuildTree();
 }
 

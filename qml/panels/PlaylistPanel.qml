@@ -85,15 +85,7 @@ Rectangle {
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                 cursorShape: Qt.PointingHandCursor
                 hoverEnabled: true
-                onClicked: (mouse) => {
-                    if (mouse.button === Qt.LeftButton)
-                        playlistSwitchMenu.popup()
-                    else if (mouse.button === Qt.RightButton)
-                        playlistActionsMenu.popup()
-                }
-            }
-
-            WheelHandler {
+                
                 // Build ordered playlist list (user first, then generated) - same as menu
                 function getOrderedPlaylists() {
                     let userPlaylists = []
@@ -108,6 +100,13 @@ Rectangle {
                         else genPlaylists.push(item.uuid)
                     }
                     return userPlaylists.concat(genPlaylists)
+                }
+                
+                onClicked: (mouse) => {
+                    if (mouse.button === Qt.LeftButton)
+                        playlistSwitchMenu.popup()
+                    else if (mouse.button === Qt.RightButton)
+                        playlistActionsMenu.popup()
                 }
                 
                 onWheel: (wheel) => {
@@ -262,12 +261,18 @@ Rectangle {
         footer: Item { width: 1; height: 20 }
 
         ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+        Behavior on contentY { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+        WheelHandler {
+            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+            onWheel: (e) => listView.contentY = Math.max(0, Math.min(listView.contentHeight - listView.height, listView.contentY - e.angleDelta.y))
+        }
         
         // Click on empty area to deselect, drag to select from bottom
         MouseArea {
             anchors.fill: parent
             z: -1
             property bool isDragSelecting: false
+            property bool didDragSelect: false  // Track if drag selection actually occurred
             
             onPressed: {
                 // Check if click is below all entries (in empty space)
@@ -275,6 +280,7 @@ Rectangle {
                 let lastEntryBottom = listView.count * 18
                 if (clickY >= lastEntryBottom) {
                     isDragSelecting = true
+                    didDragSelect = false
                     controller.clearSelection()
                 }
             }
@@ -288,17 +294,26 @@ Rectangle {
                         let hoverIndex = Math.floor(globalY / 18)
                         hoverIndex = Math.max(0, Math.min(listView.count - 1, hoverIndex))
                         controller.selectRange(hoverIndex, listView.count - 1)
+                        didDragSelect = true
                     } else {
                         controller.clearSelection()
                     }
                 }
             }
             
-            onReleased: isDragSelecting = false
-            onCanceled: isDragSelecting = false
+            onReleased: {
+                isDragSelecting = false
+                // didDragSelect stays true until next press
+            }
+            onCanceled: {
+                isDragSelecting = false
+                didDragSelect = false
+            }
             
             onClicked: {
-                if (!isDragSelecting) controller.clearSelection()
+                // Only clear if this was a simple click, not a drag select
+                if (!didDragSelect) controller.clearSelection()
+                didDragSelect = false
             }
         }
 
@@ -413,10 +428,6 @@ Rectangle {
                     }
                 }
             }
-        }
-
-        WheelHandler {
-            onWheel: (e) => listView.contentY = Math.max(0, Math.min(listView.contentHeight - listView.height, listView.contentY - e.angleDelta.y))
         }
 
         DropArea {

@@ -21,9 +21,13 @@ public:
     qint64 writeData(const char *data, qint64 maxSize) override;
     qint64 bytesAvailable() const override;
     bool isSequential() const override { return true; }
+    
+    void setVolume(float volume) { m_volume = qBound(0.0f, volume, 1.0f); }
+    float volume() const { return m_volume; }
 
 private:
     SPSCRingBuffer *m_buffer;
+    float m_volume = 1.0f;
 };
 
 #endif // BUFFERIODEVICE_H

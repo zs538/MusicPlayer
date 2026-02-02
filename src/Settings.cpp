@@ -139,6 +139,8 @@ void Settings::save()
     m_settings.setValue("behavior/generatedPlaylistCount", m_generatedPlaylistCount);
     m_settings.setValue("appearance/gridCellMinWidth", m_gridCellMinWidth);
     m_settings.setValue("appearance/gridCellMaxWidth", m_gridCellMaxWidth);
+    m_settings.setValue("library/watcherEnabled", m_watcherEnabled);
+    m_settings.setValue("library/periodicRescanMinutes", m_periodicRescanMinutes);
     m_settings.sync();
 }
 
@@ -155,6 +157,8 @@ void Settings::load()
     m_generatedPlaylistCount = m_settings.value("behavior/generatedPlaylistCount", 5).toInt();
     m_gridCellMinWidth = m_settings.value("appearance/gridCellMinWidth", 100).toInt();
     m_gridCellMaxWidth = m_settings.value("appearance/gridCellMaxWidth", 200).toInt();
+    m_watcherEnabled = m_settings.value("library/watcherEnabled", true).toBool();
+    m_periodicRescanMinutes = m_settings.value("library/periodicRescanMinutes", 10).toInt();
     
     // Load cover art patterns with defaults
     QStringList defaultPatterns = {
@@ -327,4 +331,35 @@ void Settings::setGroupTypeViewMode(const QString &groupType, const QString &vie
     QString key = QString("collection/%1/viewMode").arg(groupType);
     m_settings.setValue(key, viewMode);
     emit settingsChanged();
+}
+
+bool Settings::watcherEnabled() const
+{
+    return m_watcherEnabled;
+}
+
+void Settings::setWatcherEnabled(bool enabled)
+{
+    if (m_watcherEnabled != enabled) {
+        m_watcherEnabled = enabled;
+        m_settings.setValue("library/watcherEnabled", enabled);
+        emit watcherEnabledChanged();
+        emit settingsChanged();
+    }
+}
+
+int Settings::periodicRescanMinutes() const
+{
+    return m_periodicRescanMinutes;
+}
+
+void Settings::setPeriodicRescanMinutes(int minutes)
+{
+    minutes = qBound(0, minutes, 1440);  // 0 = disabled, max 24 hours
+    if (m_periodicRescanMinutes != minutes) {
+        m_periodicRescanMinutes = minutes;
+        m_settings.setValue("library/periodicRescanMinutes", minutes);
+        emit periodicRescanMinutesChanged();
+        emit settingsChanged();
+    }
 }

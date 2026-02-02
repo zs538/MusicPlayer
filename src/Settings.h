@@ -25,6 +25,8 @@ class Settings : public QObject
     Q_PROPERTY(int generatedPlaylistCount READ generatedPlaylistCount WRITE setGeneratedPlaylistCount NOTIFY generatedPlaylistCountChanged)
     Q_PROPERTY(int gridCellMinWidth READ gridCellMinWidth WRITE setGridCellMinWidth NOTIFY gridCellMinWidthChanged)
     Q_PROPERTY(int gridCellMaxWidth READ gridCellMaxWidth WRITE setGridCellMaxWidth NOTIFY gridCellMaxWidthChanged)
+    Q_PROPERTY(bool watcherEnabled READ watcherEnabled WRITE setWatcherEnabled NOTIFY watcherEnabledChanged)
+    Q_PROPERTY(int periodicRescanMinutes READ periodicRescanMinutes WRITE setPeriodicRescanMinutes NOTIFY periodicRescanMinutesChanged)
 
 public:
     enum PlaybackMode {
@@ -95,6 +97,12 @@ public:
     int gridCellMaxWidth() const;
     void setGridCellMaxWidth(int width);
     
+    bool watcherEnabled() const;
+    void setWatcherEnabled(bool enabled);
+    
+    int periodicRescanMinutes() const;
+    void setPeriodicRescanMinutes(int minutes);
+    
     Q_INVOKABLE void save();
     Q_INVOKABLE void load();
 
@@ -119,6 +127,8 @@ signals:
     void generatedPlaylistCountChanged();
     void gridCellMinWidthChanged();
     void gridCellMaxWidthChanged();
+    void watcherEnabledChanged();
+    void periodicRescanMinutesChanged();
     void settingsChanged();
 
 private:
@@ -136,6 +146,8 @@ private:
     int m_generatedPlaylistCount = 5;
     int m_gridCellMinWidth = 100;
     int m_gridCellMaxWidth = 200;
+    bool m_watcherEnabled = true;
+    int m_periodicRescanMinutes = 10;
 };
 
 #endif // SETTINGS_H
