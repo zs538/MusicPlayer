@@ -27,7 +27,6 @@ class SessionManager : public QObject
     
     // UI state properties exposed to QML
     Q_PROPERTY(int currentPanel READ currentPanel WRITE setCurrentPanel NOTIFY currentPanelChanged)
-    Q_PROPERTY(QString fileBrowserPath READ fileBrowserPath WRITE setFileBrowserPath NOTIFY fileBrowserPathChanged)
     Q_PROPERTY(QVariantList playlistColumns READ playlistColumns WRITE setPlaylistColumns NOTIFY playlistColumnsChanged)
     Q_PROPERTY(QStringList libraryGroupingLevels READ libraryGroupingLevels WRITE setLibraryGroupingLevels NOTIFY libraryGroupingLevelsChanged)
     Q_PROPERTY(QVariantList floatingWindows READ floatingWindows WRITE setFloatingWindows NOTIFY floatingWindowsChanged)
@@ -56,9 +55,6 @@ public:
     int currentPanel() const;
     void setCurrentPanel(int panel);
     
-    QString fileBrowserPath() const;
-    void setFileBrowserPath(const QString &path);
-    
     QVariantList playlistColumns() const;
     void setPlaylistColumns(const QVariantList &columns);
     
@@ -75,7 +71,6 @@ public:
 
 signals:
     void currentPanelChanged();
-    void fileBrowserPathChanged();
     void playlistColumnsChanged();
     void libraryGroupingLevelsChanged();
     void floatingWindowsChanged();
@@ -100,7 +95,6 @@ private:
     // Cached UI state
     QRect m_windowGeometry;
     int m_currentPanel = 0;
-    QString m_fileBrowserPath;
     QVariantList m_playlistColumns;
     QStringList m_libraryGroupingLevels;
     QVariantList m_floatingWindows;

@@ -22,8 +22,6 @@ qt_add_executable(appmusicplayer
     src/main.cpp
     src/AppViewModel.h
     src/AppViewModel.cpp
-    src/FileBrowserModel.h
-    src/FileBrowserModel.cpp
     src/TrackListModel.h
     src/TrackListModel.cpp
     src/PlaylistStore.h
@@ -117,7 +115,6 @@ qt_add_qml_module(appmusicplayer
         qml/settings/SettingsWindow.qml
     SOURCES
         src/AppViewModel.h src/AppViewModel.cpp
-        src/FileBrowserModel.h src/FileBrowserModel.cpp
         src/Settings.h src/Settings.cpp
         src/CoverArtProvider.h src/CoverArtProvider.cpp
         src/SessionManager.h src/SessionManager.cpp

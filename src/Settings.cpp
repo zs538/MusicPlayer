@@ -26,21 +26,6 @@ Settings *Settings::instance()
     return s_instance;
 }
 
-int Settings::playbackMode() const
-{
-    return m_playbackMode;
-}
-
-void Settings::setPlaybackMode(int mode)
-{
-    if (m_playbackMode != mode) {
-        m_playbackMode = mode;
-        m_settings.setValue("playback/mode", mode);
-        emit playbackModeChanged();
-        emit settingsChanged();
-    }
-}
-
 double Settings::volume() const
 {
     return m_volume;
@@ -127,7 +112,6 @@ void Settings::setCoverArtPatterns(const QStringList &patterns)
 
 void Settings::save()
 {
-    m_settings.setValue("playback/mode", m_playbackMode);
     m_settings.setValue("playback/volume", m_volume);
     m_settings.setValue("audio/outputDevice", m_outputDevice);
     m_settings.setValue("audio/bufferSizeMs", m_bufferSizeMs);
@@ -146,7 +130,6 @@ void Settings::save()
 
 void Settings::load()
 {
-    m_playbackMode = m_settings.value("playback/mode", GaplessSession).toInt();
     m_volume = m_settings.value("playback/volume", 1.0).toDouble();
     m_outputDevice = m_settings.value("audio/outputDevice", "").toString();
     m_bufferSizeMs = m_settings.value("audio/bufferSizeMs", 100).toInt();

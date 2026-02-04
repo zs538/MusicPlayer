@@ -26,8 +26,6 @@ AppViewModel::AppViewModel(QObject *parent)
     , m_libraryScanner(nullptr)
 {
     s_instance = this;
-
-    m_fileBrowserModel = new FileBrowserModel(this);
     
     m_libraryDb->open();
     m_libraryScanner = new LibraryScanner(m_libraryDb, this);
@@ -120,15 +118,8 @@ AppViewModel::AppViewModel(QObject *parent)
     
     // Connect Settings to AudioEngine
     if (settings && m_audioEngine) {
-        m_audioEngine->setPlaybackMode(static_cast<AudioEngine::PlaybackMode>(settings->playbackMode()));
         m_audioEngine->setSinkBufferMs(settings->bufferSizeMs());
         
-        connect(settings, &Settings::playbackModeChanged, this, [this]() {
-            Settings *s = Settings::instance();
-            if (s && m_audioEngine) {
-                m_audioEngine->setPlaybackMode(static_cast<AudioEngine::PlaybackMode>(s->playbackMode()));
-            }
-        });
         connect(settings, &Settings::bufferSizeMsChanged, this, [this]() {
             Settings *s = Settings::instance();
             if (s && m_audioEngine) {
@@ -434,11 +425,6 @@ void AppViewModel::clearPlaylist()
     TrackListModel *model = m_playlistStore->displayedPlaylist();
     if (model) model->clear();
     // Do NOT stop playback - user may be playing from a different playlist
-}
-
-FileBrowserModel *AppViewModel::fileBrowserModel() const
-{
-    return m_fileBrowserModel;
 }
 
 bool AppViewModel::libraryScanning() const

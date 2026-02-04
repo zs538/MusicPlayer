@@ -13,7 +13,6 @@ class Settings : public QObject
     QML_ELEMENT
     QML_SINGLETON
     
-    Q_PROPERTY(int playbackMode READ playbackMode WRITE setPlaybackMode NOTIFY playbackModeChanged)
     Q_PROPERTY(double volume READ volume WRITE setVolume NOTIFY volumeChanged)
     Q_PROPERTY(QString outputDevice READ outputDevice WRITE setOutputDevice NOTIFY outputDeviceChanged)
     Q_PROPERTY(int bufferSizeMs READ bufferSizeMs WRITE setBufferSizeMs NOTIFY bufferSizeMsChanged)
@@ -29,13 +28,6 @@ class Settings : public QObject
     Q_PROPERTY(int periodicRescanMinutes READ periodicRescanMinutes WRITE setPeriodicRescanMinutes NOTIFY periodicRescanMinutesChanged)
 
 public:
-    enum PlaybackMode {
-        GaplessSession = 0,
-        BitPerfectSameRate
-    };
-    Q_ENUM(PlaybackMode)
-    
-    
     enum AddTracksPolicy {
         AddNeverStart = 0,
         AddStartIfStopped,
@@ -59,9 +51,6 @@ public:
     
     static Settings *create(QQmlEngine *qmlEngine, QJSEngine *jsEngine);
     static Settings *instance();
-    
-    int playbackMode() const;
-    void setPlaybackMode(int mode);
     
     double volume() const;
     void setVolume(double value);
@@ -115,7 +104,6 @@ public:
     Q_INVOKABLE void setGroupTypeViewMode(const QString &groupType, const QString &viewMode);
 
 signals:
-    void playbackModeChanged();
     void volumeChanged();
     void outputDeviceChanged();
     void bufferSizeMsChanged();
@@ -134,7 +122,6 @@ signals:
 private:
     QSettings m_settings;
     
-    int m_playbackMode = GaplessSession;
     double m_volume = 1.0;
     QString m_outputDevice;
     int m_bufferSizeMs = 100;

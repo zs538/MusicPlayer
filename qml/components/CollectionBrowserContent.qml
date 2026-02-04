@@ -310,7 +310,7 @@ Item {
             clip: true
             interactive: false
             cacheBuffer: 500
-
+            
             // Debounced cell sizing - recalculates after resize stops to avoid per-frame re-layout
             property int stableCellWidth: Settings.gridCellMinWidth
             property int stableCellHeight: Math.round(stableCellWidth * 1.25)
@@ -340,8 +340,22 @@ Item {
             Behavior on contentY { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
             WheelHandler {
                 acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-                onWheel: (e) => gridView.contentY = Math.max(0, Math.min(gridView.contentHeight - gridView.height, gridView.contentY - e.angleDelta.y))
+                onWheel: (e) => {
+                    let minY = gridView.originY
+                    let maxY = gridView.originY + gridView.contentHeight - gridView.height
+                    gridView.contentY = Math.max(minY, Math.min(maxY, gridView.contentY - e.angleDelta.y))
+                }
             }
+            // Clamp contentY to valid bounds [originY, max(originY, originY + contentHeight - height)]
+            // When content fits in view (contentHeight <= height), maxY = originY (no scrolling needed)
+            onContentHeightChanged: {
+                let maxY = Math.max(originY, originY + contentHeight - height)
+                if (contentY > maxY) contentY = maxY
+                if (contentY < originY) contentY = originY
+            }
+            
+            // Reset scroll position to top when view becomes visible
+            onVisibleChanged: if (visible) contentY = originY
 
             delegate: Item {
                 id: gridDel

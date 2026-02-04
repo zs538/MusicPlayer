@@ -175,20 +175,6 @@ void SessionManager::setCurrentPanel(int panel)
     }
 }
 
-QString SessionManager::fileBrowserPath() const
-{
-    return m_fileBrowserPath;
-}
-
-void SessionManager::setFileBrowserPath(const QString &path)
-{
-    if (m_fileBrowserPath != path) {
-        m_fileBrowserPath = path;
-        emit fileBrowserPathChanged();
-        scheduleAutoSave();
-    }
-}
-
 QVariantList SessionManager::playlistColumns() const
 {
     return m_playlistColumns;
@@ -258,7 +244,6 @@ QJsonObject SessionManager::buildSessionJson() const
     // UI state
     QJsonObject uiState;
     uiState["currentPanel"] = m_currentPanel;
-    uiState["fileBrowserPath"] = m_fileBrowserPath;
     uiState["playlistColumns"] = QJsonArray::fromVariantList(m_playlistColumns);
     uiState["libraryGroupingLevels"] = QJsonArray::fromStringList(m_libraryGroupingLevels);
     json["uiState"] = uiState;
@@ -294,7 +279,6 @@ bool SessionManager::parseSessionJson(const QJsonObject &json)
     if (json.contains("uiState")) {
         QJsonObject ui = json["uiState"].toObject();
         m_currentPanel = ui["currentPanel"].toInt(0);
-        m_fileBrowserPath = ui["fileBrowserPath"].toString();
         m_playlistColumns = ui["playlistColumns"].toArray().toVariantList();
         
         // Load library grouping levels
@@ -305,7 +289,6 @@ bool SessionManager::parseSessionJson(const QJsonObject &json)
         }
         
         emit currentPanelChanged();
-        emit fileBrowserPathChanged();
         emit playlistColumnsChanged();
         emit libraryGroupingLevelsChanged();
     }

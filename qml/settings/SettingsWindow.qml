@@ -228,19 +228,6 @@ Window {
             ColumnLayout {
                 spacing: 12
                 
-                Label { text: "Playback Mode"; font.bold: true }
-                RadioButton { 
-                    text: "Gapless Session (resamples to common format)"
-                    checked: Settings.playbackMode === 0
-                    onClicked: Settings.playbackMode = 0
-                }
-                RadioButton { 
-                    text: "Bit-Perfect (not yet implemented)"
-                    enabled: false
-                    checked: Settings.playbackMode === 1
-                    onClicked: Settings.playbackMode = 1
-                }
-                
                 Label { text: "Buffer Size"; font.bold: true }
                 RowLayout {
                     SpinBox {

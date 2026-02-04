@@ -347,15 +347,6 @@ void AudioEngine::setVolume(double volume)
     }
 }
 
-void AudioEngine::setPlaybackMode(PlaybackMode mode)
-{
-    if (m_playbackMode == mode)
-        return;
-    
-    qCDebug(lcAudioEngine) << "setPlaybackMode:" << mode;
-    m_playbackMode = mode;
-}
-
 void AudioEngine::setSinkBufferMs(int ms)
 {
     ms = qBound(50, ms, 500);  // Clamp to reasonable range

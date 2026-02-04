@@ -14,20 +14,6 @@ ScrollView {
         spacing: Theme.spacingLarge
         
         SettingsGroup {
-            title: qsTr("Playback Mode")
-            Layout.fillWidth: true
-            
-            SettingsRadioGroup {
-                options: [
-                    {text: qsTr("Gapless Session"), value: 0},
-                    {text: qsTr("Bit-Perfect (Same Rate)"), value: 1}
-                ]
-                currentValue: Settings.playbackMode
-                onValueChanged: function(value) { Settings.playbackMode = value }
-            }
-        }
-        
-        SettingsGroup {
             title: qsTr("Audio Buffer")
             Layout.fillWidth: true
             

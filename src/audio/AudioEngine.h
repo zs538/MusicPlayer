@@ -36,12 +36,6 @@ public:
     };
     Q_ENUM(State)
     
-    enum PlaybackMode {
-        GaplessSession = 0,
-        BitPerfectSameRate
-    };
-    Q_ENUM(PlaybackMode)
-    
     // Audio sink buffer size - affects latency and overlap at track transitions
     // Short = 100ms (low latency, minimal overlap)
     // Long = 250ms (safer on slow systems)
@@ -54,9 +48,6 @@ public:
     qint64 positionMs() const;
     qint64 durationMs() const { return m_durationMs; }
     QString currentFilePath() const;
-    PlaybackMode playbackMode() const { return m_playbackMode; }
-    void setPlaybackMode(PlaybackMode mode);
-    
     int sinkBufferMs() const { return m_sinkBufferMs; }
     void setSinkBufferMs(int ms);
 
@@ -144,7 +135,6 @@ private:
     qint64 m_nextTrackDurationMs = 0;
     static constexpr qint64 GAPLESS_LEAD_IN_MS = 2000;
     
-    PlaybackMode m_playbackMode = GaplessSession;
     int m_sinkBufferMs = 100;  // Default: 100ms (low latency)
 };
 
