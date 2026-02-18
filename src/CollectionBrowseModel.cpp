@@ -8,6 +8,142 @@ CollectionBrowseModel::CollectionBrowseModel(QObject *parent)
 {
 }
 
+// --- LRU result cache ---
+
+bool CollectionBrowseModel::CacheKey::operator==(const CacheKey &o) const
+{
+    if (groupBy != o.groupBy || filter.size() != o.filter.size())
+        return false;
+    for (int i = 0; i < filter.size(); ++i) {
+        if (filter[i].field != o.filter[i].field ||
+            filter[i].op != o.filter[i].op ||
+            filter[i].value != o.filter[i].value)
+            return false;
+    }
+    return true;
+}
+
+CollectionBrowseModel::CacheKey CollectionBrowseModel::currentCacheKey() const
+{
+    return CacheKey{m_filter, m_groupBy};
+}
+
+CollectionBrowseModel::CacheEntry *CollectionBrowseModel::findCache(const CacheKey &key)
+{
+    for (int i = 0; i < m_cache.size(); ++i) {
+        if (m_cache[i].key == key) {
+            // Move to front (most recently used)
+            if (i > 0)
+                m_cache.move(i, 0);
+            return &m_cache[0];
+        }
+    }
+    return nullptr;
+}
+
+void CollectionBrowseModel::storeCache(const CacheKey &key, const QVector<Entry> &entries, const QString &title)
+{
+    // Check if already cached (update in place)
+    for (int i = 0; i < m_cache.size(); ++i) {
+        if (m_cache[i].key == key) {
+            m_cache[i].entries = entries;
+            m_cache[i].sorted.clear();
+            m_cache[i].title = title;
+            if (i > 0)
+                m_cache.move(i, 0);
+            return;
+        }
+    }
+    // Evict LRU if full
+    if (m_cache.size() >= MaxCacheEntries)
+        m_cache.removeLast();
+    m_cache.prepend(CacheEntry{key, entries, {}, {}, true, title});
+}
+
+void CollectionBrowseModel::invalidateCache()
+{
+    m_cache.clear();
+}
+
+// --- History navigation ---
+
+bool CollectionBrowseModel::canGoBack() const { return !m_backStack.isEmpty(); }
+bool CollectionBrowseModel::canGoForward() const { return !m_forwardStack.isEmpty(); }
+
+void CollectionBrowseModel::navigate(const QVariantList &filter, const QString &groupBy, qreal currentScrollY)
+{
+    m_backStack.append({m_filter, m_groupBy, currentScrollY});
+    m_forwardStack.clear();
+    m_pendingScrollY = 0;
+    applyState(trackFilterFromVariant(filter), groupBy);
+    emit historyChanged();
+    emit pendingScrollYChanged();
+}
+
+void CollectionBrowseModel::goBack(qreal currentScrollY)
+{
+    if (m_backStack.isEmpty()) return;
+    m_forwardStack.append({m_filter, m_groupBy, currentScrollY});
+    auto entry = m_backStack.takeLast();
+    m_pendingScrollY = entry.scrollY;
+    applyState(entry.filter, entry.groupBy);
+    emit historyChanged();
+    emit pendingScrollYChanged();
+}
+
+void CollectionBrowseModel::goForward(qreal currentScrollY)
+{
+    if (m_forwardStack.isEmpty()) return;
+    m_backStack.append({m_filter, m_groupBy, currentScrollY});
+    auto entry = m_forwardStack.takeLast();
+    m_pendingScrollY = entry.scrollY;
+    applyState(entry.filter, entry.groupBy);
+    emit historyChanged();
+    emit pendingScrollYChanged();
+}
+
+void CollectionBrowseModel::swapEntries(const QVector<Entry> &newEntries)
+{
+    const int oldCount = m_entries.size();
+    const int newCount = newEntries.size();
+
+    // Shrink: remove excess rows from the end
+    if (newCount < oldCount) {
+        beginRemoveRows(QModelIndex(), newCount, oldCount - 1);
+        m_entries.resize(newCount);
+        endRemoveRows();
+    }
+
+    // Update data for rows that persist
+    const int common = qMin(oldCount, newCount);
+    for (int i = 0; i < common; ++i)
+        m_entries[i] = newEntries[i];
+
+    // Grow: add new rows at the end
+    if (newCount > oldCount) {
+        beginInsertRows(QModelIndex(), oldCount, newCount - 1);
+        m_entries.resize(newCount);
+        for (int i = oldCount; i < newCount; ++i)
+            m_entries[i] = newEntries[i];
+        endInsertRows();
+    }
+
+    // Notify that existing rows' data changed
+    if (common > 0)
+        emit dataChanged(index(0), index(common - 1));
+
+    emit countChanged();
+}
+
+void CollectionBrowseModel::applyState(const TrackFilter &filter, const QString &groupBy)
+{
+    m_filter = filter;
+    m_groupBy = groupBy;
+    emit filterChanged();
+    emit groupByChanged();
+    refresh();
+}
+
 int CollectionBrowseModel::rowCount(const QModelIndex &parent) const
 {
     if (parent.isValid())
@@ -83,8 +219,10 @@ void CollectionBrowseModel::setDatabase(LibraryDatabase *db)
 
     m_database = db;
 
-    if (m_database)
+    if (m_database) {
+        connect(m_database, &LibraryDatabase::databaseChanged, this, &CollectionBrowseModel::invalidateCache);
         connect(m_database, &LibraryDatabase::databaseChanged, this, &CollectionBrowseModel::refresh);
+    }
 
     emit databaseChanged();
     refresh();
@@ -298,6 +436,33 @@ void CollectionBrowseModel::refresh()
         return;
     }
 
+    CacheKey key = currentCacheKey();
+
+    // Try LRU cache first — instant restore on back/forward navigation
+    CacheEntry *cached = findCache(key);
+    if (cached) {
+        m_allEntries = cached->entries;
+        m_title = cached->title;
+        // Fast path: if sort matches and no search, swap sorted entries directly
+        if (!cached->sorted.isEmpty() &&
+            cached->sortBy == m_sortBy &&
+            cached->sortAscending == m_sortAscending &&
+            m_searchFilter.isEmpty()) {
+            swapEntries(cached->sorted);
+        } else {
+            applySearchAndSort(true);
+            // Store sorted result back into cache for next time
+            if (m_searchFilter.isEmpty()) {
+                cached->sorted = m_entries;
+                cached->sortBy = m_sortBy;
+                cached->sortAscending = m_sortAscending;
+            }
+        }
+        emit titleChanged();
+        return;
+    }
+
+    // Cache miss — query database
     QVector<LibraryTrack> tracks = m_database->tracksMatchingFilter(m_filter);
 
     m_allEntries.clear();
@@ -310,8 +475,22 @@ void CollectionBrowseModel::refresh()
         m_title = QString("%1 %2s").arg(m_allEntries.size()).arg(m_groupBy);
     }
 
+    // Store in cache for future back/forward
+    storeCache(key, m_allEntries, m_title);
+
     // Apply search filter and sorting
     applySearchAndSort();
+
+    // Pre-populate sorted entries in cache so first back/forward uses fast path
+    if (m_searchFilter.isEmpty()) {
+        CacheEntry *justCached = findCache(key);
+        if (justCached) {
+            justCached->sorted = m_entries;
+            justCached->sortBy = m_sortBy;
+            justCached->sortAscending = m_sortAscending;
+        }
+    }
+
     emit titleChanged();
 }
 

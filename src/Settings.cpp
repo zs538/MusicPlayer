@@ -1,5 +1,5 @@
 #include "Settings.h"
-#include "CoverArtProvider.h"
+#include "CoverImageProvider.h"
 
 static Settings *s_instance = nullptr;
 
@@ -99,11 +99,8 @@ void Settings::setCoverArtPatterns(const QStringList &patterns)
         m_coverArtPatterns = patterns;
         m_settings.setValue("coverArt/patterns", patterns);
         
-        // Update the CoverArtProvider
-        CoverArtProvider *provider = CoverArtProvider::instance();
-        if (provider) {
-            provider->setCoverPatterns(patterns);
-        }
+        // Update the CoverImageProvider
+        CoverImageProvider::setCoverPatterns(patterns);
         
         emit coverArtPatternsChanged();
         emit settingsChanged();
@@ -153,11 +150,8 @@ void Settings::load()
     };
     m_coverArtPatterns = m_settings.value("coverArt/patterns", defaultPatterns).toStringList();
     
-    // Apply to CoverArtProvider if it exists
-    CoverArtProvider *provider = CoverArtProvider::instance();
-    if (provider) {
-        provider->setCoverPatterns(m_coverArtPatterns);
-    }
+    // Apply to CoverImageProvider
+    CoverImageProvider::setCoverPatterns(m_coverArtPatterns);
 }
 
 
@@ -313,6 +307,19 @@ void Settings::setGroupTypeViewMode(const QString &groupType, const QString &vie
 {
     QString key = QString("collection/%1/viewMode").arg(groupType);
     m_settings.setValue(key, viewMode);
+    emit settingsChanged();
+}
+
+bool Settings::groupTypeExploreInWindow(const QString &groupType) const
+{
+    QString key = QString("collection/%1/exploreInWindow").arg(groupType);
+    return m_settings.value(key, false).toBool();
+}
+
+void Settings::setGroupTypeExploreInWindow(const QString &groupType, bool inWindow)
+{
+    QString key = QString("collection/%1/exploreInWindow").arg(groupType);
+    m_settings.setValue(key, inWindow);
     emit settingsChanged();
 }
 

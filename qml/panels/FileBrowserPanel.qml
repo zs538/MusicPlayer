@@ -26,28 +26,36 @@ Item {
             spacing: Theme.spacingTiny
             
             Button {
-                text: "◀"
                 enabled: AppViewModel.fileBrowserModel && AppViewModel.fileBrowserModel.canGoBack
                 implicitWidth: 32
+                icon.source: Qt.resolvedUrl("../icons/arrow_back.svg")
+                icon.color: Theme.textPrimary
+                icon.width: 14; icon.height: 14
                 onClicked: AppViewModel.fileBrowserModel.goBack()
             }
             
             Button {
-                text: "▶"
                 enabled: AppViewModel.fileBrowserModel && AppViewModel.fileBrowserModel.canGoForward
                 implicitWidth: 32
+                icon.source: Qt.resolvedUrl("../icons/arrow_forward.svg")
+                icon.color: Theme.textPrimary
+                icon.width: 14; icon.height: 14
                 onClicked: AppViewModel.fileBrowserModel.goForward()
             }
             
             Button {
-                text: "↑"
                 implicitWidth: 32
+                icon.source: Qt.resolvedUrl("../icons/arrow_upward.svg")
+                icon.color: Theme.textPrimary
+                icon.width: 14; icon.height: 14
                 onClicked: if (AppViewModel.fileBrowserModel) AppViewModel.fileBrowserModel.goUp()
             }
             
             Button {
-                text: "⌂"
                 implicitWidth: 32
+                icon.source: Qt.resolvedUrl("../icons/home.svg")
+                icon.color: Theme.textPrimary
+                icon.width: 14; icon.height: 14
                 onClicked: if (AppViewModel.fileBrowserModel) AppViewModel.fileBrowserModel.goHome()
             }
             
@@ -105,10 +113,16 @@ Item {
                         anchors.rightMargin: Theme.spacingSmall
                         spacing: Theme.spacingSmall
                         
-                        Label {
-                            text: model.isDir ? "📁" : (model.entryType === "playlist" ? "📋" : "🎵")
-                            font.pixelSize: 12
-                            Layout.preferredWidth: 20
+                        Image {
+                            source: model.isDir
+                                ? Qt.resolvedUrl("../icons/folder.svg")
+                                : (model.entryType === "playlist"
+                                    ? Qt.resolvedUrl("../icons/queue_music.svg")
+                                    : Qt.resolvedUrl("../icons/music_note.svg"))
+                            Layout.preferredWidth: 14
+                            Layout.preferredHeight: 14
+                            sourceSize: Qt.size(28, 28)
+                            fillMode: Image.PreserveAspectFit
                         }
                         
                         Label {

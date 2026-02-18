@@ -42,12 +42,14 @@ public:
 
     Q_INVOKABLE void setActiveToViewed();
     Q_INVOKABLE bool hasViewedPlaylist() const;
+    Q_INVOKABLE void requestScrollToIndex(int index);
 
 signals:
     void viewedPlaylistIdChanged();
     void viewedPlaylistModelChanged();
     void activePlaylistIdChanged();
     void activePlaylistModelChanged();
+    void scrollToIndexRequested(int index);
 
 private:
     PlaylistStore *store() const;

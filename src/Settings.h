@@ -102,6 +102,8 @@ public:
     Q_INVOKABLE void setGroupTypeOpenAction(const QString &groupType, const QString &openAction);
     Q_INVOKABLE QString groupTypeViewMode(const QString &groupType) const;
     Q_INVOKABLE void setGroupTypeViewMode(const QString &groupType, const QString &viewMode);
+    Q_INVOKABLE bool groupTypeExploreInWindow(const QString &groupType) const;
+    Q_INVOKABLE void setGroupTypeExploreInWindow(const QString &groupType, bool inWindow);
 
 signals:
     void volumeChanged();

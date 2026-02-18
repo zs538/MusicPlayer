@@ -105,11 +105,6 @@ AppViewModel::AppViewModel(QObject *parent)
         emit currentIndexChanged();
     });
     
-    // Ensure CoverArtProvider is created
-    if (!CoverArtProvider::instance()) {
-        new CoverArtProvider(this);
-    }
-    
     // Ensure Settings is created
     Settings *settings = Settings::instance();
     if (!settings) {
@@ -210,6 +205,13 @@ AppViewModel::AppViewModel(QObject *parent)
         if (nextTrack.isValid()) {
             m_audioEngine->prepareNext(nextTrack.filePath);
         }
+        
+        // Persist playback position on track change (position resets to 0 for new track)
+        SessionManager *sessionMgr = SessionManager::instance();
+        if (sessionMgr && m_playlistStore) {
+            int playlistIdx = m_playlistStore->indexOfUuid(m_playlistStore->activePlaylistId());
+            sessionMgr->setPlaybackState(playlistIdx, 0);
+        }
     });
     
     connect(m_audioEngine, &AudioEngine::trackFinished, this, [this]() {
@@ -276,11 +278,25 @@ void AppViewModel::pause()
 {
     if (m_playbackState == Playing) {
         m_audioEngine->pause();
+        
+        // Persist playback position on pause
+        SessionManager *sessionMgr = SessionManager::instance();
+        if (sessionMgr && m_playlistStore) {
+            int playlistIdx = m_playlistStore->indexOfUuid(m_playlistStore->activePlaylistId());
+            sessionMgr->setPlaybackState(playlistIdx, m_positionMs);
+        }
     }
 }
 
 void AppViewModel::stop()
 {
+    // Persist playback position before stopping
+    SessionManager *sessionMgr = SessionManager::instance();
+    if (sessionMgr && m_playlistStore) {
+        int playlistIdx = m_playlistStore->indexOfUuid(m_playlistStore->activePlaylistId());
+        sessionMgr->setPlaybackState(playlistIdx, m_positionMs);
+    }
+    
     m_audioEngine->stop();
     
     // Reset queue position

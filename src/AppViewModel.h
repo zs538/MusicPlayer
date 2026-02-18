@@ -8,7 +8,6 @@
 #include "TrackListModel.h"
 #include "PlaylistStore.h"
 #include "PlaylistTabsModel.h"
-#include "CoverArtProvider.h"
 #include "BrowseActivationService.h"
 
 class QueueManager;

@@ -263,6 +263,9 @@ QJsonObject SessionManager::buildSessionJson() const
         json["displayedPlaylistId"] = m_playlistStore->displayedPlaylistId().toString();
     }
     
+    // Floating windows (version 2)
+    json["floatingWindows"] = QJsonArray::fromVariantList(m_floatingWindows);
+    
     return json;
 }
 
@@ -314,6 +317,12 @@ bool SessionManager::parseSessionJson(const QJsonObject &json)
         if (!displayedId.isEmpty()) {
             m_playlistStore->setDisplayedPlaylist(displayedId);
         }
+    }
+    
+    // Floating windows (version 2)
+    if (json.contains("floatingWindows")) {
+        m_floatingWindows = json["floatingWindows"].toArray().toVariantList();
+        emit floatingWindowsChanged();
     }
     
     return true;
@@ -381,6 +390,16 @@ QJsonArray SessionManager::serializePlaylists() const
                 trackObj["sampleRate"] = track.sampleRate;
                 trackObj["bitDepth"] = track.bitDepth;
                 trackObj["bitrate"] = track.bitrate;
+                // Extended fields (version 2+)
+                trackObj["fileName"] = track.fileName;
+                trackObj["fileSize"] = track.fileSize;
+                trackObj["fileType"] = track.fileType;
+                trackObj["dateCreated"] = track.dateCreated.toMSecsSinceEpoch();
+                trackObj["dateModified"] = track.dateModified.toMSecsSinceEpoch();
+                trackObj["comment"] = track.comment;
+                trackObj["bpm"] = track.bpm;
+                trackObj["initialKey"] = track.initialKey;
+                trackObj["url"] = track.url;
                 tracks.append(trackObj);
             }
             playlist["tracks"] = tracks;
@@ -455,8 +474,22 @@ bool SessionManager::deserializePlaylists(const QJsonArray &arr)
                 track.sampleRate = trackObj["sampleRate"].toInt();
                 track.bitDepth = trackObj["bitDepth"].toInt();
                 track.bitrate = trackObj["bitrate"].toInt();
+                // Extended fields (version 2+)
+                track.fileName = trackObj["fileName"].toString();
+                track.fileSize = trackObj["fileSize"].toVariant().toLongLong();
+                track.fileType = trackObj["fileType"].toString();
+                qint64 dateCreatedMs = trackObj["dateCreated"].toVariant().toLongLong();
+                if (dateCreatedMs > 0)
+                    track.dateCreated = QDateTime::fromMSecsSinceEpoch(dateCreatedMs);
+                qint64 dateModifiedMs = trackObj["dateModified"].toVariant().toLongLong();
+                if (dateModifiedMs > 0)
+                    track.dateModified = QDateTime::fromMSecsSinceEpoch(dateModifiedMs);
+                track.comment = trackObj["comment"].toString();
+                track.bpm = trackObj["bpm"].toInt();
+                track.initialKey = trackObj["initialKey"].toString();
+                track.url = trackObj["url"].toString();
                 
-                // Derive fileName from filePath if not stored
+                // Derive fileName from filePath if not stored (backward compatibility)
                 if (track.fileName.isEmpty() && !track.filePath.isEmpty()) {
                     track.fileName = QFileInfo(track.filePath).fileName();
                 }

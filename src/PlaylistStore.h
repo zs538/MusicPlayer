@@ -5,6 +5,7 @@
 #include <QUuid>
 #include <QUrl>
 #include <QVector>
+#include <QFuture>
 
 class TrackListModel;
 
@@ -78,6 +79,7 @@ public slots:
 
     // Import/export
     Q_INVOKABLE QString importPlaylist(const QString &filePath);
+    Q_INVOKABLE QString importPlaylistAsync(const QString &filePath);
     Q_INVOKABLE bool exportPlaylist(const QString &uuid, const QString &filePath);
 
 signals:
@@ -91,12 +93,18 @@ signals:
     void tabRemoved(int index);
     void tabMoved(int from, int to);
     void tabDataChanged(int index);
+    
+    // Import progress signals
+    void importProgress(const QString &uuid, int imported, int total);
+    void importFinished(const QString &uuid, bool success);
 
 private:
     bool importM3U(TrackListModel *model, const QString &filePath, bool utf8);
     bool exportM3U(TrackListModel *model, const QString &filePath, bool utf8);
+    void importM3UAsync(const QString &uuid, const QString &filePath, bool utf8);
 
     QVector<Tab> m_tabs;
+    QFuture<void> m_importFuture;
     QUuid m_activeId;
     QUuid m_displayedId;
 };

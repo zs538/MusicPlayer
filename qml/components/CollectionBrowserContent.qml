@@ -10,40 +10,103 @@ import MusicPlayer
 Item {
     id: root
 
-    // Required properties from parent (panel state)
-    required property string panelContextType
-    required property var filter
-    required property string groupBy
-    required property var panelState  // {panelContextType, filter, groupBy}
+    // Initial state (set once by parent)
+    property var initialFilter: []
+    property string initialGroupBy: "albumartist"
 
-    // Optional properties with defaults
+    // View options
     property bool showHeader: false
-    property string viewMode: Settings.groupTypeViewMode(groupBy)  // "grid", "list", "tracks"
-    property bool canGoBack: false
-    property string windowTitle: ""  // For window mode, prepended to title
-    
-    // Persist view mode changes to Settings
-    onViewModeChanged: Settings.setGroupTypeViewMode(groupBy, viewMode)
-    
-    // Update view mode when groupBy changes (load from settings)
-    onGroupByChanged: viewMode = Settings.groupTypeViewMode(groupBy)
-
-    // Expandable groups (window mode feature)
+    property string viewMode: Settings.groupTypeViewMode(initialGroupBy)
+    property string windowTitle: ""
     property bool expandableGroups: false
     property var expandedGroups: ({})
 
-    // Signals for navigation (parent handles these)
-    signal backRequested()
-    signal navigateRequested(var newFilter, string newGroupBy)
+    property bool _loadingViewMode: false
+    onViewModeChanged: { if (!_loadingViewMode) Settings.setGroupTypeViewMode(browserModel.groupBy, viewMode) }
 
     // Expose model for parent access
     readonly property alias model: browserModel
 
+    // Current scroll position (whichever view is active)
+    readonly property real _scrollY: viewMode === "grid" ? gridView.contentY : listView.contentY
+
+    // Navigation helpers — pass current scroll position to model
+    function doNavigate(filter, groupBy) { browserModel.navigate(filter, groupBy, _scrollY) }
+    function doGoBack() { browserModel.goBack(_scrollY) }
+    function doGoForward() { browserModel.goForward(_scrollY) }
+
+    // Scroll restore after back/forward navigation (direct — no Timer needed
+    // because swapEntries avoids model reset, so the view is already laid out)
+    property bool _restoring: false
+    Connections {
+        target: browserModel
+        function onPendingScrollYChanged() {
+            root._restoring = true
+            if (root.viewMode === "grid") gridView.contentY = browserModel.pendingScrollY
+            else listView.contentY = browserModel.pendingScrollY
+            root._restoring = false
+        }
+    }
+
     CollectionBrowseModel {
         id: browserModel
         database: AppViewModel.libraryDatabase
-        filter: root.filter
-        groupBy: root.groupBy
+        filter: root.initialFilter
+        groupBy: root.initialGroupBy
+        onGroupByChanged: {
+            root._loadingViewMode = true
+            root.viewMode = Settings.groupTypeViewMode(browserModel.groupBy)
+            root._loadingViewMode = false
+            root._currentOpenAction = Settings.groupTypeOpenAction(browserModel.groupBy)
+        }
+    }
+
+    // Reactive local mirror of the per-groupType open action so menu items update within the same session
+    property string _currentOpenAction: Settings.groupTypeOpenAction(initialGroupBy)
+
+    // Shared context menu state (one Menu instance instead of one per delegate)
+    property string _ctxEntryType: ""
+    property string _ctxGroupType: ""
+    property var _ctxGroupValue: null
+    property string _ctxFilePath: ""
+
+    Menu {
+        id: sharedContextMenu
+        MenuItem {
+            text: qsTr("Append to viewed playlist")
+            onTriggered: {
+                if (root._ctxEntryType === "group")
+                    AppViewModel.browseActivation.appendFilteredTracksToViewed(browserModel.filter, root._ctxGroupType, root._ctxGroupValue)
+                else
+                    AppViewModel.browseActivation.appendCollectionEntryToViewed("t:" + root._ctxFilePath)
+            }
+        }
+        MenuItem {
+            text: qsTr("Append after currently playing")
+            onTriggered: {
+                if (root._ctxEntryType === "group")
+                    AppViewModel.browseActivation.appendFilteredTracksAfterPlaying(browserModel.filter, root._ctxGroupType, root._ctxGroupValue)
+                else
+                    AppViewModel.browseActivation.appendCollectionEntryAfterPlaying("t:" + root._ctxFilePath)
+            }
+        }
+        MenuItem {
+            text: qsTr("Open in new playlist")
+            onTriggered: {
+                if (root._ctxEntryType === "group")
+                    AppViewModel.browseActivation.openFilteredTracksInNewPlaylist(browserModel.filter, root._ctxGroupType, root._ctxGroupValue)
+                else
+                    AppViewModel.browseActivation.openCollectionEntryInNewPlaylist("t:" + root._ctxFilePath)
+            }
+        }
+    }
+
+    function _openContextMenu(entryType, groupType, groupValue, filePath) {
+        root._ctxEntryType = entryType
+        root._ctxGroupType = groupType
+        root._ctxGroupValue = groupValue
+        root._ctxFilePath = filePath
+        sharedContextMenu.popup()
     }
 
     ColumnLayout {
@@ -63,15 +126,32 @@ Item {
                 anchors.rightMargin: 4
                 spacing: 4
 
-                // Back button (visible when we have navigation history)
+                // Back button
                 Button {
-                    visible: root.canGoBack
+                    visible: browserModel.canGoBack || browserModel.canGoForward
+                    enabled: browserModel.canGoBack
                     Layout.preferredWidth: 20
                     Layout.preferredHeight: 20
-                    text: "◀"
-                    font.pixelSize: 10
                     flat: true
-                    onClicked: root.backRequested()
+                    opacity: enabled ? 1.0 : 0.3
+                    icon.source: Qt.resolvedUrl("../icons/arrow_back.svg")
+                    icon.color: Theme.textPrimary
+                    icon.width: 12; icon.height: 12
+                    onClicked: root.doGoBack()
+                }
+
+                // Forward button
+                Button {
+                    visible: browserModel.canGoBack || browserModel.canGoForward
+                    enabled: browserModel.canGoForward
+                    Layout.preferredWidth: 20
+                    Layout.preferredHeight: 20
+                    flat: true
+                    opacity: enabled ? 1.0 : 0.3
+                    icon.source: Qt.resolvedUrl("../icons/arrow_forward.svg")
+                    icon.color: Theme.textPrimary
+                    icon.width: 12; icon.height: 12
+                    onClicked: root.doGoForward()
                 }
 
                 // Title on the left
@@ -79,12 +159,12 @@ Item {
                     id: titleLabel
                     Layout.fillWidth: true
                     text: {
-                        let groupLabel = root.groupBy === "albumartist" ? "Artists" :
-                                        root.groupBy === "artist" ? "Artists" :
-                                        root.groupBy === "album" ? "Albums" :
-                                        root.groupBy === "genre" ? "Genres" :
-                                        root.groupBy === "year" ? "Years" :
-                                        root.groupBy === "none" ? "Tracks" : root.groupBy
+                        let groupLabel = browserModel.groupBy === "albumartist" ? "Artists" :
+                                        browserModel.groupBy === "artist" ? "Artists" :
+                                        browserModel.groupBy === "album" ? "Albums" :
+                                        browserModel.groupBy === "genre" ? "Genres" :
+                                        browserModel.groupBy === "year" ? "Years" :
+                                        browserModel.groupBy === "none" ? "Tracks" : browserModel.groupBy
                         let prefix = root.windowTitle ? (root.windowTitle + " - ") : ""
                         return prefix + groupLabel + " (" + browserModel.count + ")"
                     }
@@ -162,9 +242,10 @@ Item {
                     id: optionsButton
                     Layout.preferredWidth: 24
                     Layout.preferredHeight: 20
-                    text: "..."
-                    font.pixelSize: 10
                     flat: true
+                    icon.source: Qt.resolvedUrl("../icons/more_vert.svg")
+                    icon.color: Theme.textPrimary
+                    icon.width: 12; icon.height: 12
                     onClicked: optionsMenu.popup()
 
                     Menu {
@@ -221,38 +302,38 @@ Item {
                             MenuItem {
                                 text: "Album Artist"
                                 checkable: true
-                                checked: root.groupBy === "albumartist"
-                                onTriggered: root.navigateRequested(root.filter, "albumartist")
+                                checked: browserModel.groupBy === "albumartist"
+                                onTriggered: browserModel.groupBy = "albumartist"
                             }
                             MenuItem {
                                 text: "Artist"
                                 checkable: true
-                                checked: root.groupBy === "artist"
-                                onTriggered: root.navigateRequested(root.filter, "artist")
+                                checked: browserModel.groupBy === "artist"
+                                onTriggered: browserModel.groupBy = "artist"
                             }
                             MenuItem {
                                 text: "Album"
                                 checkable: true
-                                checked: root.groupBy === "album"
-                                onTriggered: root.navigateRequested(root.filter, "album")
+                                checked: browserModel.groupBy === "album"
+                                onTriggered: browserModel.groupBy = "album"
                             }
                             MenuItem {
                                 text: "Genre"
                                 checkable: true
-                                checked: root.groupBy === "genre"
-                                onTriggered: root.navigateRequested(root.filter, "genre")
+                                checked: browserModel.groupBy === "genre"
+                                onTriggered: browserModel.groupBy = "genre"
                             }
                             MenuItem {
                                 text: "Year"
                                 checkable: true
-                                checked: root.groupBy === "year"
-                                onTriggered: root.navigateRequested(root.filter, "year")
+                                checked: browserModel.groupBy === "year"
+                                onTriggered: browserModel.groupBy = "year"
                             }
                             MenuItem {
                                 text: "None (Tracks)"
                                 checkable: true
-                                checked: root.groupBy === "none"
-                                onTriggered: root.navigateRequested(root.filter, "none")
+                                checked: browserModel.groupBy === "none"
+                                onTriggered: browserModel.groupBy = "none"
                             }
                         }
 
@@ -262,18 +343,28 @@ Item {
                             ButtonGroup { id: openActionGroup }
 
                             MenuItem {
-                                text: "Further explore"
+                                text: "Explore"
                                 ButtonGroup.group: openActionGroup
                                 checkable: true
-                                checked: Settings.groupTypeOpenAction(root.groupBy) !== "queueTracks"
-                                onTriggered: Settings.setGroupTypeOpenAction(root.groupBy, "openPanel")
+                                checked: root._currentOpenAction !== "queueTracks"
+                                onTriggered: { Settings.setGroupTypeOpenAction(browserModel.groupBy, "openPanel"); root._currentOpenAction = "openPanel" }
                             }
                             MenuItem {
                                 text: "Queue tracks"
                                 ButtonGroup.group: openActionGroup
                                 checkable: true
-                                checked: Settings.groupTypeOpenAction(root.groupBy) === "queueTracks"
-                                onTriggered: Settings.setGroupTypeOpenAction(root.groupBy, "queueTracks")
+                                checked: root._currentOpenAction === "queueTracks"
+                                onTriggered: { Settings.setGroupTypeOpenAction(browserModel.groupBy, "queueTracks"); root._currentOpenAction = "queueTracks" }
+                            }
+
+                            MenuSeparator {}
+
+                            MenuItem {
+                                text: "Explore in new window"
+                                checkable: true
+                                enabled: root._currentOpenAction !== "queueTracks"
+                                checked: Settings.groupTypeExploreInWindow(browserModel.groupBy)
+                                onTriggered: Settings.setGroupTypeExploreInWindow(browserModel.groupBy, !Settings.groupTypeExploreInWindow(browserModel.groupBy))
                             }
                         }
                     }
@@ -309,7 +400,8 @@ Item {
             Layout.margins: 4
             clip: true
             interactive: false
-            cacheBuffer: 500
+            reuseItems: true
+            cacheBuffer: 300
             
             // Debounced cell sizing - recalculates after resize stops to avoid per-frame re-layout
             property int stableCellWidth: Settings.gridCellMinWidth
@@ -337,7 +429,7 @@ Item {
             model: browserModel
 
             ScrollBar.vertical: ScrollBar { active: true; policy: ScrollBar.AsNeeded }
-            Behavior on contentY { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+            Behavior on contentY { enabled: !root._restoring; NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
             WheelHandler {
                 acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                 onWheel: (e) => {
@@ -403,12 +495,16 @@ Item {
                                 layer.smooth: true
                                 layer.textureSize: Qt.size(width * 2, height * 2)
 
-                                Label {
+                                Image {
                                     anchors.centerIn: parent
-                                    text: gridDel.entryType === "group" ? "💿" : "🎵"
-                                    font.pixelSize: 32
-                                    color: Theme.textMuted
-                                    visible: parent.status !== Image.Ready
+                                    width: 32; height: 32
+                                    source: gridDel.entryType === "group"
+                                        ? Qt.resolvedUrl("../icons/album.svg")
+                                        : Qt.resolvedUrl("../icons/music_note.svg")
+                                    sourceSize: Qt.size(64, 64)
+                                    fillMode: Image.PreserveAspectFit
+                                    opacity: 0.3
+                                    visible: coverImage.status !== Image.Ready
                                 }
                             }
                         }
@@ -439,11 +535,18 @@ Item {
                         id: gridMouseArea
                         anchors.fill: parent
                         hoverEnabled: true
-                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
 
                         onClicked: (mouse) => {
                             if (mouse.button === Qt.RightButton) {
-                                gridContextMenu.popup()
+                                root._openContextMenu(gridDel.entryType, gridDel.groupType, gridDel.groupValue, gridDel.filePath)
+                            } else if (mouse.button === Qt.MiddleButton) {
+                                if (gridDel.entryType === "group") {
+                                    AppViewModel.browseActivation.appendFilteredTracksToViewed(
+                                        browserModel.filter, gridDel.groupType, gridDel.groupValue)
+                                } else {
+                                    AppViewModel.browseActivation.appendCollectionEntryToViewed("t:" + gridDel.filePath)
+                                }
                             }
                         }
 
@@ -451,60 +554,21 @@ Item {
                             if (gridDel.entryType === "group") {
                                 let openAction = Settings.groupTypeOpenAction(gridDel.groupType)
                                 if (openAction === "queueTracks") {
-                                    // Queue tracks from this group
                                     AppViewModel.browseActivation.addFilteredTracksToViewed(
-                                        root.filter, gridDel.groupType, gridDel.groupValue)
-                                } else {
-                                    // Further explore - open in new panel
+                                        browserModel.filter, gridDel.groupType, gridDel.groupValue)
+                                } else if (Settings.groupTypeExploreInWindow(gridDel.groupType)) {
                                     AppViewModel.browseActivation.openCollectionGroup(
-                                        root.panelState, gridDel.groupType, gridDel.groupValue)
+                                        {filter: browserModel.filter, groupBy: browserModel.groupBy}, gridDel.groupType, gridDel.groupValue)
+                                } else {
+                                    let newFilter = browserModel.filter.concat([{field: gridDel.groupType, op: "=", value: gridDel.groupValue}])
+                                    root.doNavigate(newFilter, Settings.groupTypeNextGroupBy(gridDel.groupType))
                                 }
                             } else {
-                                // Track - always queue it
                                 AppViewModel.browseActivation.activateCollectionEntry("t:" + gridDel.filePath)
                             }
                         }
                     }
 
-                    Menu {
-                        id: gridContextMenu
-
-                        MenuItem {
-                            text: qsTr("Append to viewed playlist")
-                            onTriggered: {
-                                if (gridDel.entryType === "group") {
-                                    AppViewModel.browseActivation.appendFilteredTracksToViewed(
-                                        root.filter, gridDel.groupType, gridDel.groupValue)
-                                } else {
-                                    AppViewModel.browseActivation.appendCollectionEntryToViewed("t:" + gridDel.filePath)
-                                }
-                            }
-                        }
-
-                        MenuItem {
-                            text: qsTr("Append after currently playing")
-                            onTriggered: {
-                                if (gridDel.entryType === "group") {
-                                    AppViewModel.browseActivation.appendFilteredTracksAfterPlaying(
-                                        root.filter, gridDel.groupType, gridDel.groupValue)
-                                } else {
-                                    AppViewModel.browseActivation.appendCollectionEntryAfterPlaying("t:" + gridDel.filePath)
-                                }
-                            }
-                        }
-
-                        MenuItem {
-                            text: qsTr("Open in new playlist")
-                            onTriggered: {
-                                if (gridDel.entryType === "group") {
-                                    AppViewModel.browseActivation.openFilteredTracksInNewPlaylist(
-                                        root.filter, gridDel.groupType, gridDel.groupValue)
-                                } else {
-                                    AppViewModel.browseActivation.openCollectionEntryInNewPlaylist("t:" + gridDel.filePath)
-                                }
-                            }
-                        }
-                    }
                 }
             }
             
@@ -518,11 +582,12 @@ Item {
             Layout.fillHeight: true
             clip: true
             interactive: false
+            reuseItems: true
             model: browserModel
             boundsBehavior: Flickable.StopAtBounds
             cacheBuffer: 300
             ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-            Behavior on contentY { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+            Behavior on contentY { enabled: !root._restoring; NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
             WheelHandler {
                 acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                 onWheel: (e) => listView.contentY = Math.max(0, Math.min(listView.contentHeight - listView.height, listView.contentY - e.angleDelta.y))
@@ -561,12 +626,16 @@ Item {
                         spacing: 6
 
                         // Expand indicator for groups (when expandable mode is on)
-                        Label {
+                        Image {
                             visible: listDel.isGroup && root.expandableGroups
-                            text: listDel.isExpanded ? "▼" : "▶"
-                            color: Theme.textSecondary
-                            font.pixelSize: 10
+                            source: listDel.isExpanded
+                                ? Qt.resolvedUrl("../icons/expand_more.svg")
+                                : Qt.resolvedUrl("../icons/chevron_right.svg")
+                            sourceSize: Qt.size(24, 24)
                             Layout.preferredWidth: 12
+                            Layout.preferredHeight: 12
+                            fillMode: Image.PreserveAspectFit
+                            opacity: 0.6
                         }
 
                         // Cover art for groups
@@ -631,11 +700,18 @@ Item {
                         id: listMouseArea
                         anchors.fill: parent
                         hoverEnabled: true
-                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
 
                         onClicked: (mouse) => {
                             if (mouse.button === Qt.RightButton) {
-                                listContextMenu.popup()
+                                root._openContextMenu(listDel.entryType, listDel.groupType, listDel.groupValue, listDel.filePath)
+                            } else if (mouse.button === Qt.MiddleButton) {
+                                if (listDel.isGroup) {
+                                    AppViewModel.browseActivation.appendFilteredTracksToViewed(
+                                        browserModel.filter, listDel.groupType, listDel.groupValue)
+                                } else {
+                                    AppViewModel.browseActivation.appendCollectionEntryToViewed("t:" + listDel.filePath)
+                                }
                             } else if (listDel.isGroup && root.expandableGroups) {
                                 // Toggle expansion
                                 let newExpanded = Object.assign({}, root.expandedGroups)
@@ -647,57 +723,21 @@ Item {
                             if (listDel.isGroup && !root.expandableGroups) {
                                 let openAction = Settings.groupTypeOpenAction(listDel.groupType)
                                 if (openAction === "queueTracks") {
-                                    // Queue tracks from this group
                                     AppViewModel.browseActivation.addFilteredTracksToViewed(
-                                        root.filter, listDel.groupType, listDel.groupValue)
-                                } else {
-                                    // Further explore - open in new panel
+                                        browserModel.filter, listDel.groupType, listDel.groupValue)
+                                } else if (Settings.groupTypeExploreInWindow(listDel.groupType)) {
                                     AppViewModel.browseActivation.openCollectionGroup(
-                                        root.panelState, listDel.groupType, listDel.groupValue)
+                                        {filter: browserModel.filter, groupBy: browserModel.groupBy}, listDel.groupType, listDel.groupValue)
+                                } else {
+                                    let newFilter = browserModel.filter.concat([{field: listDel.groupType, op: "=", value: listDel.groupValue}])
+                                    root.doNavigate(newFilter, Settings.groupTypeNextGroupBy(listDel.groupType))
                                 }
                             } else if (!listDel.isGroup) {
-                                // Track - always queue it
                                 AppViewModel.browseActivation.activateCollectionEntry("t:" + listDel.filePath)
                             }
                         }
                     }
 
-                    Menu {
-                        id: listContextMenu
-                        MenuItem {
-                            text: "Append to viewed playlist"
-                            onTriggered: {
-                                if (listDel.isGroup) {
-                                    AppViewModel.browseActivation.appendFilteredTracksToViewed(
-                                        root.filter, listDel.groupType, listDel.groupValue)
-                                } else {
-                                    AppViewModel.browseActivation.appendCollectionEntryToViewed("t:" + listDel.filePath)
-                                }
-                            }
-                        }
-                        MenuItem {
-                            text: "Append after currently playing"
-                            onTriggered: {
-                                if (listDel.isGroup) {
-                                    AppViewModel.browseActivation.appendFilteredTracksAfterPlaying(
-                                        root.filter, listDel.groupType, listDel.groupValue)
-                                } else {
-                                    AppViewModel.browseActivation.appendCollectionEntryAfterPlaying("t:" + listDel.filePath)
-                                }
-                            }
-                        }
-                        MenuItem {
-                            text: "Open in new playlist"
-                            onTriggered: {
-                                if (listDel.isGroup) {
-                                    AppViewModel.browseActivation.openFilteredTracksInNewPlaylist(
-                                        root.filter, listDel.groupType, listDel.groupValue)
-                                } else {
-                                    AppViewModel.browseActivation.openCollectionEntryInNewPlaylist("t:" + listDel.filePath)
-                                }
-                            }
-                        }
-                    }
                 }
 
                 // Expanded tracks (only for groups when expanded)
@@ -751,9 +791,12 @@ Item {
                             id: expandedTrackMa
                             anchors.fill: parent
                             hoverEnabled: true
-                            acceptedButtons: Qt.LeftButton | Qt.RightButton
+                            acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
 
-                            onClicked: (mouse) => { if (mouse.button === Qt.RightButton) expandedTrackMenu.popup() }
+                            onClicked: (mouse) => {
+                                if (mouse.button === Qt.RightButton) expandedTrackMenu.popup()
+                                else if (mouse.button === Qt.MiddleButton) AppViewModel.browseActivation.appendCollectionEntryToViewed("t:" + modelData.filePath)
+                            }
                             onDoubleClicked: {
                                 AppViewModel.browseActivation.activateCollectionEntry("t:" + modelData.filePath)
                             }
@@ -778,6 +821,16 @@ Item {
                 }
             }
 
+        }
+    }
+
+    // Mouse back/forward buttons overlay (on top of content, only catches Back/Forward)
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.BackButton | Qt.ForwardButton
+        onClicked: (mouse) => {
+            if (mouse.button === Qt.BackButton) root.doGoBack()
+            else if (mouse.button === Qt.ForwardButton) root.doGoForward()
         }
     }
 }

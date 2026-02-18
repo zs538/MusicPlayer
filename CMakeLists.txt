@@ -46,8 +46,6 @@ qt_add_executable(appmusicplayer
     src/library/LibraryWatcher.cpp
     src/Settings.h
     src/Settings.cpp
-    src/CoverArtProvider.h
-    src/CoverArtProvider.cpp
     src/SessionManager.h
     src/SessionManager.cpp
     src/MetadataExtractor.h
@@ -72,10 +70,6 @@ set_source_files_properties(src/AppViewModel.h PROPERTIES
 )
 
 set_source_files_properties(src/Settings.h PROPERTIES
-    QT_QML_SINGLETON_TYPE TRUE
-)
-
-set_source_files_properties(src/CoverArtProvider.h PROPERTIES
     QT_QML_SINGLETON_TYPE TRUE
 )
 
@@ -107,16 +101,36 @@ qt_add_qml_module(appmusicplayer
         qml/Theme.qml
         qml/DragManager.qml
         qml/components/CollectionBrowserContent.qml
+        qml/components/IconImage.qml
         qml/panels/CollectionPanel.qml
         qml/panels/PlaylistPanel.qml
         qml/panels/CoverPanel.qml
         qml/panels/ControlsStrip.qml
         qml/windows/CollectionWindow.qml
+        qml/windows/CoverWindow.qml
         qml/settings/SettingsWindow.qml
+    RESOURCES
+        qml/icons/skip_previous.svg
+        qml/icons/play_arrow.svg
+        qml/icons/pause.svg
+        qml/icons/stop.svg
+        qml/icons/skip_next.svg
+        qml/icons/settings.svg
+        qml/icons/arrow_back.svg
+        qml/icons/arrow_forward.svg
+        qml/icons/arrow_upward.svg
+        qml/icons/home.svg
+        qml/icons/folder.svg
+        qml/icons/queue_music.svg
+        qml/icons/music_note.svg
+        qml/icons/album.svg
+        qml/icons/expand_more.svg
+        qml/icons/chevron_right.svg
+        qml/icons/more_vert.svg
+        qml/icons/volume_up.svg
     SOURCES
         src/AppViewModel.h src/AppViewModel.cpp
         src/Settings.h src/Settings.cpp
-        src/CoverArtProvider.h src/CoverArtProvider.cpp
         src/SessionManager.h src/SessionManager.cpp
         src/ViewedPlaylistRouter.h src/ViewedPlaylistRouter.cpp
         src/PlaylistPanelController.h src/PlaylistPanelController.cpp

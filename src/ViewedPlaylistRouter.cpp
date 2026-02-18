@@ -104,5 +104,10 @@ void ViewedPlaylistRouter::setActiveToViewed()
 bool ViewedPlaylistRouter::hasViewedPlaylist() const
 {
     PlaylistStore *s = store();
-    return s && !s->displayedPlaylistIdString().isEmpty();
+    return s && !s->displayedPlaylistId().isNull();
+}
+
+void ViewedPlaylistRouter::requestScrollToIndex(int index)
+{
+    emit scrollToIndexRequested(index);
 }

@@ -19,12 +19,6 @@ ApplicationWindow {
             // Open a new collection window via WindowManager
             WindowManager.openCollectionWindow(panelState)
         }
-        function onReplaceCollectionPanelRequested(panelState) {
-            // Replace the main collection panel state
-            collectionPanel.panelContextType = panelState.panelContextType || "all"
-            collectionPanel.filter = panelState.filter || []
-            collectionPanel.groupBy = panelState.groupBy || "none"
-        }
     }
 
     Connections {
@@ -32,9 +26,8 @@ ApplicationWindow {
         function onWindowOpened(windowId, panelState) {
             collectionWindowComponent.createObject(root, {
                 windowId: windowId,
-                panelContextType: panelState.panelContextType || "all",
-                filter: panelState.filter || [],
-                groupBy: panelState.groupBy || "none",
+                initFilter: panelState.filter || [],
+                initGroupBy: panelState.groupBy || "none",
                 title: panelState.title || "Collection"
             })
         }

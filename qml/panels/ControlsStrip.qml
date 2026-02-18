@@ -22,20 +22,24 @@ Rectangle {
             spacing: 2
 
             Button {
-                text: "⏮"
                 flat: true
                 implicitWidth: 28
                 implicitHeight: 24
-                font.pixelSize: 12
+                icon.source: Qt.resolvedUrl("../icons/skip_previous.svg")
+                icon.color: Theme.textPrimary
+                icon.width: 16; icon.height: 16
                 onClicked: AppViewModel.previous()
             }
 
             Button {
-                text: AppViewModel.playbackState === AppViewModel.Playing ? "⏸" : "▶"
                 flat: true
                 implicitWidth: 28
                 implicitHeight: 24
-                font.pixelSize: 14
+                icon.source: AppViewModel.playbackState === AppViewModel.Playing
+                    ? Qt.resolvedUrl("../icons/pause.svg")
+                    : Qt.resolvedUrl("../icons/play_arrow.svg")
+                icon.color: Theme.textPrimary
+                icon.width: 16; icon.height: 16
                 onClicked: {
                     if (AppViewModel.playbackState === AppViewModel.Playing)
                         AppViewModel.pause()
@@ -45,20 +49,22 @@ Rectangle {
             }
 
             Button {
-                text: "⏹"
                 flat: true
                 implicitWidth: 28
                 implicitHeight: 24
-                font.pixelSize: 12
+                icon.source: Qt.resolvedUrl("../icons/stop.svg")
+                icon.color: Theme.textPrimary
+                icon.width: 16; icon.height: 16
                 onClicked: AppViewModel.stop()
             }
 
             Button {
-                text: "⏭"
                 flat: true
                 implicitWidth: 28
                 implicitHeight: 24
-                font.pixelSize: 12
+                icon.source: Qt.resolvedUrl("../icons/skip_next.svg")
+                icon.color: Theme.textPrimary
+                icon.width: 16; icon.height: 16
                 onClicked: AppViewModel.next()
             }
         }
@@ -135,13 +141,23 @@ Rectangle {
             Layout.preferredWidth: 30
         }
 
+        // Volume icon
+        Image {
+            source: Qt.resolvedUrl("../icons/volume_up.svg")
+            Layout.preferredWidth: 14
+            Layout.preferredHeight: 14
+            sourceSize: Qt.size(28, 28)
+            fillMode: Image.PreserveAspectFit
+        }
+
         // Settings button
         Button {
-            text: "⚙"
             flat: true
             implicitWidth: 28
             implicitHeight: 24
-            font.pixelSize: 14
+            icon.source: Qt.resolvedUrl("../icons/settings.svg")
+            icon.color: Theme.textPrimary
+            icon.width: 16; icon.height: 16
             onClicked: settingsRequested()
         }
     }

@@ -2,7 +2,6 @@
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
 #include "CoverImageProvider.h"
-#include "AppViewModel.h"
 
 int main(int argc, char *argv[])
 {
@@ -15,8 +14,8 @@ int main(int argc, char *argv[])
     
     QQmlApplicationEngine engine;
     
-    // Register cover image provider (with null db initially, will be set later)
-    auto *coverProvider = new CoverImageProvider(nullptr);
+    // Register cover image provider
+    auto *coverProvider = new CoverImageProvider();
     CoverImageProvider::setInstance(coverProvider);
     engine.addImageProvider("cover", coverProvider);
     
@@ -26,14 +25,6 @@ int main(int argc, char *argv[])
         &app,
         []() { QCoreApplication::exit(-1); },
         Qt::QueuedConnection);
-    
-    // After QML loads, the AppViewModel singleton will be created
-    // We can then update the cover provider with the database
-    QObject::connect(&engine, &QQmlApplicationEngine::objectCreated, [coverProvider]() {
-        if (AppViewModel::instance()) {
-            coverProvider->setDatabase(AppViewModel::instance()->libraryDatabase());
-        }
-    });
     
     engine.loadFromModule("MusicPlayer", "Main");
     

@@ -69,7 +69,6 @@ public:
 
 signals:
     void openCollectionPanelRequested(const QVariantMap &panelState);
-    void replaceCollectionPanelRequested(const QVariantMap &panelState);
 
 private:
     void applyTracksToPlaylist(const QStringList &filePaths, int startRow = 0);

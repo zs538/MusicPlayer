@@ -58,12 +58,7 @@ void BrowseActivationService::dropUrlsToViewed(const QList<QUrl> &urls)
     if (!m_store || !router() || urls.isEmpty())
         return;
     
-    // Resolve target playlist based on OpeningTracksAction setting
-    QString targetId = resolveTargetPlaylistId();
-    if (targetId.isEmpty())
-        return;
-    
-    router()->setViewedPlaylistId(targetId);
+    // Always append to the currently viewed playlist (no setting override)
     TrackListModel *model = m_store->displayedPlaylist();
     if (!model)
         return;

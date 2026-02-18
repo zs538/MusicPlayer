@@ -4,6 +4,8 @@
 #include <QAbstractListModel>
 #include <QQmlEngine>
 #include <QVariantList>
+#include <QList>
+#include <QPair>
 #include "TrackFilter.h"
 
 class LibraryDatabase;
@@ -21,6 +23,9 @@ class CollectionBrowseModel : public QAbstractListModel
     Q_PROPERTY(QString searchFilter READ searchFilter WRITE setSearchFilter NOTIFY searchFilterChanged)
     Q_PROPERTY(int count READ count NOTIFY countChanged)
     Q_PROPERTY(QString title READ title NOTIFY titleChanged)
+    Q_PROPERTY(bool canGoBack READ canGoBack NOTIFY historyChanged)
+    Q_PROPERTY(bool canGoForward READ canGoForward NOTIFY historyChanged)
+    Q_PROPERTY(qreal pendingScrollY READ pendingScrollY NOTIFY pendingScrollYChanged)
 
 public:
     enum Roles {
@@ -75,6 +80,14 @@ public:
 
     Q_INVOKABLE QVariantList tracksForGroup(const QString &groupType, const QVariant &groupValue) const;
 
+    // History navigation — atomic filter+groupBy change, single refresh
+    Q_INVOKABLE void navigate(const QVariantList &filter, const QString &groupBy, qreal currentScrollY = 0);
+    Q_INVOKABLE void goBack(qreal currentScrollY = 0);
+    Q_INVOKABLE void goForward(qreal currentScrollY = 0);
+    bool canGoBack() const;
+    bool canGoForward() const;
+    qreal pendingScrollY() const { return m_pendingScrollY; }
+
 signals:
     void databaseChanged();
     void filterChanged();
@@ -84,6 +97,8 @@ signals:
     void searchFilterChanged();
     void countChanged();
     void titleChanged();
+    void historyChanged();
+    void pendingScrollYChanged();
 
 private slots:
     void refresh();
@@ -112,6 +127,7 @@ private:
         QString fileType;
     };
 
+    void swapEntries(const QVector<Entry> &newEntries);
     void applySearchAndSort(bool forceReset = false);
     void applyIncrementalUpdate(const QVector<Entry> &newEntries);
     static QString entryKey(const Entry &e);
@@ -120,6 +136,33 @@ private:
     void buildTracks(const QVector<struct LibraryTrack> &tracks);
     QString formatGroupDisplay(const QString &groupType, const QVariant &value) const;
     QVariant getGroupValue(const struct LibraryTrack &track, const QString &groupType) const;
+
+    // LRU result cache — keyed by filter+groupBy, stores pre-search/sort entries
+    struct CacheKey {
+        TrackFilter filter;
+        QString groupBy;
+        bool operator==(const CacheKey &o) const;
+    };
+    struct CacheEntry {
+        CacheKey key;
+        QVector<Entry> entries;       // pre-search/sort (m_allEntries)
+        QVector<Entry> sorted;        // post-sort, no search filter
+        QString sortBy;
+        bool sortAscending = true;
+        QString title;
+    };
+    static constexpr int MaxCacheEntries = 16;
+    QList<CacheEntry> m_cache;
+    CacheKey currentCacheKey() const;
+    CacheEntry *findCache(const CacheKey &key);
+    void storeCache(const CacheKey &key, const QVector<Entry> &entries, const QString &title);
+    void invalidateCache();
+
+    struct HistoryEntry { TrackFilter filter; QString groupBy; qreal scrollY = 0; };
+    QVector<HistoryEntry> m_backStack;
+    QVector<HistoryEntry> m_forwardStack;
+    qreal m_pendingScrollY = 0;
+    void applyState(const TrackFilter &filter, const QString &groupBy);
 
     LibraryDatabase *m_database = nullptr;
     TrackFilter m_filter;

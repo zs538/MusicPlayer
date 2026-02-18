@@ -1,9 +1,9 @@
 #include "CoverImageProvider.h"
-#include "library/LibraryDatabase.h"
 #include <QFileInfo>
 #include <QDir>
 #include <QImage>
 #include <QDebug>
+#include <QRegularExpression>
 #include <taglib/fileref.h>
 #include <taglib/tag.h>
 #include <taglib/tpropertymap.h>
@@ -12,6 +12,8 @@
 #include <taglib/oggfile.h>
 #include <taglib/vorbisfile.h>
 #include <taglib/opusfile.h>
+#include <taglib/mp4file.h>
+#include <taglib/mp4coverart.h>
 #include <taglib/id3v2tag.h>
 #include <taglib/attachedpictureframe.h>
 #include <taglib/flacpicture.h>
@@ -20,10 +22,17 @@
 CoverImageProvider *CoverImageProvider::s_instance = nullptr;
 QCache<QString, QImage> CoverImageProvider::s_cache(300);
 QMutex CoverImageProvider::s_cacheMutex;
+QStringList CoverImageProvider::s_coverPatterns = {
+    "cover.jpg", "cover.jpeg", "cover.png",
+    "folder.jpg", "folder.png",
+    "front.jpg", "front.png",
+    "%album%.jpg", "%album%.png",
+    "*.jpg", "*.png"
+};
+QMutex CoverImageProvider::s_patternsMutex;
 
-CoverImageProvider::CoverImageProvider(LibraryDatabase *db)
+CoverImageProvider::CoverImageProvider()
     : QQuickAsyncImageProvider()
-    , m_db(db)
 {
     m_threadPool.setMaxThreadCount(2); // Limit concurrent image loading
 }
@@ -36,6 +45,21 @@ void CoverImageProvider::setInstance(CoverImageProvider *provider)
 CoverImageProvider *CoverImageProvider::instance()
 {
     return s_instance;
+}
+
+void CoverImageProvider::setCoverPatterns(const QStringList &patterns)
+{
+    QMutexLocker locker(&s_patternsMutex);
+    s_coverPatterns = patterns;
+    // Invalidate cache when patterns change
+    QMutexLocker cacheLocker(&s_cacheMutex);
+    s_cache.clear();
+}
+
+QStringList CoverImageProvider::coverPatterns()
+{
+    QMutexLocker locker(&s_patternsMutex);
+    return s_coverPatterns;
 }
 
 QQuickImageResponse *CoverImageProvider::requestImageResponse(const QString &id, const QSize &requestedSize)
@@ -61,6 +85,12 @@ void CoverImageProvider::putCached(const QString &key, const QImage &image)
     s_cache.insert(key, new QImage(image));
 }
 
+void CoverImageProvider::clearCache()
+{
+    QMutexLocker locker(&s_cacheMutex);
+    s_cache.clear();
+}
+
 QImage CoverImageProvider::loadCoverForPath(const QString &filePath, const QSize &)
 {
     // First try embedded cover
@@ -74,6 +104,13 @@ QImage CoverImageProvider::loadCoverForPath(const QString &filePath, const QSize
     
     // Note: Scaling is done in CoverImageResponse::run() after loading
     return cover;
+}
+
+static QImage imageFromData(const char *data, unsigned int size)
+{
+    QImage img;
+    img.loadFromData(reinterpret_cast<const uchar*>(data), size);
+    return img;
 }
 
 QImage CoverImageProvider::loadEmbeddedCover(const QString &filePath)
@@ -92,24 +129,37 @@ QImage CoverImageProvider::loadEmbeddedCover(const QString &filePath)
             if (!frames.isEmpty()) {
                 auto *pic = dynamic_cast<TagLib::ID3v2::AttachedPictureFrame*>(frames.front());
                 if (pic) {
-                    QImage img;
-                    img.loadFromData(reinterpret_cast<const uchar*>(pic->picture().data()), 
-                                     pic->picture().size());
-                    return img;
+                    return imageFromData(pic->picture().data(), pic->picture().size());
                 }
             }
         }
     }
     
-    // Try FLAC
+    // Try FLAC — prefer FrontCover, fall back to any picture
     if (auto *flacFile = dynamic_cast<TagLib::FLAC::File*>(fileRef.file())) {
-        auto pics = flacFile->pictureList();
+        const auto &pics = flacFile->pictureList();
         if (!pics.isEmpty()) {
+            for (auto *pic : pics) {
+                if (pic && pic->type() == TagLib::FLAC::Picture::FrontCover) {
+                    QImage img = imageFromData(pic->data().data(), pic->data().size());
+                    if (!img.isNull()) return img;
+                }
+            }
             auto *pic = pics.front();
-            QImage img;
-            img.loadFromData(reinterpret_cast<const uchar*>(pic->data().data()), 
-                             pic->data().size());
-            return img;
+            if (pic) return imageFromData(pic->data().data(), pic->data().size());
+        }
+    }
+    
+    // Try MP4/M4A
+    if (auto *mp4File = dynamic_cast<TagLib::MP4::File*>(fileRef.file())) {
+        if (auto *tag = mp4File->tag()) {
+            if (tag->itemMap().contains("covr")) {
+                auto coverArtList = tag->itemMap()["covr"].toCoverArtList();
+                if (!coverArtList.isEmpty()) {
+                    auto coverArt = coverArtList.front();
+                    return imageFromData(coverArt.data().data(), coverArt.data().size());
+                }
+            }
         }
     }
     
@@ -118,11 +168,7 @@ QImage CoverImageProvider::loadEmbeddedCover(const QString &filePath)
         if (auto *tag = opusFile->tag()) {
             auto pics = tag->pictureList();
             if (!pics.isEmpty()) {
-                auto *pic = pics.front();
-                QImage img;
-                img.loadFromData(reinterpret_cast<const uchar*>(pic->data().data()), 
-                                 pic->data().size());
-                return img;
+                return imageFromData(pics.front()->data().data(), pics.front()->data().size());
             }
         }
     }
@@ -132,11 +178,7 @@ QImage CoverImageProvider::loadEmbeddedCover(const QString &filePath)
         if (auto *tag = vorbisFile->tag()) {
             auto pics = tag->pictureList();
             if (!pics.isEmpty()) {
-                auto *pic = pics.front();
-                QImage img;
-                img.loadFromData(reinterpret_cast<const uchar*>(pic->data().data()), 
-                                 pic->data().size());
-                return img;
+                return imageFromData(pics.front()->data().data(), pics.front()->data().size());
             }
         }
     }
@@ -144,37 +186,42 @@ QImage CoverImageProvider::loadEmbeddedCover(const QString &filePath)
     return QImage();
 }
 
-QImage CoverImageProvider::loadFolderCover(const QString &folderPath)
+QImage CoverImageProvider::loadFolderCover(const QString &folderPath, const QString &album, const QString &artist)
 {
     QDir dir(folderPath);
+    if (!dir.exists()) return QImage();
     
-    // Common cover art filenames
-    static const QStringList coverNames = {
-        "cover.jpg", "cover.jpeg", "cover.png",
-        "folder.jpg", "folder.jpeg", "folder.png",
-        "front.jpg", "front.jpeg", "front.png",
-        "album.jpg", "album.jpeg", "album.png",
-        "Cover.jpg", "Cover.jpeg", "Cover.png",
-        "Folder.jpg", "Folder.jpeg", "Folder.png"
-    };
+    // Get all image files in directory
+    QStringList imageFiles = dir.entryList({"*.jpg", "*.jpeg", "*.png", "*.gif", "*.webp", "*.bmp"}, QDir::Files, QDir::Name);
+    if (imageFiles.isEmpty()) return QImage();
     
-    for (const QString &name : coverNames) {
-        QString path = dir.filePath(name);
-        if (QFileInfo::exists(path)) {
-            QImage img(path);
-            if (!img.isNull()) {
-                return img;
+    // Get current patterns (thread-safe copy)
+    QStringList patterns = coverPatterns();
+    
+    // Try each pattern in priority order
+    for (const QString &pattern : patterns) {
+        // Expand %album% / %artist% placeholders
+        QString expanded = pattern;
+        if (!album.isEmpty()) expanded.replace("%album%", album, Qt::CaseInsensitive);
+        if (!artist.isEmpty()) expanded.replace("%artist%", artist, Qt::CaseInsensitive);
+        
+        // Skip patterns with unexpanded placeholders
+        if (expanded.contains('%')) continue;
+        
+        for (const QString &imageFile : imageFiles) {
+            bool match = false;
+            if (expanded.contains('*')) {
+                QRegularExpression regex(
+                    "^" + QRegularExpression::escape(expanded).replace("\\*", ".*") + "$",
+                    QRegularExpression::CaseInsensitiveOption);
+                match = regex.match(imageFile).hasMatch();
+            } else {
+                match = imageFile.compare(expanded, Qt::CaseInsensitive) == 0;
             }
-        }
-    }
-    
-    // Try any image file in the folder
-    QStringList imageFilters = {"*.jpg", "*.jpeg", "*.png", "*.gif", "*.bmp"};
-    QStringList images = dir.entryList(imageFilters, QDir::Files);
-    if (!images.isEmpty()) {
-        QImage img(dir.filePath(images.first()));
-        if (!img.isNull()) {
-            return img;
+            if (match) {
+                QImage img(dir.filePath(imageFile));
+                if (!img.isNull()) return img;
+            }
         }
     }
     

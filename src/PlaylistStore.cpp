@@ -6,6 +6,7 @@
 #include <QDir>
 #include <QFile>
 #include <QTextStream>
+#include <QtConcurrent>
 
 PlaylistStore::PlaylistStore(QObject *parent)
     : QObject(parent)
@@ -65,6 +66,25 @@ QString PlaylistStore::createNewTab(const QString &name, bool isUserCreated)
     tab.name = tabName;
     tab.model = new TrackListModel(this);
     tab.isUserCreated = isUserCreated;
+    
+    // Connect model mutation signals to emit playlistChanged() for auto-save
+    // and tabDataChanged() for track count updates in PlaylistTabsModel.
+    // Capture UUID (not index) since tabs can be reordered.
+    QUuid tabUuid = tab.uuid;
+    TrackListModel *model = tab.model;
+    
+    auto emitChanges = [this, tabUuid]() {
+        emit playlistChanged();
+        int idx = indexOfUuid(tabUuid);
+        if (idx >= 0)
+            emit tabDataChanged(idx);
+    };
+    
+    connect(model, &TrackListModel::rowsInserted, this, emitChanges);
+    connect(model, &TrackListModel::rowsRemoved, this, emitChanges);
+    connect(model, &TrackListModel::rowsMoved, this, emitChanges);
+    connect(model, &TrackListModel::modelReset, this, emitChanges);
+    connect(model, &TrackListModel::dataChanged, this, emitChanges);
     
     int idx = m_tabs.size();
     m_tabs.append(tab);
@@ -356,4 +376,94 @@ bool PlaylistStore::exportM3U(TrackListModel *model, const QString &filePath, bo
         out << track.filePath << "\n";
     }
     return true;
+}
+
+QString PlaylistStore::importPlaylistAsync(const QString &filePath)
+{
+    QString uuid = createNewTab(QFileInfo(filePath).baseName());
+    bool utf8 = filePath.endsWith(".m3u8", Qt::CaseInsensitive);
+    
+    // Run import in background thread
+    m_importFuture = QtConcurrent::run([this, uuid, filePath, utf8]() {
+        importM3UAsync(uuid, filePath, utf8);
+    });
+    
+    return uuid;
+}
+
+void PlaylistStore::importM3UAsync(const QString &uuid, const QString &filePath, bool utf8)
+{
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QMetaObject::invokeMethod(this, [this, uuid]() {
+            closeTab(uuid);
+            emit importFinished(uuid, false);
+        }, Qt::QueuedConnection);
+        return;
+    }
+    
+    // First pass: count lines for progress
+    QTextStream countStream(&file);
+    countStream.setEncoding(utf8 ? QStringConverter::Utf8 : QStringConverter::Latin1);
+    int totalLines = 0;
+    while (!countStream.atEnd()) {
+        QString line = countStream.readLine().trimmed();
+        if (!line.isEmpty() && !line.startsWith('#'))
+            ++totalLines;
+    }
+    file.seek(0);
+    
+    // Second pass: extract metadata and batch insert
+    QTextStream in(&file);
+    in.setEncoding(utf8 ? QStringConverter::Utf8 : QStringConverter::Latin1);
+    QString playlistDir = QFileInfo(filePath).absolutePath();
+    
+    QVector<TrackInfo> batch;
+    int imported = 0;
+    constexpr int BATCH_SIZE = 50;
+    
+    while (!in.atEnd()) {
+        QString line = in.readLine().trimmed();
+        if (line.isEmpty() || line.startsWith('#'))
+            continue;
+        
+        QString fullPath = QDir::isAbsolutePath(line) ? line : QDir::cleanPath(playlistDir + '/' + line);
+        TrackInfo track = MetadataExtractor::extractTrackInfo(fullPath);
+        if (track.isValid()) {
+            batch.append(track);
+            ++imported;
+        }
+        
+        // Send batch to UI thread when full
+        if (batch.size() >= BATCH_SIZE) {
+            QVector<TrackInfo> toSend = batch;
+            batch.clear();
+            int currentImported = imported;
+            QMetaObject::invokeMethod(this, [this, uuid, toSend, currentImported, totalLines]() {
+                TrackListModel *model = getPlaylistModel(uuid);
+                if (model) {
+                    model->addTracks(toSend);
+                }
+                emit importProgress(uuid, currentImported, totalLines);
+            }, Qt::QueuedConnection);
+        }
+    }
+    
+    // Send remaining tracks
+    if (!batch.isEmpty()) {
+        QVector<TrackInfo> toSend = batch;
+        int currentImported = imported;
+        QMetaObject::invokeMethod(this, [this, uuid, toSend, currentImported, totalLines]() {
+            TrackListModel *model = getPlaylistModel(uuid);
+            if (model) {
+                model->addTracks(toSend);
+            }
+            emit importProgress(uuid, currentImported, totalLines);
+        }, Qt::QueuedConnection);
+    }
+    
+    // Signal completion
+    QMetaObject::invokeMethod(this, [this, uuid]() {
+        emit importFinished(uuid, true);
+    }, Qt::QueuedConnection);
 }

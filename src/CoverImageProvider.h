@@ -7,8 +7,7 @@
 #include <QMutex>
 #include <QThreadPool>
 #include <QRunnable>
-
-class LibraryDatabase;
+#include <QStringList>
 
 /**
  * @brief Async QQuickImageProvider for cover art images.
@@ -24,28 +23,32 @@ class LibraryDatabase;
 class CoverImageProvider : public QQuickAsyncImageProvider
 {
 public:
-    explicit CoverImageProvider(LibraryDatabase *db);
+    explicit CoverImageProvider();
     
     QQuickImageResponse *requestImageResponse(const QString &id, const QSize &requestedSize) override;
     
     static void setInstance(CoverImageProvider *provider);
     static CoverImageProvider *instance();
     
-    void setDatabase(LibraryDatabase *db) { m_db = db; }
+    // Configurable cover patterns (thread-safe)
+    static void setCoverPatterns(const QStringList &patterns);
+    static QStringList coverPatterns();
     
     // Static methods for worker thread access
     static QImage loadCoverForPath(const QString &filePath, const QSize &requestedSize);
     static QImage loadEmbeddedCover(const QString &filePath);
-    static QImage loadFolderCover(const QString &folderPath);
+    static QImage loadFolderCover(const QString &folderPath, const QString &album = {}, const QString &artist = {});
     static QImage getCached(const QString &key);
     static void putCached(const QString &key, const QImage &image);
+    static void clearCache();
 
 private:
-    LibraryDatabase *m_db;
     QThreadPool m_threadPool;
     
     static QCache<QString, QImage> s_cache;
     static QMutex s_cacheMutex;
+    static QStringList s_coverPatterns;
+    static QMutex s_patternsMutex;
     static CoverImageProvider *s_instance;
 };
 

@@ -25,6 +25,11 @@ Rectangle {
         function onViewedPlaylistModelChanged() {
             controller.model = ViewedPlaylistRouter.viewedPlaylistModel || AppViewModel.displayedPlaylistModel
         }
+        function onScrollToIndexRequested(index) {
+            if (index >= 0 && index < listView.count) {
+                listView.positionViewAtIndex(index, ListView.Center)
+            }
+        }
     }
 
     ColumnLayout {
@@ -192,8 +197,11 @@ Rectangle {
                     property string plUuid
                     property string plName
                     
-                    text: (plUuid === ViewedPlaylistRouter.activePlaylistId && AppViewModel.playbackState !== AppViewModel.Stopped ? "▶ " : "") + plName
+                    text: plName
                     font.bold: plUuid === root.playlistId
+                    icon.source: (plUuid === ViewedPlaylistRouter.activePlaylistId && AppViewModel.playbackState !== AppViewModel.Stopped)
+                        ? Qt.resolvedUrl("../icons/play_arrow.svg") : ""
+                    icon.color: Theme.accent
                     
                     onTriggered: ViewedPlaylistRouter.viewedPlaylistId = plUuid
                 }
