@@ -173,6 +173,28 @@ Window {
                         }
                     }
                     
+                    // Expanded track double-click
+                    GroupBox {
+                        title: "Double-clicking a track in expanded list view"
+                        Layout.fillWidth: true
+
+                        ColumnLayout {
+                            anchors.fill: parent
+                            spacing: 4
+
+                            RadioButton {
+                                text: "Add whole group and start playing from that track"
+                                checked: Settings.expandedTrackOpenMode === 0
+                                onClicked: Settings.expandedTrackOpenMode = 0
+                            }
+                            RadioButton {
+                                text: "Open just that one track"
+                                checked: Settings.expandedTrackOpenMode === 1
+                                onClicked: Settings.expandedTrackOpenMode = 1
+                            }
+                        }
+                    }
+
                     Item { Layout.fillHeight: true }
                 }
             }
@@ -220,7 +242,27 @@ Window {
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true
                 }
-                
+
+                Label { text: "List View"; font.bold: true }
+
+                GridLayout {
+                    columns: 2
+                    columnSpacing: 12
+                    rowSpacing: 8
+
+                    Label { text: "Group row height:" }
+                    RowLayout {
+                        SpinBox {
+                            from: 32
+                            to: 120
+                            stepSize: 4
+                            value: Settings.listGroupRowHeight
+                            onValueModified: Settings.listGroupRowHeight = value
+                        }
+                        Label { text: "px"; color: Theme.textSecondary }
+                    }
+                }
+
                 Item { Layout.fillHeight: true }
             }
 

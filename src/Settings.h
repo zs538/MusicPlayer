@@ -26,6 +26,8 @@ class Settings : public QObject
     Q_PROPERTY(int gridCellMaxWidth READ gridCellMaxWidth WRITE setGridCellMaxWidth NOTIFY gridCellMaxWidthChanged)
     Q_PROPERTY(bool watcherEnabled READ watcherEnabled WRITE setWatcherEnabled NOTIFY watcherEnabledChanged)
     Q_PROPERTY(int periodicRescanMinutes READ periodicRescanMinutes WRITE setPeriodicRescanMinutes NOTIFY periodicRescanMinutesChanged)
+    Q_PROPERTY(int expandedTrackOpenMode READ expandedTrackOpenMode WRITE setExpandedTrackOpenMode NOTIFY expandedTrackOpenModeChanged)
+    Q_PROPERTY(int listGroupRowHeight READ listGroupRowHeight WRITE setListGroupRowHeight NOTIFY listGroupRowHeightChanged)
 
 public:
     enum AddTracksPolicy {
@@ -91,7 +93,13 @@ public:
     
     int periodicRescanMinutes() const;
     void setPeriodicRescanMinutes(int minutes);
-    
+
+    int expandedTrackOpenMode() const;
+    void setExpandedTrackOpenMode(int mode);
+
+    int listGroupRowHeight() const;
+    void setListGroupRowHeight(int height);
+
     Q_INVOKABLE void save();
     Q_INVOKABLE void load();
 
@@ -119,6 +127,8 @@ signals:
     void gridCellMaxWidthChanged();
     void watcherEnabledChanged();
     void periodicRescanMinutesChanged();
+    void expandedTrackOpenModeChanged();
+    void listGroupRowHeightChanged();
     void settingsChanged();
 
 private:
@@ -137,6 +147,8 @@ private:
     int m_gridCellMaxWidth = 200;
     bool m_watcherEnabled = true;
     int m_periodicRescanMinutes = 10;
+    int m_expandedTrackOpenMode = 0;
+    int m_listGroupRowHeight = 56;
 };
 
 #endif // SETTINGS_H

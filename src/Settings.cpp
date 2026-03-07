@@ -122,6 +122,8 @@ void Settings::save()
     m_settings.setValue("appearance/gridCellMaxWidth", m_gridCellMaxWidth);
     m_settings.setValue("library/watcherEnabled", m_watcherEnabled);
     m_settings.setValue("library/periodicRescanMinutes", m_periodicRescanMinutes);
+    m_settings.setValue("behavior/expandedTrackOpenMode", m_expandedTrackOpenMode);
+    m_settings.setValue("appearance/listGroupRowHeight", m_listGroupRowHeight);
     m_settings.sync();
 }
 
@@ -139,6 +141,8 @@ void Settings::load()
     m_gridCellMaxWidth = m_settings.value("appearance/gridCellMaxWidth", 200).toInt();
     m_watcherEnabled = m_settings.value("library/watcherEnabled", true).toBool();
     m_periodicRescanMinutes = m_settings.value("library/periodicRescanMinutes", 10).toInt();
+    m_expandedTrackOpenMode = m_settings.value("behavior/expandedTrackOpenMode", 0).toInt();
+    m_listGroupRowHeight = m_settings.value("appearance/listGroupRowHeight", 56).toInt();
     
     // Load cover art patterns with defaults
     QStringList defaultPatterns = {
@@ -321,6 +325,38 @@ void Settings::setGroupTypeExploreInWindow(const QString &groupType, bool inWind
     QString key = QString("collection/%1/exploreInWindow").arg(groupType);
     m_settings.setValue(key, inWindow);
     emit settingsChanged();
+}
+
+int Settings::expandedTrackOpenMode() const
+{
+    return m_expandedTrackOpenMode;
+}
+
+void Settings::setExpandedTrackOpenMode(int mode)
+{
+    mode = qBound(0, mode, 1);
+    if (m_expandedTrackOpenMode != mode) {
+        m_expandedTrackOpenMode = mode;
+        m_settings.setValue("behavior/expandedTrackOpenMode", mode);
+        emit expandedTrackOpenModeChanged();
+        emit settingsChanged();
+    }
+}
+
+int Settings::listGroupRowHeight() const
+{
+    return m_listGroupRowHeight;
+}
+
+void Settings::setListGroupRowHeight(int height)
+{
+    height = qBound(32, height, 120);
+    if (m_listGroupRowHeight != height) {
+        m_listGroupRowHeight = height;
+        m_settings.setValue("appearance/listGroupRowHeight", height);
+        emit listGroupRowHeightChanged();
+        emit settingsChanged();
+    }
 }
 
 bool Settings::watcherEnabled() const

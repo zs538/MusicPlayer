@@ -179,6 +179,7 @@ QVariant CollectionBrowseModel::data(const QModelIndex &index, int role) const
     case YearRole: return e.year;
     case BitrateRole: return e.bitrate;
     case FileTypeRole: return e.fileType;
+    case TotalDurationMsRole: return e.totalDurationMs;
     }
     return QVariant();
 }
@@ -205,7 +206,8 @@ QHash<int, QByteArray> CollectionBrowseModel::roleNames() const
         { GenreRole, "genre" },
         { YearRole, "year" },
         { BitrateRole, "bitrate" },
-        { FileTypeRole, "fileType" }
+        { FileTypeRole, "fileType" },
+        { TotalDurationMsRole, "totalDurationMs" }
     };
 }
 
@@ -543,6 +545,7 @@ void CollectionBrowseModel::buildGroups(const QVector<LibraryTrack> &tracks)
         int year = 0;
         QString artist;
         QString album;
+        qint64 totalDurationMs = 0;
     };
 
     QMap<QString, GroupData> groups;
@@ -559,9 +562,11 @@ void CollectionBrowseModel::buildGroups(const QVector<LibraryTrack> &tracks)
             gd.year = track.year;
             gd.artist = track.albumArtist.isEmpty() ? track.artist : track.albumArtist;
             gd.album = track.album;
+            gd.totalDurationMs = track.durationMs;
             groups.insert(key, gd);
         } else {
             groups[key].count++;
+            groups[key].totalDurationMs += track.durationMs;
             // Keep earliest year for sorting
             if (track.year > 0 && (groups[key].year == 0 || track.year < groups[key].year))
                 groups[key].year = track.year;
@@ -586,6 +591,7 @@ void CollectionBrowseModel::buildGroups(const QVector<LibraryTrack> &tracks)
         e.year = gd.year;
         e.artist = gd.artist;
         e.album = gd.album;
+        e.totalDurationMs = gd.totalDurationMs;
         m_allEntries.append(e);
     }
 }

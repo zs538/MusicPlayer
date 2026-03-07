@@ -48,7 +48,8 @@ public:
         GenreRole,
         YearRole,
         BitrateRole,
-        FileTypeRole
+        FileTypeRole,
+        TotalDurationMsRole
     };
 
     explicit CollectionBrowseModel(QObject *parent = nullptr);
@@ -125,6 +126,7 @@ private:
         int year = 0;
         int bitrate = 0;
         QString fileType;
+        qint64 totalDurationMs = 0;
     };
 
     void swapEntries(const QVector<Entry> &newEntries);

@@ -602,102 +602,132 @@ Item {
                 required property string groupType
                 required property var groupValue
                 required property string displayText
+                required property string subtitle
                 required property string representativeFilePath
                 required property string imagePath
                 required property string filePath
                 required property var durationMs
                 required property int trackNumber
                 required property int childCount
+                required property int year
+                required property var totalDurationMs
 
                 property bool isGroup: entryType === "group"
                 property string groupKey: String(listDel.groupValue)
                 property bool isExpanded: root.expandableGroups && root.expandedGroups[groupKey] === true
 
-                // Group/Track row
+                // Scriptable info strings — future: replace with user template engine (%year%, %tracks%, %duration%, etc.)
+                readonly property string groupInfoLeft: listDel.year > 0 ? String(listDel.year) : ""
+                readonly property string groupInfoRight: {
+                    let parts = []
+                    if (listDel.childCount > 0)
+                        parts.push(listDel.childCount + (listDel.childCount === 1 ? " track" : " tracks"))
+                    let ms = listDel.totalDurationMs
+                    if (ms > 0) {
+                        let s = Math.floor(ms / 1000)
+                        let m = Math.floor(s / 60)
+                        let h = Math.floor(m / 60)
+                        parts.push(h > 0 ? (h + ":" + String(m % 60).padStart(2,'0') + ":" + String(s % 60).padStart(2,'0'))
+                                         : (m + ":" + String(s % 60).padStart(2,'0')))
+                    }
+                    return parts.join("  ")
+                }
+
+                // --- Group row ---
                 Rectangle {
+                    id: groupRow
+                    visible: listDel.isGroup
                     width: listDel.width
-                    height: listDel.isGroup ? 40 : 20
-                    color: listMouseArea.containsMouse ? Theme.hover : "transparent"
+                    height: listDel.isGroup ? Settings.listGroupRowHeight : 0
+                    
+                    // Alternating background for group rows
+                    property color baseColor: (listDel.index % 2 === 0) ? "transparent" : Theme.surfaceAlt
+                    color: groupMa.containsMouse ? Theme.hover : baseColor
 
                     RowLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: listDel.isGroup ? 4 : 24
-                        anchors.rightMargin: 8
-                        spacing: 6
+                        spacing: 0
 
-                        // Expand indicator for groups (when expandable mode is on)
-                        Image {
-                            visible: listDel.isGroup && root.expandableGroups
-                            source: listDel.isExpanded
-                                ? Qt.resolvedUrl("../icons/expand_more.svg")
-                                : Qt.resolvedUrl("../icons/chevron_right.svg")
-                            sourceSize: Qt.size(24, 24)
-                            Layout.preferredWidth: 12
-                            Layout.preferredHeight: 12
-                            fillMode: Image.PreserveAspectFit
-                            opacity: 0.6
-                        }
-
-                        // Cover art for groups
+                        // Cover art — fills full row height
                         Rectangle {
-                            visible: listDel.isGroup
-                            Layout.preferredWidth: 32
-                            Layout.preferredHeight: 32
+                            Layout.preferredWidth: groupRow.height
+                            Layout.fillHeight: true
                             color: Theme.surfaceAlt
                             border.color: Theme.border
+                            border.width: 1
 
                             Image {
+                                id: listGroupCover
                                 anchors.fill: parent
                                 anchors.margins: 1
-                                source: listDel.imagePath ? ("file://" + listDel.imagePath) : ((listDel.representativeFilePath || listDel.filePath) ? "image://cover/" + (listDel.representativeFilePath || listDel.filePath) : "")
+                                source: listDel.imagePath
+                                    ? ("file://" + listDel.imagePath)
+                                    : ((listDel.representativeFilePath || listDel.filePath)
+                                        ? ("image://cover/" + (listDel.representativeFilePath || listDel.filePath))
+                                        : "")
                                 fillMode: Image.PreserveAspectCrop
                                 asynchronous: true
                                 cache: true
-                                sourceSize.width: 128
-                                sourceSize.height: 128
+                                sourceSize.width: 512
+                                sourceSize.height: 512
                                 layer.enabled: true
                                 layer.smooth: true
                                 layer.textureSize: Qt.size(width * 2, height * 2)
+
+                                Image {
+                                    anchors.centerIn: parent
+                                    width: 24; height: 24
+                                    source: Qt.resolvedUrl("../icons/album.svg")
+                                    sourceSize: Qt.size(48, 48)
+                                    fillMode: Image.PreserveAspectFit
+                                    opacity: 0.3
+                                    visible: listGroupCover.status !== Image.Ready
+                                }
                             }
                         }
 
-                        // Track number
-                        Label {
-                            visible: !listDel.isGroup && listDel.trackNumber > 0
-                            text: String(listDel.trackNumber).padStart(2, '0')
-                            color: Theme.textSecondary
-                            font.pixelSize: 11
-                            Layout.preferredWidth: 20
-                        }
-
-                        // Title
-                        Label {
-                            text: listDel.displayText
-                            color: Theme.textPrimary
-                            font.pixelSize: listDel.isGroup ? 12 : 11
-                            font.bold: listDel.isGroup
-                            elide: Text.ElideRight
+                        // Title + info block
+                        Item {
                             Layout.fillWidth: true
-                        }
+                            Layout.fillHeight: true
 
-                        // Track count or duration
-                        Label {
-                            text: listDel.isGroup ? (listDel.childCount + " tracks") : formatDuration(listDel.durationMs)
-                            color: Theme.textSecondary
-                            font.pixelSize: 11
-                            Layout.preferredWidth: 50
-                            horizontalAlignment: Text.AlignRight
+                            Column {
+                                anchors {
+                                    left: parent.left; right: parent.right
+                                    top: parent.top; bottom: parent.bottom
+                                    leftMargin: 8; rightMargin: 8
+                                    topMargin: 4; bottomMargin: 4
+                                }
+                                spacing: 2
 
-                            function formatDuration(ms) {
-                                if (!ms) return ""
-                                let s = Math.floor(ms / 1000), m = Math.floor(s / 60)
-                                return m + ":" + String(s % 60).padStart(2, '0')
+                                Label {
+                                    width: parent.width
+                                    text: listDel.displayText
+                                    color: Theme.textPrimary
+                                    font.pixelSize: Math.max(12, Math.round(groupRow.height * 0.28))
+                                    font.bold: true
+                                    elide: Text.ElideRight
+                                }
+                                Label {
+                                    width: parent.width
+                                    text: {
+                                        let left = listDel.groupInfoLeft
+                                        let right = listDel.groupInfoRight
+                                        if (left && right) return left + "    " + right
+                                        return left || right
+                                    }
+                                    color: Theme.textSecondary
+                                    font.pixelSize: Math.max(10, Math.round(groupRow.height * 0.22))
+                                    elide: Text.ElideRight
+                                    visible: text.length > 0
+                                }
                             }
                         }
+
                     }
 
                     MouseArea {
-                        id: listMouseArea
+                        id: groupMa
                         anchors.fill: parent
                         hoverEnabled: true
                         acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
@@ -706,119 +736,213 @@ Item {
                             if (mouse.button === Qt.RightButton) {
                                 root._openContextMenu(listDel.entryType, listDel.groupType, listDel.groupValue, listDel.filePath)
                             } else if (mouse.button === Qt.MiddleButton) {
-                                if (listDel.isGroup) {
-                                    AppViewModel.browseActivation.appendFilteredTracksToViewed(
-                                        browserModel.filter, listDel.groupType, listDel.groupValue)
-                                } else {
-                                    AppViewModel.browseActivation.appendCollectionEntryToViewed("t:" + listDel.filePath)
-                                }
-                            } else if (listDel.isGroup && root.expandableGroups) {
-                                // Toggle expansion
+                                AppViewModel.browseActivation.appendFilteredTracksToViewed(
+                                    browserModel.filter, listDel.groupType, listDel.groupValue)
+                            } else if (root.expandableGroups) {
                                 let newExpanded = Object.assign({}, root.expandedGroups)
                                 newExpanded[listDel.groupKey] = !listDel.isExpanded
                                 root.expandedGroups = newExpanded
                             }
                         }
                         onDoubleClicked: {
-                            if (listDel.isGroup && !root.expandableGroups) {
-                                let openAction = Settings.groupTypeOpenAction(listDel.groupType)
-                                if (openAction === "queueTracks") {
-                                    AppViewModel.browseActivation.addFilteredTracksToViewed(
-                                        browserModel.filter, listDel.groupType, listDel.groupValue)
-                                } else if (Settings.groupTypeExploreInWindow(listDel.groupType)) {
-                                    AppViewModel.browseActivation.openCollectionGroup(
-                                        {filter: browserModel.filter, groupBy: browserModel.groupBy}, listDel.groupType, listDel.groupValue)
-                                } else {
-                                    let newFilter = browserModel.filter.concat([{field: listDel.groupType, op: "=", value: listDel.groupValue}])
-                                    root.doNavigate(newFilter, Settings.groupTypeNextGroupBy(listDel.groupType))
-                                }
-                            } else if (!listDel.isGroup) {
-                                AppViewModel.browseActivation.activateCollectionEntry("t:" + listDel.filePath)
+                            // Group double-click always fires group action regardless of expand state
+                            let openAction = Settings.groupTypeOpenAction(listDel.groupType)
+                            if (openAction === "queueTracks") {
+                                AppViewModel.browseActivation.addFilteredTracksToViewed(
+                                    browserModel.filter, listDel.groupType, listDel.groupValue)
+                            } else if (Settings.groupTypeExploreInWindow(listDel.groupType)) {
+                                AppViewModel.browseActivation.openCollectionGroup(
+                                    {filter: browserModel.filter, groupBy: browserModel.groupBy}, listDel.groupType, listDel.groupValue)
+                            } else {
+                                let newFilter = browserModel.filter.concat([{field: listDel.groupType, op: "=", value: listDel.groupValue}])
+                                root.doNavigate(newFilter, Settings.groupTypeNextGroupBy(listDel.groupType))
                             }
                         }
                     }
-
                 }
 
-                // Expanded tracks (only for groups when expanded)
-                Repeater {
-                    model: listDel.isGroup && listDel.isExpanded ? browserModel.tracksForGroup(listDel.groupType, listDel.groupValue) : []
+                // --- Track row (non-group / tracks mode) ---
+                Rectangle {
+                    id: trackRow
+                    visible: !listDel.isGroup
+                    width: listDel.width
+                    height: !listDel.isGroup ? 28 : 0
+                    color: trackMa.containsMouse ? Theme.hover : "transparent"
 
-                    Rectangle {
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 12
+                        anchors.rightMargin: 8
+                        spacing: 6
+
+                        Label {
+                            visible: listDel.trackNumber > 0
+                            text: String(listDel.trackNumber)
+                            color: Theme.textSecondary
+                            font.pixelSize: 11
+                            Layout.preferredWidth: 20
+                        }
+
+                        Label {
+                            text: listDel.displayText
+                            color: Theme.textPrimary
+                            font.pixelSize: 11
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
+
+                        Label {
+                            text: {
+                                let ms = listDel.durationMs
+                                if (!ms) return ""
+                                let s = Math.floor(ms / 1000), m = Math.floor(s / 60)
+                                return m + ":" + String(s % 60).padStart(2, '0')
+                            }
+                            color: Theme.textSecondary
+                            font.pixelSize: 11
+                            Layout.preferredWidth: 40
+                            horizontalAlignment: Text.AlignRight
+                        }
+                    }
+
+                    MouseArea {
+                        id: trackMa
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+
+                        onClicked: (mouse) => {
+                            if (mouse.button === Qt.RightButton)
+                                root._openContextMenu(listDel.entryType, listDel.groupType, listDel.groupValue, listDel.filePath)
+                            else if (mouse.button === Qt.MiddleButton)
+                                AppViewModel.browseActivation.appendCollectionEntryToViewed("t:" + listDel.filePath)
+                        }
+                        onDoubleClicked: {
+                            // Track double-click always queues the track
+                            AppViewModel.browseActivation.appendCollectionEntryToViewed("t:" + listDel.filePath)
+                            // If we also want to play it immediately, we should use activateCollectionEntry but
+                            // the user asked "always work as queue track even if Explore is set".
+                            // I'll use addFilteredTracksToViewed with a single track filter to respect the play action
+                            // actually wait, queue track means just adding it to the end?
+                            // "always work as queue track" means it should append it.
+                            // Let's use appendCollectionEntryToViewed.
+                            // Wait, activateCollectionEntry does "Append to viewed" if openingTracksAction is OpeningAppendToViewed.
+                            // If they mean "Queue tracks" action from the group menu, that appends.
+                            // I will use appendCollectionEntryToViewed to be safe.
+                            AppViewModel.browseActivation.appendCollectionEntryToViewed("t:" + listDel.filePath)
+                        }
+                    }
+                }
+
+                // --- Expanded tracks (only for groups when expanded) ---
+                Repeater {
+                    model: listDel.isGroup && listDel.isExpanded
+                        ? browserModel.tracksForGroup(listDel.groupType, listDel.groupValue)
+                        : []
+
+                    delegate: Rectangle {
+                        id: expTrackRow
                         width: listDel.width
-                        height: 18
-                        color: expandedTrackMa.containsMouse ? Theme.hover : "transparent"
+                        height: 28
+                        color: expTrackMa.containsMouse ? Theme.hover : groupRow.baseColor
+                        clip: true
 
                         required property var modelData
                         required property int index
 
+                        // Animation when expanding
+                        NumberAnimation on height {
+                            from: 0
+                            to: 28
+                            duration: 150
+                            easing.type: Easing.OutQuad
+                        }
+                        NumberAnimation on opacity {
+                            from: 0.0
+                            to: 1.0
+                            duration: 150
+                            easing.type: Easing.OutQuad
+                        }
+
                         RowLayout {
                             anchors.fill: parent
-                            anchors.leftMargin: 48
+                            anchors.leftMargin: 12
                             anchors.rightMargin: 8
-                            spacing: 4
+                            spacing: 6
 
                             Label {
-                                text: modelData.trackNumber > 0 ? String(modelData.trackNumber).padStart(2, '0') : ""
+                                text: expTrackRow.modelData.trackNumber > 0
+                                    ? String(expTrackRow.modelData.trackNumber)
+                                    : ""
                                 color: Theme.textSecondary
-                                font.pixelSize: 10
-                                Layout.preferredWidth: 18
+                                font.pixelSize: 11
+                                Layout.preferredWidth: 20
                             }
 
                             Label {
-                                text: modelData.title || modelData.filePath.split('/').pop()
+                                text: expTrackRow.modelData.title || expTrackRow.modelData.filePath.split('/').pop()
                                 color: Theme.textPrimary
-                                font.pixelSize: 10
+                                font.pixelSize: 11
                                 elide: Text.ElideRight
                                 Layout.fillWidth: true
                             }
 
                             Label {
                                 text: {
-                                    let ms = modelData.durationMs
+                                    let ms = expTrackRow.modelData.durationMs
                                     if (!ms) return ""
                                     let s = Math.floor(ms / 1000), m = Math.floor(s / 60)
                                     return m + ":" + String(s % 60).padStart(2, '0')
                                 }
                                 color: Theme.textSecondary
-                                font.pixelSize: 10
+                                font.pixelSize: 11
                                 Layout.preferredWidth: 40
                                 horizontalAlignment: Text.AlignRight
                             }
                         }
 
                         MouseArea {
-                            id: expandedTrackMa
+                            id: expTrackMa
                             anchors.fill: parent
                             hoverEnabled: true
                             acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
 
                             onClicked: (mouse) => {
-                                if (mouse.button === Qt.RightButton) expandedTrackMenu.popup()
-                                else if (mouse.button === Qt.MiddleButton) AppViewModel.browseActivation.appendCollectionEntryToViewed("t:" + modelData.filePath)
+                                if (mouse.button === Qt.RightButton) expTrackCtxMenu.popup()
+                                else if (mouse.button === Qt.MiddleButton)
+                                    AppViewModel.browseActivation.appendCollectionEntryToViewed("t:" + expTrackRow.modelData.filePath)
                             }
                             onDoubleClicked: {
-                                AppViewModel.browseActivation.activateCollectionEntry("t:" + modelData.filePath)
+                                if (Settings.expandedTrackOpenMode === 0) {
+                                    // Add whole group, start from this track
+                                    AppViewModel.browseActivation.addFilteredTracksToViewedStartingAt(
+                                        browserModel.filter, listDel.groupType, listDel.groupValue,
+                                        expTrackRow.modelData.filePath)
+                                } else {
+                                    // Queue just this track
+                                    AppViewModel.browseActivation.appendCollectionEntryToViewed("t:" + expTrackRow.modelData.filePath)
+                                }
                             }
                         }
 
                         Menu {
-                            id: expandedTrackMenu
+                            id: expTrackCtxMenu
                             MenuItem {
                                 text: "Append to viewed playlist"
-                                onTriggered: AppViewModel.browseActivation.appendCollectionEntryToViewed("t:" + modelData.filePath)
+                                onTriggered: AppViewModel.browseActivation.appendCollectionEntryToViewed("t:" + expTrackRow.modelData.filePath)
                             }
                             MenuItem {
                                 text: "Append after currently playing"
-                                onTriggered: AppViewModel.browseActivation.appendCollectionEntryAfterPlaying("t:" + modelData.filePath)
+                                onTriggered: AppViewModel.browseActivation.appendCollectionEntryAfterPlaying("t:" + expTrackRow.modelData.filePath)
                             }
                             MenuItem {
                                 text: "Open in new playlist"
-                                onTriggered: AppViewModel.browseActivation.openCollectionEntryInNewPlaylist("t:" + modelData.filePath)
+                                onTriggered: AppViewModel.browseActivation.openCollectionEntryInNewPlaylist("t:" + expTrackRow.modelData.filePath)
                             }
                         }
                     }
                 }
+
             }
 
         }

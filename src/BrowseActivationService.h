@@ -48,6 +48,12 @@ public:
     Q_INVOKABLE void addFilteredTracksToViewed(const QVariantList &filter,
                                                 const QString &groupType,
                                                 const QVariant &groupValue);
+
+    // Double-click on expanded track: add whole group, start playing from specific track
+    Q_INVOKABLE void addFilteredTracksToViewedStartingAt(const QVariantList &filter,
+                                                          const QString &groupType,
+                                                          const QVariant &groupValue,
+                                                          const QString &startFilePath);
     
     // Context menu: append to viewed playlist (no autoplay)
     Q_INVOKABLE void appendFilteredTracksToViewed(const QVariantList &filter,

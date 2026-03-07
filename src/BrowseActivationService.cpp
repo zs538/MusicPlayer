@@ -290,6 +290,75 @@ void BrowseActivationService::addFilteredTracksToViewed(const QVariantList &filt
     }
 }
 
+void BrowseActivationService::addFilteredTracksToViewedStartingAt(const QVariantList &filter,
+                                                                   const QString &groupType,
+                                                                   const QVariant &groupValue,
+                                                                   const QString &startFilePath)
+{
+    if (!m_libraryDb || !m_store || !router())
+        return;
+
+    TrackFilter trackFilter = trackFilterFromVariant(filter);
+    if (!groupType.isEmpty()) {
+        FilterCondition cond;
+        cond.field = groupType;
+        cond.op = "=";
+        cond.value = groupValue;
+        trackFilter.append(cond);
+    }
+
+    QVector<LibraryTrack> tracks = m_libraryDb->tracksMatchingFilter(trackFilter);
+    if (tracks.isEmpty())
+        return;
+
+    QString playlistName = groupValue.toString();
+    if (playlistName.isEmpty())
+        playlistName = "Tracks";
+        
+    if (groupType == "album" && !tracks.isEmpty()) {
+        QString artist = tracks.first().albumArtist;
+        if (artist.isEmpty()) artist = tracks.first().artist;
+        if (!artist.isEmpty()) playlistName = artist + " - " + groupValue.toString();
+    }
+
+    Settings *settings = Settings::instance();
+    if (settings && settings->openingTracksAction() == Settings::OpeningCreateNewPlaylist) {
+        QString existingId = m_store->findGeneratedPlaylistByName(playlistName);
+        if (!existingId.isEmpty()) {
+            router()->setViewedPlaylistId(existingId);
+            // Find the track index within the existing playlist and play from there
+            if (shouldAutoplay() && m_app) {
+                router()->setActiveToViewed();
+                m_app->playIndex(0);
+            }
+            return;
+        }
+    }
+
+    QString targetId = resolveTargetPlaylistId(playlistName);
+    if (targetId.isEmpty())
+        return;
+
+    router()->setViewedPlaylistId(targetId);
+    TrackListModel *model = m_store->displayedPlaylist();
+    if (!model)
+        return;
+
+    int startRow = model->count();
+    int playRow = startRow;
+
+    for (int i = 0; i < tracks.size(); ++i) {
+        model->addTrack(MetadataExtractor::toTrackInfo(tracks[i]));
+        if (tracks[i].filePath == startFilePath)
+            playRow = startRow + i;
+    }
+
+    if (shouldAutoplay() && m_app) {
+        router()->setActiveToViewed();
+        m_app->playIndex(playRow);
+    }
+}
+
 // Context menu: Append to viewed playlist (no autoplay, no target resolution)
 void BrowseActivationService::appendFilteredTracksToViewed(const QVariantList &filter,
                                                             const QString &groupType,
