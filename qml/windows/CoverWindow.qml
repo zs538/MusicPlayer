@@ -10,7 +10,7 @@ Window {
     width: _w; height: _h
     minimumWidth: _w; maximumWidth: _w; minimumHeight: _h; maximumHeight: _h
     visible: true; color: "#000"
-    flags: Qt.Window | Qt.WindowTitleHint | Qt.WindowCloseButtonHint
+    flags: Qt.Window | Qt.WindowTitleHint | Qt.WindowSystemMenuHint | Qt.WindowCloseButtonHint
     title: (artist && trackTitle) ? artist + " - " + trackTitle + " (" + img.sourceSize.width + "×" + img.sourceSize.height + ")" : img.sourceSize.width + "×" + img.sourceSize.height
 
     Shortcut { sequence: "Escape"; onActivated: root.close() }

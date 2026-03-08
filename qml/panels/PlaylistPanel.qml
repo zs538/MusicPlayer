@@ -8,6 +8,16 @@ Rectangle {
     id: root
     color: Theme.surface
 
+    component TextCursor: HoverHandler {
+        cursorShape: Qt.IBeamCursor
+    }
+
+    component PointingCursor: HoverHandler {
+        cursorShape: Qt.PointingHandCursor
+    }
+
+    readonly property int playlistRowHeight: 22
+
     property string playlistId: ViewedPlaylistRouter.viewedPlaylistId
     property bool isUserCreated: {
         let idx = AppViewModel.playlistStore.indexOfUuid(playlistId)
@@ -183,6 +193,7 @@ Rectangle {
                 
                 MenuItem {
                     text: "New playlist"
+                    PointingCursor {}
                     onTriggered: {
                         let newId = AppViewModel.playlistStore.createNewTab()
                         ViewedPlaylistRouter.viewedPlaylistId = newId
@@ -198,11 +209,7 @@ Rectangle {
                     property string plName
                     
                     text: plName
-                    font.bold: plUuid === root.playlistId
-                    icon.source: (plUuid === ViewedPlaylistRouter.activePlaylistId && AppViewModel.playbackState !== AppViewModel.Stopped)
-                        ? Qt.resolvedUrl("../icons/play_arrow.svg") : ""
-                    icon.color: Theme.accent
-                    
+                    PointingCursor {}
                     onTriggered: ViewedPlaylistRouter.viewedPlaylistId = plUuid
                 }
             }
@@ -217,6 +224,7 @@ Rectangle {
                 id: playlistActionsMenu
                 MenuItem {
                     text: "Rename"
+                    PointingCursor {}
                     onTriggered: {
                         let dialog = renameDialog.createObject(root, {playlistId: root.playlistId})
                         dialog.open()
@@ -224,17 +232,20 @@ Rectangle {
                 }
                 MenuItem {
                     text: "Clear"
+                    PointingCursor {}
                     onTriggered: controller.model?.clear()
                 }
                 MenuItem {
                     text: "Make permanent"
                     visible: !root.isUserCreated
                     height: visible ? implicitHeight : 0
+                    PointingCursor {}
                     onTriggered: AppViewModel.playlistStore.setPlaylistUserCreated(root.playlistId, true)
                 }
                 MenuSeparator {}
                 MenuItem {
                     text: "Import..."
+                    PointingCursor {}
                     onTriggered: {
                         let dialog = importDialog.createObject(root)
                         dialog.open()
@@ -242,6 +253,7 @@ Rectangle {
                 }
                 MenuItem {
                     text: "Export..."
+                    PointingCursor {}
                     onTriggered: {
                         let dialog = exportDialog.createObject(root, {playlistId: root.playlistId})
                         dialog.open()
@@ -251,6 +263,7 @@ Rectangle {
                 MenuItem {
                     text: "Close"
                     enabled: AppViewModel.playlistTabsModel.rowCount() > 1
+                    PointingCursor {}
                     onTriggered: AppViewModel.playlistStore.closeTab(root.playlistId)
                 }
             }
@@ -285,7 +298,7 @@ Rectangle {
             onPressed: {
                 // Check if click is below all entries (in empty space)
                 let clickY = mouseY + listView.contentY
-                let lastEntryBottom = listView.count * 18
+                let lastEntryBottom = listView.count * root.playlistRowHeight
                 if (clickY >= lastEntryBottom) {
                     isDragSelecting = true
                     didDragSelect = false
@@ -296,10 +309,10 @@ Rectangle {
             onPositionChanged: (mouse) => {
                 if (pressed && isDragSelecting && listView.count > 0) {
                     let globalY = mouse.y + listView.contentY
-                    let lastEntryBottom = listView.count * 18
+                    let lastEntryBottom = listView.count * root.playlistRowHeight
                     // Only select if dragging into entry area
                     if (globalY < lastEntryBottom) {
-                        let hoverIndex = Math.floor(globalY / 18)
+                        let hoverIndex = Math.floor(globalY / root.playlistRowHeight)
                         hoverIndex = Math.max(0, Math.min(listView.count - 1, hoverIndex))
                         controller.selectRange(hoverIndex, listView.count - 1)
                         didDragSelect = true
@@ -332,14 +345,14 @@ Rectangle {
             height: 2
             color: Theme.accent
             visible: DragManager.isDragging && DragManager.dropTargetId === root.playlistId
-            y: Math.max(0, DragManager.dropTargetIndex * 18 - listView.contentY)
+            y: Math.max(0, DragManager.dropTargetIndex * root.playlistRowHeight - listView.contentY)
             z: 100
         }
 
         delegate: Rectangle {
             id: del
             width: listView.width
-            height: 18
+            height: root.playlistRowHeight
 
             required property int index
             required property string filePath
@@ -355,20 +368,44 @@ Rectangle {
                 function onSelectionChanged() { del.selected = controller.isRowSelected(del.index) }
             }
 
-            color: selected ? Theme.selected : playing ? Theme.accentLight : ma.containsMouse ? Theme.hover : "transparent"
+            color: selected ? Theme.selected : ma.containsMouse ? Theme.hover : "transparent"
             opacity: DragManager.isDragging && DragManager.sourceId === root.playlistId && DragManager.draggedIndices.indexOf(index) >= 0 ? 0.4 : 1
+
+            Rectangle {
+                anchors.left: parent.left
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                width: del.playing ? 3 : 0
+                color: Theme.accent
+                visible: del.playing
+            }
 
             RowLayout {
                 anchors.fill: parent
-                anchors.margins: 4
-                spacing: 4
+                anchors.leftMargin: del.playing ? 8 : 6
+                anchors.rightMargin: 6
+                anchors.topMargin: 2
+                anchors.bottomMargin: 2
+                spacing: 6
+
+                Label {
+                    text: del.playing ? "▶" : ""
+                    color: Theme.accent
+                    font.pixelSize: 10
+                    font.bold: true
+                    Layout.preferredWidth: 10
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
 
                 Label {
                     text: del.title || del.filePath.split('/').pop()
                     color: del.playing ? Theme.accent : Theme.textPrimary
                     font.pixelSize: 11
+                    font.bold: del.playing
                     elide: Text.ElideRight
                     Layout.fillWidth: true
+                    verticalAlignment: Text.AlignVCenter
                 }
 
                 Label {
@@ -380,8 +417,9 @@ Rectangle {
                     }
                     color: Theme.textSecondary
                     font.pixelSize: 11
-                    Layout.preferredWidth: 35
+                    Layout.preferredWidth: 40
                     horizontalAlignment: Text.AlignRight
+                    verticalAlignment: Text.AlignVCenter
                 }
             }
 
@@ -390,6 +428,7 @@ Rectangle {
                 anchors.fill: parent
                 hoverEnabled: true
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
+                cursorShape: DragManager.isDragging && DragManager.sourceId === root.playlistId ? Qt.ClosedHandCursor : Qt.ArrowCursor
                 property point pressPos
 
                 onPressed: function(mouse) {
@@ -423,7 +462,7 @@ Rectangle {
                     }
                     if (DragManager.isDragging) {
                         let y = mapToItem(listView, mouse.x, mouse.y).y + listView.contentY
-                        DragManager.setDropTarget(root.playlistId, Math.max(0, Math.min(Math.round(y / 18), listView.count)))
+                        DragManager.setDropTarget(root.playlistId, Math.max(0, Math.min(Math.round(y / del.height), listView.count)))
                     }
                 }
 
@@ -467,14 +506,33 @@ Rectangle {
     Menu {
         id: contextMenu
 
-        MenuItem { text: "Play"; enabled: controller.selectedCount > 0; onTriggered: AppViewModel.browseActivation.activatePlaylistRow(controller.selectedRows()[0]) }
-        MenuItem { text: "Remove"; enabled: controller.selectedCount > 0; onTriggered: controller.removeSelected() }
+        MenuItem {
+            text: "Play"
+            enabled: controller.selectedCount > 0
+            PointingCursor {}
+            onTriggered: AppViewModel.browseActivation.activatePlaylistRow(controller.selectedRows()[0])
+        }
+        MenuItem {
+            text: "Remove"
+            enabled: controller.selectedCount > 0
+            PointingCursor {}
+            onTriggered: controller.removeSelected()
+        }
         MenuSeparator {}
-        MenuItem { text: "Select all"; onTriggered: controller.selectAll() }
-        MenuItem { text: "Clear playlist"; onTriggered: controller.model?.clear() }
+        MenuItem {
+            text: "Select all"
+            PointingCursor {}
+            onTriggered: controller.selectAll()
+        }
+        MenuItem {
+            text: "Clear playlist"
+            PointingCursor {}
+            onTriggered: controller.model?.clear()
+        }
         MenuSeparator {}
         MenuItem { 
             text: "Rename playlist"
+            PointingCursor {}
             onTriggered: {
                 let dialog = renameDialog.createObject(root, {playlistId: root.playlistId})
                 dialog.open()
@@ -483,11 +541,13 @@ Rectangle {
         MenuItem { 
             text: "Close playlist"
             enabled: AppViewModel.playlistTabsModel.rowCount() > 1
+            PointingCursor {}
             onTriggered: AppViewModel.playlistStore.closeTab(root.playlistId)
         }
         MenuSeparator {}
         MenuItem { 
             text: "Import playlist..."
+            PointingCursor {}
             onTriggered: {
                 let dialog = importDialog.createObject(root)
                 dialog.open()
@@ -495,6 +555,7 @@ Rectangle {
         }
         MenuItem { 
             text: "Export playlist..."
+            PointingCursor {}
             onTriggered: {
                 let dialog = exportDialog.createObject(root, {playlistId: root.playlistId})
                 dialog.open()
@@ -503,6 +564,7 @@ Rectangle {
         MenuSeparator {}
         MenuItem { 
             text: "New playlist"
+            PointingCursor {}
             onTriggered: {
                 let newId = AppViewModel.playlistStore.createNewTab()
                 ViewedPlaylistRouter.viewedPlaylistId = newId
@@ -528,6 +590,7 @@ Rectangle {
                     id: nameField
                     Layout.fillWidth: true
                     selectByMouse: true
+                    TextCursor {}
                     Component.onCompleted: {
                         let idx = AppViewModel.playlistStore.indexOfUuid(playlistId)
                         if (idx >= 0) {
@@ -556,7 +619,7 @@ Rectangle {
             fileMode: FileDialog.OpenFile
             nameFilters: ["Playlist files (*.m3u *.m3u8)", "All files (*)"]
             onAccepted: {
-                let path = selectedFile.toString().replace("file://", "")
+                let path = String(selectedFile)
                 let newId = AppViewModel.playlistStore.importPlaylist(path)
                 if (newId) {
                     ViewedPlaylistRouter.viewedPlaylistId = newId
@@ -575,7 +638,7 @@ Rectangle {
             nameFilters: ["M3U8 Playlist (*.m3u8)", "M3U Playlist (*.m3u)"]
             defaultSuffix: "m3u8"
             onAccepted: {
-                let path = selectedFile.toString().replace("file://", "")
+                let path = String(selectedFile)
                 AppViewModel.playlistStore.exportPlaylist(playlistId, path)
             }
         }

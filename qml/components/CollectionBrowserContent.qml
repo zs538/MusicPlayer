@@ -10,6 +10,14 @@ import MusicPlayer
 Item {
     id: root
 
+    component PointingCursor: HoverHandler {
+        cursorShape: Qt.PointingHandCursor
+    }
+
+    component TextCursor: HoverHandler {
+        cursorShape: Qt.IBeamCursor
+    }
+
     // Initial state (set once by parent)
     property var initialFilter: []
     property string initialGroupBy: "albumartist"
@@ -74,6 +82,7 @@ Item {
         id: sharedContextMenu
         MenuItem {
             text: qsTr("Append to viewed playlist")
+            PointingCursor {}
             onTriggered: {
                 if (root._ctxEntryType === "group")
                     AppViewModel.browseActivation.appendFilteredTracksToViewed(browserModel.filter, root._ctxGroupType, root._ctxGroupValue)
@@ -83,6 +92,7 @@ Item {
         }
         MenuItem {
             text: qsTr("Append after currently playing")
+            PointingCursor {}
             onTriggered: {
                 if (root._ctxEntryType === "group")
                     AppViewModel.browseActivation.appendFilteredTracksAfterPlaying(browserModel.filter, root._ctxGroupType, root._ctxGroupValue)
@@ -92,6 +102,7 @@ Item {
         }
         MenuItem {
             text: qsTr("Open in new playlist")
+            PointingCursor {}
             onTriggered: {
                 if (root._ctxEntryType === "group")
                     AppViewModel.browseActivation.openFilteredTracksInNewPlaylist(browserModel.filter, root._ctxGroupType, root._ctxGroupValue)
@@ -107,6 +118,17 @@ Item {
         root._ctxGroupValue = groupValue
         root._ctxFilePath = filePath
         sharedContextMenu.popup()
+    }
+
+    TapHandler {
+        acceptedButtons: Qt.LeftButton
+        gesturePolicy: TapHandler.ReleaseWithinBounds
+        onTapped: function(eventPoint, button) {
+            let searchFieldPosition = searchField.mapFromItem(root, eventPoint.position.x, eventPoint.position.y)
+            if (searchField.activeFocus && !searchField.contains(searchFieldPosition)) {
+                root.forceActiveFocus()
+            }
+        }
     }
 
     ColumnLayout {
@@ -138,6 +160,12 @@ Item {
                     icon.color: Theme.textPrimary
                     icon.width: 12; icon.height: 12
                     onClicked: root.doGoBack()
+
+                    MouseArea {
+                        anchors.fill: parent
+                        acceptedButtons: Qt.NoButton
+                        cursorShape: parent.enabled ? Qt.PointingHandCursor : Qt.ForbiddenCursor
+                    }
                 }
 
                 // Forward button
@@ -152,6 +180,12 @@ Item {
                     icon.color: Theme.textPrimary
                     icon.width: 12; icon.height: 12
                     onClicked: root.doGoForward()
+
+                    MouseArea {
+                        anchors.fill: parent
+                        acceptedButtons: Qt.NoButton
+                        cursorShape: parent.enabled ? Qt.PointingHandCursor : Qt.ForbiddenCursor
+                    }
                 }
 
                 // Title on the left
@@ -185,7 +219,15 @@ Item {
                     rightPadding: 4
                     topPadding: 2
                     bottomPadding: 2
+                    hoverEnabled: true
+                    selectByMouse: true
                     onTextChanged: browserModel.searchFilter = text
+
+                    MouseArea {
+                        anchors.fill: parent
+                        acceptedButtons: Qt.NoButton
+                        cursorShape: Qt.IBeamCursor
+                    }
                 }
 
                 // Sort button
@@ -198,6 +240,7 @@ Item {
                           browserModel.sortBy === "count" ? "Count" : "Sort"
                     font.pixelSize: 10
                     flat: true
+                    PointingCursor {}
                     onClicked: sortMenu.popup()
 
                     Menu {
@@ -206,12 +249,14 @@ Item {
                             text: "Name (A-Z)"
                             checkable: true
                             checked: browserModel.sortBy === "name" && browserModel.sortAscending
+                            PointingCursor {}
                             onTriggered: { browserModel.sortBy = "name"; browserModel.sortAscending = true }
                         }
                         MenuItem {
                             text: "Name (Z-A)"
                             checkable: true
                             checked: browserModel.sortBy === "name" && !browserModel.sortAscending
+                            PointingCursor {}
                             onTriggered: { browserModel.sortBy = "name"; browserModel.sortAscending = false }
                         }
                         MenuSeparator {}
@@ -219,12 +264,14 @@ Item {
                             text: "Year (Oldest)"
                             checkable: true
                             checked: browserModel.sortBy === "year" && browserModel.sortAscending
+                            PointingCursor {}
                             onTriggered: { browserModel.sortBy = "year"; browserModel.sortAscending = true }
                         }
                         MenuItem {
                             text: "Year (Newest)"
                             checkable: true
                             checked: browserModel.sortBy === "year" && !browserModel.sortAscending
+                            PointingCursor {}
                             onTriggered: { browserModel.sortBy = "year"; browserModel.sortAscending = false }
                         }
                         MenuSeparator {}
@@ -232,6 +279,7 @@ Item {
                             text: "Track Count"
                             checkable: true
                             checked: browserModel.sortBy === "count"
+                            PointingCursor {}
                             onTriggered: { browserModel.sortBy = "count"; browserModel.sortAscending = false }
                         }
                     }
@@ -246,6 +294,7 @@ Item {
                     icon.source: Qt.resolvedUrl("../icons/more_vert.svg")
                     icon.color: Theme.textPrimary
                     icon.width: 12; icon.height: 12
+                    PointingCursor {}
                     onClicked: optionsMenu.popup()
 
                     Menu {
@@ -256,6 +305,7 @@ Item {
                             text: "Show header"
                             checkable: true
                             checked: root.showHeader
+                            PointingCursor {}
                             onTriggered: root.showHeader = !root.showHeader
                         }
 
@@ -264,6 +314,7 @@ Item {
                             text: "Expandable groups"
                             checkable: true
                             checked: root.expandableGroups
+                            PointingCursor {}
                             onTriggered: root.expandableGroups = !root.expandableGroups
                         }
 
@@ -279,6 +330,7 @@ Item {
                                 ButtonGroup.group: viewModeGroup
                                 checkable: true
                                 checked: root.viewMode === "grid"
+                                PointingCursor {}
                                 onTriggered: root.viewMode = "grid"
                             }
                             MenuItem {
@@ -286,6 +338,7 @@ Item {
                                 ButtonGroup.group: viewModeGroup
                                 checkable: true
                                 checked: root.viewMode === "list"
+                                PointingCursor {}
                                 onTriggered: root.viewMode = "list"
                             }
                             MenuItem {
@@ -293,6 +346,7 @@ Item {
                                 ButtonGroup.group: viewModeGroup
                                 checkable: true
                                 checked: root.viewMode === "tracks"
+                                PointingCursor {}
                                 onTriggered: root.viewMode = "tracks"
                             }
                         }
@@ -303,36 +357,42 @@ Item {
                                 text: "Album Artist"
                                 checkable: true
                                 checked: browserModel.groupBy === "albumartist"
+                                PointingCursor {}
                                 onTriggered: browserModel.groupBy = "albumartist"
                             }
                             MenuItem {
                                 text: "Artist"
                                 checkable: true
                                 checked: browserModel.groupBy === "artist"
+                                PointingCursor {}
                                 onTriggered: browserModel.groupBy = "artist"
                             }
                             MenuItem {
                                 text: "Album"
                                 checkable: true
                                 checked: browserModel.groupBy === "album"
+                                PointingCursor {}
                                 onTriggered: browserModel.groupBy = "album"
                             }
                             MenuItem {
                                 text: "Genre"
                                 checkable: true
                                 checked: browserModel.groupBy === "genre"
+                                PointingCursor {}
                                 onTriggered: browserModel.groupBy = "genre"
                             }
                             MenuItem {
                                 text: "Year"
                                 checkable: true
                                 checked: browserModel.groupBy === "year"
+                                PointingCursor {}
                                 onTriggered: browserModel.groupBy = "year"
                             }
                             MenuItem {
                                 text: "None (Tracks)"
                                 checkable: true
                                 checked: browserModel.groupBy === "none"
+                                PointingCursor {}
                                 onTriggered: browserModel.groupBy = "none"
                             }
                         }
@@ -347,6 +407,7 @@ Item {
                                 ButtonGroup.group: openActionGroup
                                 checkable: true
                                 checked: root._currentOpenAction !== "queueTracks"
+                                PointingCursor {}
                                 onTriggered: { Settings.setGroupTypeOpenAction(browserModel.groupBy, "openPanel"); root._currentOpenAction = "openPanel" }
                             }
                             MenuItem {
@@ -354,6 +415,7 @@ Item {
                                 ButtonGroup.group: openActionGroup
                                 checkable: true
                                 checked: root._currentOpenAction === "queueTracks"
+                                PointingCursor {}
                                 onTriggered: { Settings.setGroupTypeOpenAction(browserModel.groupBy, "queueTracks"); root._currentOpenAction = "queueTracks" }
                             }
 
@@ -364,6 +426,7 @@ Item {
                                 checkable: true
                                 enabled: root._currentOpenAction !== "queueTracks"
                                 checked: Settings.groupTypeExploreInWindow(browserModel.groupBy)
+                                PointingCursor {}
                                 onTriggered: Settings.setGroupTypeExploreInWindow(browserModel.groupBy, !Settings.groupTypeExploreInWindow(browserModel.groupBy))
                             }
                         }
@@ -536,6 +599,7 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+                        cursorShape: Qt.PointingHandCursor
 
                         onClicked: (mouse) => {
                             if (mouse.button === Qt.RightButton) {
@@ -731,6 +795,7 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+                        cursorShape: Qt.PointingHandCursor
 
                         onClicked: (mouse) => {
                             if (mouse.button === Qt.RightButton) {
@@ -810,6 +875,7 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+                        cursorShape: Qt.PointingHandCursor
 
                         onClicked: (mouse) => {
                             if (mouse.button === Qt.RightButton)
@@ -906,6 +972,7 @@ Item {
                             anchors.fill: parent
                             hoverEnabled: true
                             acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+                            cursorShape: Qt.PointingHandCursor
 
                             onClicked: (mouse) => {
                                 if (mouse.button === Qt.RightButton) expTrackCtxMenu.popup()
@@ -929,14 +996,17 @@ Item {
                             id: expTrackCtxMenu
                             MenuItem {
                                 text: "Append to viewed playlist"
+                                PointingCursor {}
                                 onTriggered: AppViewModel.browseActivation.appendCollectionEntryToViewed("t:" + expTrackRow.modelData.filePath)
                             }
                             MenuItem {
                                 text: "Append after currently playing"
+                                PointingCursor {}
                                 onTriggered: AppViewModel.browseActivation.appendCollectionEntryAfterPlaying("t:" + expTrackRow.modelData.filePath)
                             }
                             MenuItem {
                                 text: "Open in new playlist"
+                                PointingCursor {}
                                 onTriggered: AppViewModel.browseActivation.openCollectionEntryInNewPlaylist("t:" + expTrackRow.modelData.filePath)
                             }
                         }

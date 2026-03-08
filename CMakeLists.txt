@@ -7,14 +7,125 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Quick QuickControls2 Multimedia Concurrent Sql)
-find_package(PkgConfig REQUIRED)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
-pkg_check_modules(AVFORMAT REQUIRED libavformat)
-pkg_check_modules(AVCODEC REQUIRED libavcodec)
-pkg_check_modules(AVUTIL REQUIRED libavutil)
-pkg_check_modules(SWRESAMPLE REQUIRED libswresample)
-pkg_check_modules(TAGLIB REQUIRED taglib)
+set(MSYS2_MINGW_PREFIX "C:/msys64/mingw64")
+
+find_package(Qt6 6.5 REQUIRED COMPONENTS Quick QuickControls2 Multimedia Concurrent Sql Svg)
+
+set(THIRD_PARTY_INCLUDE_DIRS "")
+set(THIRD_PARTY_LIBRARIES "")
+
+find_package(PkgConfig QUIET)
+
+if(PkgConfig_FOUND)
+    pkg_check_modules(AVFORMAT REQUIRED libavformat)
+    pkg_check_modules(AVCODEC REQUIRED libavcodec)
+    pkg_check_modules(AVUTIL REQUIRED libavutil)
+    pkg_check_modules(SWRESAMPLE REQUIRED libswresample)
+    pkg_check_modules(TAGLIB REQUIRED taglib)
+
+    list(APPEND THIRD_PARTY_INCLUDE_DIRS
+        ${AVFORMAT_INCLUDE_DIRS}
+        ${AVCODEC_INCLUDE_DIRS}
+        ${AVUTIL_INCLUDE_DIRS}
+        ${SWRESAMPLE_INCLUDE_DIRS}
+        ${TAGLIB_INCLUDE_DIRS}
+    )
+
+    list(APPEND THIRD_PARTY_LIBRARIES
+        ${AVFORMAT_LIBRARIES}
+        ${AVCODEC_LIBRARIES}
+        ${AVUTIL_LIBRARIES}
+        ${SWRESAMPLE_LIBRARIES}
+        ${TAGLIB_LIBRARIES}
+    )
+else()
+    if(WIN32)
+        find_path(FFMPEG_INCLUDE_DIR
+            NAMES libavformat/avformat.h
+            PATHS ${MSYS2_MINGW_PREFIX}/include
+            NO_DEFAULT_PATH
+        )
+        find_path(TAGLIB_INCLUDE_DIR
+            NAMES taglib/fileref.h
+            PATHS ${MSYS2_MINGW_PREFIX}/include
+            NO_DEFAULT_PATH
+        )
+
+        find_library(AVFORMAT_LIBRARY
+            NAMES avformat libavformat.dll.a avformat-62
+            PATHS ${MSYS2_MINGW_PREFIX}/lib
+            NO_DEFAULT_PATH
+        )
+        find_library(AVCODEC_LIBRARY
+            NAMES avcodec libavcodec.dll.a avcodec-62
+            PATHS ${MSYS2_MINGW_PREFIX}/lib
+            NO_DEFAULT_PATH
+        )
+        find_library(AVUTIL_LIBRARY
+            NAMES avutil libavutil.dll.a avutil-60
+            PATHS ${MSYS2_MINGW_PREFIX}/lib
+            NO_DEFAULT_PATH
+        )
+        find_library(SWRESAMPLE_LIBRARY
+            NAMES swresample libswresample.dll.a swresample-5
+            PATHS ${MSYS2_MINGW_PREFIX}/lib
+            NO_DEFAULT_PATH
+        )
+        find_library(TAGLIB_LIBRARY
+            NAMES tag libtag.dll.a taglib
+            PATHS ${MSYS2_MINGW_PREFIX}/lib
+            NO_DEFAULT_PATH
+        )
+
+        if(NOT FFMPEG_INCLUDE_DIR OR NOT TAGLIB_INCLUDE_DIR OR NOT AVFORMAT_LIBRARY OR NOT AVCODEC_LIBRARY OR NOT AVUTIL_LIBRARY OR NOT SWRESAMPLE_LIBRARY OR NOT TAGLIB_LIBRARY)
+            message(FATAL_ERROR "Could not find FFmpeg/TagLib in C:/msys64/mingw64. Install the MSYS2 mingw64 FFmpeg and TagLib packages, then re-run CMake.")
+        endif()
+
+        list(APPEND THIRD_PARTY_INCLUDE_DIRS
+            ${FFMPEG_INCLUDE_DIR}
+            ${TAGLIB_INCLUDE_DIR}
+        )
+
+        list(APPEND THIRD_PARTY_LIBRARIES
+            ${AVFORMAT_LIBRARY}
+            ${AVCODEC_LIBRARY}
+            ${AVUTIL_LIBRARY}
+            ${SWRESAMPLE_LIBRARY}
+            ${TAGLIB_LIBRARY}
+            # MinGW system libraries for threading/time functions
+            -lwinpthread -lwinmm
+        )
+    else()
+        find_package(FFmpeg REQUIRED COMPONENTS avformat avcodec avutil swresample)
+        find_package(TagLib REQUIRED)
+
+        list(APPEND THIRD_PARTY_INCLUDE_DIRS
+            ${FFMPEG_INCLUDE_DIRS}
+            ${TagLib_INCLUDE_DIRS}
+        )
+
+        if(TARGET FFmpeg::avformat)
+            list(APPEND THIRD_PARTY_LIBRARIES
+                FFmpeg::avformat
+                FFmpeg::avcodec
+                FFmpeg::avutil
+                FFmpeg::swresample
+            )
+        else()
+            list(APPEND THIRD_PARTY_LIBRARIES
+                ${FFMPEG_LIBRARIES}
+            )
+        endif()
+
+        if(TARGET TagLib::TagLib)
+            list(APPEND THIRD_PARTY_LIBRARIES TagLib::TagLib)
+        else()
+            list(APPEND THIRD_PARTY_LIBRARIES ${TagLib_LIBRARIES})
+        endif()
+    endif()
+endif()
 
 qt_standard_project_setup(REQUIRES 6.5)
 
@@ -141,11 +252,7 @@ qt_add_qml_module(appmusicplayer
 
 target_include_directories(appmusicplayer PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${AVFORMAT_INCLUDE_DIRS}
-    ${AVCODEC_INCLUDE_DIRS}
-    ${AVUTIL_INCLUDE_DIRS}
-    ${SWRESAMPLE_INCLUDE_DIRS}
-    ${TAGLIB_INCLUDE_DIRS}
+    ${THIRD_PARTY_INCLUDE_DIRS}
 )
 
 target_link_libraries(appmusicplayer PRIVATE
@@ -154,11 +261,8 @@ target_link_libraries(appmusicplayer PRIVATE
     Qt6::Multimedia
     Qt6::Concurrent
     Qt6::Sql
-    ${AVFORMAT_LIBRARIES}
-    ${AVCODEC_LIBRARIES}
-    ${AVUTIL_LIBRARIES}
-    ${SWRESAMPLE_LIBRARIES}
-    ${TAGLIB_LIBRARIES}
+    Qt6::Svg
+    ${THIRD_PARTY_LIBRARIES}
 )
 
 install(TARGETS appmusicplayer

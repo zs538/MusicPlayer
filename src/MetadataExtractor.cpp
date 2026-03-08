@@ -18,7 +18,7 @@ TrackInfo extractTrackInfo(const QString &filePath)
         return track;
     }
     
-    track.filePath = QDir::cleanPath(fileInfo.absoluteFilePath());
+    track.filePath = LibraryDatabase::normalizeFileSystemPath(fileInfo.absoluteFilePath());
     track.fileName = fileInfo.fileName();
     track.fileSize = fileInfo.size();
     track.fileType = fileInfo.suffix().toUpper();

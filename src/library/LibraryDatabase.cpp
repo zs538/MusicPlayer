@@ -5,6 +5,7 @@
 #include <QDir>
 #include <QUuid>
 #include <QDebug>
+#include <QUrl>
 
 LibraryDatabase::LibraryDatabase(QObject *parent)
     : QObject(parent)
@@ -208,21 +209,6 @@ void LibraryDatabase::bindTrackToQuery(QSqlQuery &query, const LibraryTrack &tra
     query.bindValue(":codec", track.codec);
 }
 
-bool LibraryDatabase::upsertTrack(const LibraryTrack &track)
-{
-    QSqlQuery query(m_db);
-    query.prepare(upsertTrackSql());
-    bindTrackToQuery(query, track);
-    
-    if (!query.exec()) {
-        qWarning() << "Failed to upsert track:" << query.lastError().text();
-        return false;
-    }
-    
-    emit databaseChanged();
-    return true;
-}
-
 bool LibraryDatabase::removeTrack(qint64 id)
 {
     QSqlQuery query(m_db);
@@ -239,11 +225,49 @@ bool LibraryDatabase::removeTrack(qint64 id)
     return true;
 }
 
+QString LibraryDatabase::normalizeFileSystemPath(const QString &path)
+{
+    QString normalized = path.trimmed();
+    if (normalized.isEmpty()) {
+        return normalized;
+    }
+
+    const QUrl url(normalized);
+    if (url.isValid() && url.isLocalFile()) {
+        normalized = url.toLocalFile();
+    }
+
+    normalized = QDir::cleanPath(QDir::fromNativeSeparators(normalized));
+
+#ifdef Q_OS_WIN
+    if (normalized.size() >= 3 && normalized.at(0) == '/' && normalized.at(2) == ':') {
+        normalized.remove(0, 1);
+    }
+
+    if (normalized.size() >= 2 && normalized.at(1) == ':') {
+        normalized[0] = normalized.at(0).toUpper();
+    }
+#endif
+
+    return normalized;
+}
+
+QString LibraryDatabase::normalizeWatchFolderPath(const QString &path)
+{
+    return normalizeFileSystemPath(path);
+}
+
 bool LibraryDatabase::removeTracksInFolder(const QString &folderPath)
 {
+    const QString normalizedFolderPath = normalizeWatchFolderPath(folderPath);
     QSqlQuery query(m_db);
-    QString pattern = folderPath + "/%";
-    query.prepare("DELETE FROM tracks WHERE file_path LIKE :pattern");
+    QString pattern = normalizedFolderPath + "/%";
+    query.prepare(R"(
+        DELETE FROM tracks
+        WHERE lower(replace(file_path, '\\', '/')) = lower(:folderPath)
+           OR lower(replace(file_path, '\\', '/')) LIKE lower(:pattern)
+    )");
+    query.bindValue(":folderPath", normalizedFolderPath);
     query.bindValue(":pattern", pattern);
     
     if (!query.exec()) {
@@ -251,10 +275,23 @@ bool LibraryDatabase::removeTracksInFolder(const QString &folderPath)
     }
     
     int affected = query.numRowsAffected();
-    qDebug() << "removeTracksInFolder:" << folderPath << "- removed" << affected << "tracks";
+    qDebug() << "removeTracksInFolder:" << normalizedFolderPath << "- removed" << affected << "tracks";
     
     emit databaseChanged();
     return true;
+}
+
+std::optional<LibraryTrack> LibraryDatabase::trackByPath(const QString &filePath) const
+{
+    const QString normalizedPath = normalizeFileSystemPath(filePath);
+    QSqlQuery query(m_db);
+    query.prepare("SELECT * FROM tracks WHERE file_path = :path");
+    query.bindValue(":path", normalizedPath);
+    
+    if (query.exec() && query.next()) {
+        return trackFromQuery(query);
+    }
+    return std::nullopt;
 }
 
 LibraryTrack LibraryDatabase::trackFromQuery(const QSqlQuery &query) const
@@ -291,24 +328,12 @@ LibraryTrack LibraryDatabase::trackFromQuery(const QSqlQuery &query) const
     return track;
 }
 
-std::optional<LibraryTrack> LibraryDatabase::trackByPath(const QString &filePath) const
-{
-    QSqlQuery query(m_db);
-    query.prepare("SELECT * FROM tracks WHERE file_path = :path");
-    query.bindValue(":path", filePath);
-    
-    if (query.exec() && query.next()) {
-        return trackFromQuery(query);
-    }
-    return std::nullopt;
-}
-
 QVector<LibraryTrack> LibraryDatabase::allTracks() const
 {
     QVector<LibraryTrack> tracks;
     QSqlQuery query(m_db);
     query.exec("SELECT * FROM tracks ORDER BY artist, album, disc_number, track_number");
-    
+
     while (query.next()) {
         tracks.append(trackFromQuery(query));
     }
@@ -321,14 +346,14 @@ QVector<LibraryTrack> LibraryDatabase::searchTracks(const QString &searchQuery) 
     QSqlQuery query(m_db);
     QString pattern = "%" + searchQuery + "%";
     query.prepare(R"(
-        SELECT * FROM tracks 
-        WHERE title LIKE :pattern 
-           OR artist LIKE :pattern 
+        SELECT * FROM tracks
+        WHERE title LIKE :pattern
+           OR artist LIKE :pattern
            OR album LIKE :pattern
         ORDER BY artist, album, track_number
     )");
     query.bindValue(":pattern", pattern);
-    
+
     if (query.exec()) {
         while (query.next()) {
             tracks.append(trackFromQuery(query));
@@ -349,56 +374,97 @@ int LibraryDatabase::trackCount() const
 QVector<LibraryTrack> LibraryDatabase::tracksMatchingFilter(const TrackFilter &filter) const
 {
     QVector<LibraryTrack> tracks;
-    
+
     if (filter.isEmpty()) {
         return allTracks();
     }
-    
+
     QString sql = "SELECT * FROM tracks WHERE 1=1";
     QVector<QPair<QString, QVariant>> bindings;
     int paramIndex = 0;
-    
+
     for (const FilterCondition &cond : filter) {
         QString col = groupTypeToColumn(cond.field);
         if (col.isEmpty())
             continue;
-        
+
         QString paramName = QString(":p%1").arg(paramIndex++);
         sql += QString(" AND %1 = %2").arg(col, paramName);
         bindings.append({paramName, cond.value});
     }
-    
+
     sql += " ORDER BY album_artist, album, disc_number, track_number";
-    
+
     QSqlQuery query(m_db);
     query.prepare(sql);
     for (const auto &binding : bindings) {
         query.bindValue(binding.first, binding.second);
     }
-    
+
     if (query.exec()) {
         while (query.next()) {
             tracks.append(trackFromQuery(query));
         }
     }
-    
+
     return tracks;
 }
 
 bool LibraryDatabase::addWatchFolder(const QString &path)
 {
+    const QString normalizedPath = normalizeWatchFolderPath(path);
+    if (normalizedPath.isEmpty()) {
+        return false;
+    }
+
     QSqlQuery query(m_db);
     query.prepare("INSERT OR IGNORE INTO watch_folders (path) VALUES (:path)");
-    query.bindValue(":path", path);
+    query.bindValue(":path", normalizedPath);
     return query.exec();
 }
 
 bool LibraryDatabase::removeWatchFolder(const QString &path)
 {
-    QSqlQuery query(m_db);
-    query.prepare("DELETE FROM watch_folders WHERE path = :path");
-    query.bindValue(":path", path);
-    return query.exec();
+    const QString normalizedPath = normalizeWatchFolderPath(path);
+    if (normalizedPath.isEmpty()) {
+        return false;
+    }
+
+    QVector<qint64> idsToDelete;
+    QSqlQuery selectQuery(m_db);
+    selectQuery.prepare("SELECT id, path FROM watch_folders");
+
+    if (!selectQuery.exec()) {
+        return false;
+    }
+
+    while (selectQuery.next()) {
+        const qint64 id = selectQuery.value(0).toLongLong();
+        const QString storedPath = selectQuery.value(1).toString();
+        if (normalizeWatchFolderPath(storedPath) == normalizedPath) {
+            idsToDelete.append(id);
+        }
+    }
+
+    if (idsToDelete.isEmpty()) {
+        qDebug() << "removeWatchFolder:" << normalizedPath << "- no matching stored folder row found";
+        return true;
+    }
+
+    QSqlQuery deleteQuery(m_db);
+    deleteQuery.prepare("DELETE FROM watch_folders WHERE id = :id");
+
+    bool removedAny = false;
+    for (qint64 id : idsToDelete) {
+        deleteQuery.bindValue(":id", id);
+        if (!deleteQuery.exec()) {
+            return false;
+        }
+        removedAny = true;
+    }
+
+    qDebug() << "removeWatchFolder:" << normalizedPath << "- removed" << idsToDelete.size() << "stored folder row(s)";
+    return removedAny;
 }
 
 QStringList LibraryDatabase::watchFolders() const
@@ -406,9 +472,9 @@ QStringList LibraryDatabase::watchFolders() const
     QStringList folders;
     QSqlQuery query(m_db);
     query.exec("SELECT path FROM watch_folders ORDER BY path");
-    
+
     while (query.next()) {
-        folders.append(query.value(0).toString());
+        folders.append(normalizeWatchFolderPath(query.value(0).toString()));
     }
     return folders;
 }

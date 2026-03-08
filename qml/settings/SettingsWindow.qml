@@ -3,6 +3,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
 import QtQuick.Dialogs
+import QtCore
 import MusicPlayer
 
 Window {
@@ -12,8 +13,12 @@ Window {
     minimumWidth: 525
     minimumHeight: 300
     title: qsTr("Settings")
-    flags: Qt.Tool | Qt.WindowCloseButtonHint | Qt.WindowMinMaxButtonsHint
+    flags: Qt.Window | Qt.WindowTitleHint | Qt.WindowSystemMenuHint | Qt.WindowCloseButtonHint
     color: Theme.background
+
+    component PointingCursor: HoverHandler {
+        cursorShape: Qt.PointingHandCursor
+    }
 
     property int currentPage: 0
     readonly property var pages: ["Behavior", "Appearance", "Playback", "Library", "Session"]
@@ -41,6 +46,13 @@ Window {
         function onLibraryFoldersChanged() {
             root.refreshWatchFolders()
         }
+    }
+
+    Shortcut {
+        sequence: StandardKey.Cancel
+        context: Qt.WindowShortcut
+        enabled: root.active
+        onActivated: root.close()
     }
 
     RowLayout {
@@ -76,6 +88,8 @@ Window {
                         
                         MouseArea {
                             anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
                             onClicked: root.currentPage = index
                         }
                     }
@@ -102,96 +116,89 @@ Window {
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: 2
-                    spacing: 8
-                    
-                    // Adding tracks
-                    GroupBox {
-                        title: "Adding track(s) will"
-                        Layout.fillWidth: true
-                        
-                        ColumnLayout {
-                            anchors.fill: parent
-                            ComboBox {
-                                Layout.fillWidth: true
-                                model: ["Never start playing", "Play only if the playback is stopped", "Always start playing"]
-                                currentIndex: Settings.addTracksPolicy
-                                onCurrentValueChanged: Settings.addTracksPolicy = currentIndex
-                            }
-                        }
-                    }
-                    
-                    // Previous button
-                    GroupBox {
-                        title: "Pressing previous button will"
-                        Layout.fillWidth: true
-                        
-                        ColumnLayout {
-                            anchors.fill: parent
-                            ComboBox {
-                                Layout.fillWidth: true
-                                model: ["Jump to previous track right away", "Restart song, then jump to the previous one if pressed again"]
-                                currentIndex: Settings.previousButtonAction
-                                onCurrentValueChanged: Settings.previousButtonAction = currentIndex
-                            }
-                        }
-                    }
-                    
-                    // Opening tracks
-                    GroupBox {
-                        title: "Opening track(s) will"
-                        Layout.fillWidth: true
-                        
-                        ColumnLayout {
-                            anchors.fill: parent
-                            spacing: 4
-                            
-                            RadioButton {
-                                text: "Append to viewed playlist"
-                                checked: Settings.openingTracksAction === 0
-                                onClicked: Settings.openingTracksAction = 0
-                            }
-                            
-                            RowLayout {
-                                RadioButton {
-                                    text: "Create a new playlist"
-                                    checked: Settings.openingTracksAction === 1
-                                    onClicked: Settings.openingTracksAction = 1
-                                }
-                                Label { 
-                                    text: "Count:" 
-                                    enabled: Settings.openingTracksAction === 1
-                                }
-                                SpinBox {
-                                    from: 1
-                                    to: 20
-                                    value: Settings.generatedPlaylistCount
-                                    onValueModified: Settings.generatedPlaylistCount = value
-                                    enabled: Settings.openingTracksAction === 1
-                                    Layout.preferredWidth: 80
-                                }
-                            }
-                        }
-                    }
-                    
-                    // Expanded track double-click
-                    GroupBox {
-                        title: "Double-clicking a track in expanded list view"
-                        Layout.fillWidth: true
+                    spacing: 12
 
-                        ColumnLayout {
-                            anchors.fill: parent
-                            spacing: 4
+                    Label {
+                        text: "Adding track(s) will"
+                        font.bold: true
+                    }
+                    ComboBox {
+                        Layout.fillWidth: true
+                        model: ["Never start playing", "Play only if the playback is stopped", "Always start playing"]
+                        currentIndex: Settings.addTracksPolicy
+                        PointingCursor {}
+                        onCurrentValueChanged: Settings.addTracksPolicy = currentIndex
+                    }
 
+                    Label {
+                        text: "Pressing previous button will"
+                        font.bold: true
+                    }
+                    ComboBox {
+                        Layout.fillWidth: true
+                        model: ["Jump to previous track right away", "Restart song, then jump to the previous one if pressed again"]
+                        currentIndex: Settings.previousButtonAction
+                        PointingCursor {}
+                        onCurrentValueChanged: Settings.previousButtonAction = currentIndex
+                    }
+
+                    Label {
+                        text: "Opening track(s) will"
+                        font.bold: true
+                    }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 4
+
+                        RadioButton {
+                            text: "Append to viewed playlist"
+                            checked: Settings.openingTracksAction === 0
+                            PointingCursor {}
+                            onClicked: Settings.openingTracksAction = 0
+                        }
+
+                        RowLayout {
                             RadioButton {
-                                text: "Add whole group and start playing from that track"
-                                checked: Settings.expandedTrackOpenMode === 0
-                                onClicked: Settings.expandedTrackOpenMode = 0
+                                text: "Create a new playlist"
+                                checked: Settings.openingTracksAction === 1
+                                PointingCursor {}
+                                onClicked: Settings.openingTracksAction = 1
                             }
-                            RadioButton {
-                                text: "Open just that one track"
-                                checked: Settings.expandedTrackOpenMode === 1
-                                onClicked: Settings.expandedTrackOpenMode = 1
+                            Label {
+                                text: "Count:"
+                                enabled: Settings.openingTracksAction === 1
                             }
+                            SpinBox {
+                                from: 1
+                                to: 20
+                                value: Settings.generatedPlaylistCount
+                                onValueModified: Settings.generatedPlaylistCount = value
+                                enabled: Settings.openingTracksAction === 1
+                                Layout.preferredWidth: 80
+                                PointingCursor {}
+                            }
+                        }
+                    }
+
+                    Label {
+                        text: "Double-clicking a track in expanded list view"
+                        font.bold: true
+                    }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 4
+
+                        RadioButton {
+                            text: "Add whole group and start playing from that track"
+                            checked: Settings.expandedTrackOpenMode === 0
+                            PointingCursor {}
+                            onClicked: Settings.expandedTrackOpenMode = 0
+                        }
+                        RadioButton {
+                            text: "Open just that one track"
+                            checked: Settings.expandedTrackOpenMode === 1
+                            PointingCursor {}
+                            onClicked: Settings.expandedTrackOpenMode = 1
                         }
                     }
 
@@ -217,6 +224,7 @@ Window {
                             to: 300
                             stepSize: 10
                             value: Settings.gridCellMinWidth
+                            PointingCursor {}
                             onValueModified: Settings.gridCellMinWidth = value
                         }
                         Label { text: "px"; color: Theme.textSecondary }
@@ -229,6 +237,7 @@ Window {
                             to: 400
                             stepSize: 10
                             value: Settings.gridCellMaxWidth
+                            PointingCursor {}
                             onValueModified: Settings.gridCellMaxWidth = value
                         }
                         Label { text: "px"; color: Theme.textSecondary }
@@ -257,6 +266,7 @@ Window {
                             to: 120
                             stepSize: 4
                             value: Settings.listGroupRowHeight
+                            PointingCursor {}
                             onValueModified: Settings.listGroupRowHeight = value
                         }
                         Label { text: "px"; color: Theme.textSecondary }
@@ -278,6 +288,7 @@ Window {
                         to: 500
                         stepSize: 10
                         value: Settings.bufferSizeMs
+                        PointingCursor {}
                         onValueModified: Settings.bufferSizeMs = value
                     }
                     Label { text: "ms (lower = less latency, higher = more stable)" }
@@ -333,6 +344,8 @@ Window {
                             
                             MouseArea {
                                 anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
                                 onClicked: libraryPage.selectedIdx = index
                             }
                         }
@@ -351,11 +364,13 @@ Window {
                     spacing: 6
                     Button {
                         text: "Add Folder..."
+                        PointingCursor {}
                         onClicked: folderDialog.open()
                     }
                     Button {
                         text: "Remove"
                         enabled: libraryPage.selectedIdx >= 0 && libraryPage.selectedIdx < folderModel.count
+                        PointingCursor {}
                         onClicked: {
                             if (libraryPage.selectedIdx >= 0 && libraryPage.selectedIdx < folderModel.count) {
                                 var path = folderModel.get(libraryPage.selectedIdx).path
@@ -370,6 +385,7 @@ Window {
                     Button {
                         text: "Rescan Library"
                         enabled: !AppViewModel.libraryScanning
+                        PointingCursor {}
                         onClicked: AppViewModel.rescanLibrary()
                     }
                     Label {
@@ -386,10 +402,7 @@ Window {
                     id: folderDialog
                     title: "Select Music Folder"
                     onAccepted: {
-                        var path = selectedFolder.toString()
-                        if (path.startsWith("file://")) {
-                            path = path.substring(7)
-                        }
+                        var path = String(selectedFolder)
                         AppViewModel.addLibraryFolder(path)
                     }
                 }
@@ -404,6 +417,7 @@ Window {
                 CheckBox {
                     text: "Restore session on startup"
                     checked: Settings.restoreSession
+                    PointingCursor {}
                     onClicked: Settings.restoreSession = checked
                 }
                 

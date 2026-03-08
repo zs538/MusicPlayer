@@ -44,9 +44,33 @@ ApplicationWindow {
 
         // Main content area: 2-column layout
         SplitView {
+            id: mainSplitView
             Layout.fillWidth: true
             Layout.fillHeight: true
             orientation: Qt.Horizontal
+
+            handle: Item {
+                implicitWidth: 10
+                implicitHeight: parent ? parent.height : 0
+
+                HoverHandler {
+                    cursorShape: Qt.SizeHorCursor
+                }
+
+                Rectangle {
+                    id: splitHandleLine
+                    anchors.centerIn: parent
+                    width: 1
+                    height: parent.height
+                    color: SplitHandle.pressed ? Theme.textPrimary : Theme.border
+
+                    containmentMask: Item {
+                        x: (splitHandleLine.width - width) / 2
+                        width: 12
+                        height: mainSplitView.height
+                    }
+                }
+            }
 
             // Left column: Cover (top, fixed 1:1) + Playlist (bottom)
             ColumnLayout {
@@ -85,7 +109,11 @@ ApplicationWindow {
             Layout.preferredHeight: 32
             Layout.minimumHeight: 28
             Layout.maximumHeight: 44
-            onSettingsRequested: settingsWindow.show()
+            onSettingsRequested: {
+                settingsWindow.show()
+                settingsWindow.raise()
+                settingsWindow.requestActivate()
+            }
         }
     }
 
@@ -107,6 +135,10 @@ ApplicationWindow {
 
     Shortcut {
         sequence: "Ctrl+,"
-        onActivated: settingsWindow.show()
+        onActivated: {
+            settingsWindow.show()
+            settingsWindow.raise()
+            settingsWindow.requestActivate()
+        }
     }
 }

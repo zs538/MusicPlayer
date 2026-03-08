@@ -11,6 +11,19 @@ Rectangle {
 
     implicitHeight: 32
 
+    component PointingCursor: HoverHandler {
+        cursorShape: Qt.PointingHandCursor
+    }
+
+    component SectionSeparator: Rectangle {
+        Layout.preferredWidth: 1
+        Layout.fillHeight: true
+        Layout.topMargin: 6
+        Layout.bottomMargin: 6
+        color: Theme.border
+        opacity: 0.9
+    }
+
     RowLayout {
         anchors.fill: parent
         anchors.leftMargin: 4
@@ -28,6 +41,7 @@ Rectangle {
                 icon.source: Qt.resolvedUrl("../icons/skip_previous.svg")
                 icon.color: Theme.textPrimary
                 icon.width: 16; icon.height: 16
+                PointingCursor {}
                 onClicked: AppViewModel.previous()
             }
 
@@ -40,6 +54,7 @@ Rectangle {
                     : Qt.resolvedUrl("../icons/play_arrow.svg")
                 icon.color: Theme.textPrimary
                 icon.width: 16; icon.height: 16
+                PointingCursor {}
                 onClicked: {
                     if (AppViewModel.playbackState === AppViewModel.Playing)
                         AppViewModel.pause()
@@ -55,6 +70,7 @@ Rectangle {
                 icon.source: Qt.resolvedUrl("../icons/stop.svg")
                 icon.color: Theme.textPrimary
                 icon.width: 16; icon.height: 16
+                PointingCursor {}
                 onClicked: AppViewModel.stop()
             }
 
@@ -65,9 +81,12 @@ Rectangle {
                 icon.source: Qt.resolvedUrl("../icons/skip_next.svg")
                 icon.color: Theme.textPrimary
                 icon.width: 16; icon.height: 16
+                PointingCursor {}
                 onClicked: AppViewModel.next()
             }
         }
+
+        SectionSeparator {}
 
         // Track info
         Label {
@@ -80,6 +99,8 @@ Rectangle {
             color: Theme.textSecondary
             font.pixelSize: 10
         }
+
+        SectionSeparator {}
 
         // Center: Seek bar with times
         Label {
@@ -95,6 +116,8 @@ Rectangle {
             from: 0
             to: AppViewModel.durationMs > 0 ? AppViewModel.durationMs : 1
             value: AppViewModel.positionMs
+            hoverEnabled: true
+            PointingCursor {}
 
             property bool seeking: false
 
@@ -123,7 +146,17 @@ Rectangle {
             font.pixelSize: 10
         }
 
+        SectionSeparator {}
+
         // Right: Volume
+        Image {
+            source: Qt.resolvedUrl("../icons/volume_up.svg")
+            Layout.preferredWidth: 14
+            Layout.preferredHeight: 14
+            sourceSize: Qt.size(28, 28)
+            fillMode: Image.PreserveAspectFit
+        }
+
         Slider {
             id: volumeSlider
             Layout.preferredWidth: 80
@@ -131,6 +164,8 @@ Rectangle {
             from: 0
             to: 1
             value: Settings.volume
+            hoverEnabled: true
+            PointingCursor {}
             onMoved: Settings.volume = value
         }
 
@@ -141,14 +176,7 @@ Rectangle {
             Layout.preferredWidth: 30
         }
 
-        // Volume icon
-        Image {
-            source: Qt.resolvedUrl("../icons/volume_up.svg")
-            Layout.preferredWidth: 14
-            Layout.preferredHeight: 14
-            sourceSize: Qt.size(28, 28)
-            fillMode: Image.PreserveAspectFit
-        }
+        SectionSeparator {}
 
         // Settings button
         Button {
@@ -158,6 +186,7 @@ Rectangle {
             icon.source: Qt.resolvedUrl("../icons/settings.svg")
             icon.color: Theme.textPrimary
             icon.width: 16; icon.height: 16
+            PointingCursor {}
             onClicked: settingsRequested()
         }
     }

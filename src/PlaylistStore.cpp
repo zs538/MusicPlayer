@@ -6,6 +6,7 @@
 #include <QDir>
 #include <QFile>
 #include <QTextStream>
+#include <QUrl>
 #include <QtConcurrent>
 
 PlaylistStore::PlaylistStore(QObject *parent)
@@ -311,15 +312,33 @@ int PlaylistStore::indexOfUuid(const QUuid &uuid) const
     return -1;
 }
 
+namespace {
+QString normalizePlaylistFilePath(const QString &filePath)
+{
+    QString normalized = filePath.trimmed();
+    if (normalized.isEmpty()) {
+        return normalized;
+    }
+
+    const QUrl url(normalized);
+    if (url.isValid() && url.isLocalFile()) {
+        normalized = url.toLocalFile();
+    }
+
+    return QDir::cleanPath(QDir::fromNativeSeparators(normalized));
+}
+}
+
 QString PlaylistStore::importPlaylist(const QString &filePath)
 {
-    QString uuid = createNewTab(QFileInfo(filePath).baseName());
+    const QString normalizedPath = normalizePlaylistFilePath(filePath);
+    QString uuid = createNewTab(QFileInfo(normalizedPath).baseName());
     TrackListModel *model = getPlaylistModel(uuid);
     if (!model)
         return QString();
     
-    bool utf8 = filePath.endsWith(".m3u8", Qt::CaseInsensitive);
-    if (!importM3U(model, filePath, utf8)) {
+    bool utf8 = normalizedPath.endsWith(".m3u8", Qt::CaseInsensitive);
+    if (!importM3U(model, normalizedPath, utf8)) {
         closeTab(uuid);
         return QString();
     }
@@ -332,26 +351,31 @@ bool PlaylistStore::exportPlaylist(const QString &uuid, const QString &filePath)
     if (!model)
         return false;
     
-    bool utf8 = filePath.endsWith(".m3u8", Qt::CaseInsensitive);
-    return exportM3U(model, filePath, utf8);
+    const QString normalizedPath = normalizePlaylistFilePath(filePath);
+    if (normalizedPath.isEmpty())
+        return false;
+    
+    bool utf8 = normalizedPath.endsWith(".m3u8", Qt::CaseInsensitive);
+    return exportM3U(model, normalizedPath, utf8);
 }
 
 bool PlaylistStore::importM3U(TrackListModel *model, const QString &filePath, bool utf8)
 {
-    QFile file(filePath);
+    const QString normalizedPath = normalizePlaylistFilePath(filePath);
+    QFile file(normalizedPath);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
         return false;
     
     QTextStream in(&file);
     in.setEncoding(utf8 ? QStringConverter::Utf8 : QStringConverter::Latin1);
     
-    QString playlistDir = QFileInfo(filePath).absolutePath();
-    
+    QString playlistDir = QFileInfo(normalizedPath).absolutePath();
+
     while (!in.atEnd()) {
         QString line = in.readLine().trimmed();
         if (line.isEmpty() || line.startsWith('#'))
             continue;
-        
+
         QString fullPath = QDir::isAbsolutePath(line) ? line : QDir::cleanPath(playlistDir + '/' + line);
         TrackInfo track = MetadataExtractor::extractTrackInfo(fullPath);
         if (track.isValid())
@@ -362,14 +386,15 @@ bool PlaylistStore::importM3U(TrackListModel *model, const QString &filePath, bo
 
 bool PlaylistStore::exportM3U(TrackListModel *model, const QString &filePath, bool utf8)
 {
-    QFile file(filePath);
+    const QString normalizedPath = normalizePlaylistFilePath(filePath);
+    QFile file(normalizedPath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
         return false;
-    
+
     QTextStream out(&file);
     out.setEncoding(utf8 ? QStringConverter::Utf8 : QStringConverter::Latin1);
     out << "#EXTM3U\n";
-    
+
     for (int i = 0; i < model->count(); ++i) {
         TrackInfo track = model->trackAt(i);
         out << "#EXTINF:" << track.durationMs / 1000 << "," << track.artist << " - " << track.title << "\n";
@@ -380,20 +405,22 @@ bool PlaylistStore::exportM3U(TrackListModel *model, const QString &filePath, bo
 
 QString PlaylistStore::importPlaylistAsync(const QString &filePath)
 {
-    QString uuid = createNewTab(QFileInfo(filePath).baseName());
-    bool utf8 = filePath.endsWith(".m3u8", Qt::CaseInsensitive);
-    
+    const QString normalizedPath = normalizePlaylistFilePath(filePath);
+    QString uuid = createNewTab(QFileInfo(normalizedPath).baseName());
+    bool utf8 = normalizedPath.endsWith(".m3u8", Qt::CaseInsensitive);
+
     // Run import in background thread
-    m_importFuture = QtConcurrent::run([this, uuid, filePath, utf8]() {
-        importM3UAsync(uuid, filePath, utf8);
+    m_importFuture = QtConcurrent::run([this, uuid, normalizedPath, utf8]() {
+        importM3UAsync(uuid, normalizedPath, utf8);
     });
-    
+
     return uuid;
 }
 
 void PlaylistStore::importM3UAsync(const QString &uuid, const QString &filePath, bool utf8)
 {
-    QFile file(filePath);
+    const QString normalizedPath = normalizePlaylistFilePath(filePath);
+    QFile file(normalizedPath);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         QMetaObject::invokeMethod(this, [this, uuid]() {
             closeTab(uuid);
@@ -401,7 +428,7 @@ void PlaylistStore::importM3UAsync(const QString &uuid, const QString &filePath,
         }, Qt::QueuedConnection);
         return;
     }
-    
+
     // First pass: count lines for progress
     QTextStream countStream(&file);
     countStream.setEncoding(utf8 ? QStringConverter::Utf8 : QStringConverter::Latin1);
@@ -412,16 +439,16 @@ void PlaylistStore::importM3UAsync(const QString &uuid, const QString &filePath,
             ++totalLines;
     }
     file.seek(0);
-    
+
     // Second pass: extract metadata and batch insert
     QTextStream in(&file);
     in.setEncoding(utf8 ? QStringConverter::Utf8 : QStringConverter::Latin1);
-    QString playlistDir = QFileInfo(filePath).absolutePath();
-    
+    QString playlistDir = QFileInfo(normalizedPath).absolutePath();
+
     QVector<TrackInfo> batch;
     int imported = 0;
     constexpr int BATCH_SIZE = 50;
-    
+
     while (!in.atEnd()) {
         QString line = in.readLine().trimmed();
         if (line.isEmpty() || line.startsWith('#'))

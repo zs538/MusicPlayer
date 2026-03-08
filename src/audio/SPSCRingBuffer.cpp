@@ -2,6 +2,9 @@
 #include <algorithm>
 #include <thread>
 #include <chrono>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 SPSCRingBuffer::SPSCRingBuffer(size_t capacity)
     : m_buffer(capacity)
@@ -115,7 +118,11 @@ void SPSCRingBuffer::waitForSpace()
     
     // If still no space, sleep briefly
     while (!m_aborted.load(std::memory_order_relaxed) && availableToWrite() == 0) {
+#ifdef _WIN32
+        Sleep(1);
+#else
         std::this_thread::sleep_for(std::chrono::microseconds(500));
+#endif
     }
     
     m_producerWaiting.store(false, std::memory_order_relaxed);

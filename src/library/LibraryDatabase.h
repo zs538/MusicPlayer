@@ -73,6 +73,8 @@ public:
     bool addWatchFolder(const QString &path);
     bool removeWatchFolder(const QString &path);
     QStringList watchFolders() const;
+    static QString normalizeFileSystemPath(const QString &path);
+    static QString normalizeWatchFolderPath(const QString &path);
 
     // SQL query for upsert - shared with LibraryScanner for thread-local connections
     static QString upsertTrackSql();

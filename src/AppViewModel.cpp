@@ -455,17 +455,19 @@ int AppViewModel::libraryScanProgress() const
 
 void AppViewModel::addLibraryFolder(const QString &path)
 {
-    qDebug() << "AppViewModel::addLibraryFolder:" << path;
-    m_libraryDb->addWatchFolder(path);
+    const QString normalizedPath = LibraryDatabase::normalizeWatchFolderPath(path);
+    qDebug() << "AppViewModel::addLibraryFolder:" << normalizedPath;
+    m_libraryDb->addWatchFolder(normalizedPath);
     m_libraryWatcher->setWatchFolders(m_libraryDb->watchFolders());
-    m_libraryScanner->scanFolder(path);
+    m_libraryScanner->scanFolder(normalizedPath);
     emit libraryFoldersChanged();
 }
 
 void AppViewModel::removeLibraryFolder(const QString &path)
 {
-    m_libraryDb->removeWatchFolder(path);
-    m_libraryDb->removeTracksInFolder(path);
+    const QString normalizedPath = LibraryDatabase::normalizeWatchFolderPath(path);
+    m_libraryDb->removeWatchFolder(normalizedPath);
+    m_libraryDb->removeTracksInFolder(normalizedPath);
     m_libraryWatcher->setWatchFolders(m_libraryDb->watchFolders());
     m_libraryDb->notifyDatabaseChanged();
     emit libraryFoldersChanged();
@@ -489,16 +491,18 @@ QStringList AppViewModel::watchFolders() const
 
 void AppViewModel::addWatchFolder(const QString &path)
 {
-    m_libraryDb->addWatchFolder(path);
+    const QString normalizedPath = LibraryDatabase::normalizeWatchFolderPath(path);
+    m_libraryDb->addWatchFolder(normalizedPath);
     m_libraryWatcher->setWatchFolders(m_libraryDb->watchFolders());
-    m_libraryScanner->scanFolder(path);
+    m_libraryScanner->scanFolder(normalizedPath);
     emit libraryFoldersChanged();
 }
 
 void AppViewModel::removeWatchFolder(const QString &path)
 {
-    m_libraryDb->removeWatchFolder(path);
-    m_libraryDb->removeTracksInFolder(path);
+    const QString normalizedPath = LibraryDatabase::normalizeWatchFolderPath(path);
+    m_libraryDb->removeWatchFolder(normalizedPath);
+    m_libraryDb->removeTracksInFolder(normalizedPath);
     m_libraryWatcher->setWatchFolders(m_libraryDb->watchFolders());
     m_libraryDb->notifyDatabaseChanged();
     emit libraryFoldersChanged();
