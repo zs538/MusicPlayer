@@ -216,6 +216,41 @@ Rectangle {
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                 cursorShape: Qt.PointingHandCursor
                 hoverEnabled: true
+                property point toolTipAnchorPos: Qt.point(0, 0)
+
+                function updateToolTipAnchor(x, y) {
+                    toolTipAnchorPos = Qt.point(x + 8, y + 12)
+                }
+
+                ToolTip {
+                    id: headerToolTip
+                    parent: headerMouseArea
+                    visible: headerMouseArea.containsMouse && headerLabel.text.length > 0
+                    delay: 800
+                    timeout: 5000
+                    text: headerLabel.text
+                    x: Math.max(0, headerMouseArea.toolTipAnchorPos.x)
+                    y: Math.max(0, headerMouseArea.toolTipAnchorPos.y)
+                    leftPadding: 5
+                    rightPadding: 5
+                    topPadding: 2
+                    bottomPadding: 2
+                    background: Rectangle {
+                        color: Theme.surfaceAlt
+                        border.color: "#3a3a3a"
+                        border.width: 1
+                        radius: Theme.radiusNone
+                    }
+                    contentItem: Text {
+                        text: headerToolTip.text
+                        color: "#3a3a3a"
+                        font.pixelSize: 11
+                    }
+                    onVisibleChanged: {
+                        if (visible)
+                            headerMouseArea.updateToolTipAnchor(headerMouseArea.mouseX, headerMouseArea.mouseY)
+                    }
+                }
                 
                 // Build ordered playlist list (user first, then generated) - same as menu
                 function getOrderedPlaylists() {
@@ -520,6 +555,7 @@ Rectangle {
                 opacity: DragManager.isDragging && DragManager.sourceId === root.playlistId && DragManager.draggedIndices.indexOf(index) >= 0 ? 0.4 : 1
 
                 TrackColumnsRow {
+                    id: trackColumnsRow
                     anchors.fill: parent
                     columns: root.playlistTrackListLayout.columns
                     trackData: del.trackData
@@ -538,6 +574,47 @@ Rectangle {
                     acceptedButtons: Qt.LeftButton | Qt.RightButton
                     cursorShape: DragManager.isDragging && DragManager.sourceId === root.playlistId ? Qt.ClosedHandCursor : Qt.ArrowCursor
                     property point pressPos
+                    property point toolTipAnchorPos: Qt.point(0, 0)
+                    readonly property string hoveredColumnText: containsMouse ? trackColumnsRow.textAtX(mouseX) : ""
+
+                    function updateToolTipAnchor(x, y) {
+                        toolTipAnchorPos = Qt.point(x + 8, y + 12)
+                    }
+
+                    ToolTip {
+                        id: rowToolTip
+                        parent: ma
+                        visible: ma.containsMouse && !DragManager.isDragging && ma.hoveredColumnText.length > 0
+                        delay: 800
+                        timeout: 5000
+                        text: ma.hoveredColumnText
+                        x: Math.max(0, ma.toolTipAnchorPos.x)
+                        y: Math.max(0, ma.toolTipAnchorPos.y)
+                        leftPadding: 5
+                        rightPadding: 5
+                        topPadding: 2
+                        bottomPadding: 2
+                        background: Rectangle {
+                            color: Theme.surfaceAlt
+                            border.color: "#3a3a3a"
+                            border.width: 1
+                            radius: Theme.radiusNone
+                        }
+                        contentItem: Text {
+                            text: rowToolTip.text
+                            color: "#3a3a3a"
+                            font.pixelSize: 11
+                        }
+                        onVisibleChanged: {
+                            if (visible)
+                                ma.updateToolTipAnchor(ma.mouseX, ma.mouseY)
+                        }
+                    }
+
+                    onHoveredColumnTextChanged: {
+                        if (hoveredColumnText.length > 0 && rowToolTip.visible)
+                            updateToolTipAnchor(mouseX, mouseY)
+                    }
 
                     onPressed: function(mouse) {
                         if (mouse.button === Qt.LeftButton) pressPos = Qt.point(mouse.x, mouse.y)

@@ -20,6 +20,19 @@ Item {
 
     implicitHeight: fontPixelSize + 8
 
+    function textAtX(xPos) {
+        let localX = xPos - leftMargin
+        if (localX < 0 || localX > availableWidth)
+            return ""
+        for (let i = 0; i < columns.length; ++i) {
+            let start = columnStarts[i] || 0
+            let width = resolvedWidths[i] || 0
+            if (localX >= start && localX < start + width)
+                return TrackListColumnsSupport.textForColumn(trackData, columns[i] || ({}))
+        }
+        return ""
+    }
+
     Repeater {
         model: root.columns
 
@@ -31,6 +44,7 @@ Item {
             height: root.height
 
             Label {
+                id: columnLabel
                 anchors {
                     fill: parent
                     leftMargin: 2
@@ -45,6 +59,15 @@ Item {
                 horizontalAlignment: (columnData.alignment || "left") === "right"
                     ? Text.AlignRight
                     : ((columnData.alignment || "left") === "center" ? Text.AlignHCenter : Text.AlignLeft)
+
+                HoverHandler {
+                    id: columnHover
+                }
+
+                ToolTip.visible: columnHover.hovered && columnLabel.text.length > 0
+                ToolTip.delay: 800
+                ToolTip.timeout: 5000
+                ToolTip.text: columnLabel.text
             }
         }
     }

@@ -25,6 +25,25 @@ Rectangle {
         opacity: 0.9
     }
 
+    component StyledHoverToolTip: ToolTip {
+        id: toolTip
+        leftPadding: 5
+        rightPadding: 5
+        topPadding: 2
+        bottomPadding: 2
+        background: Rectangle {
+            color: Theme.surfaceAlt
+            border.color: "#3a3a3a"
+            border.width: 1
+            radius: Theme.radiusNone
+        }
+        contentItem: Text {
+            text: toolTip.text
+            color: "#3a3a3a"
+            font.pixelSize: 11
+        }
+    }
+
     component FlatSlider: Slider {
         id: control
         implicitHeight: 20
@@ -80,25 +99,43 @@ Rectangle {
             spacing: 2
 
             Button {
+                id: backButton
                 flat: true
                 implicitWidth: 28
                 implicitHeight: 24
+                hoverEnabled: true
                 icon.source: Qt.resolvedUrl("../icons/skip_previous.svg")
                 icon.color: Theme.textPrimary
                 icon.width: 16; icon.height: 16
+                StyledHoverToolTip {
+                    parent: backButton
+                    visible: backButton.hovered
+                    delay: 800
+                    timeout: 5000
+                    text: "Back"
+                }
                 PointingCursor {}
                 onClicked: AppViewModel.previous()
             }
 
             Button {
+                id: playPauseButton
                 flat: true
                 implicitWidth: 28
                 implicitHeight: 24
+                hoverEnabled: true
                 icon.source: AppViewModel.playbackState === AppViewModel.Playing
                     ? Qt.resolvedUrl("../icons/pause.svg")
                     : Qt.resolvedUrl("../icons/play_arrow.svg")
                 icon.color: Theme.textPrimary
                 icon.width: 16; icon.height: 16
+                StyledHoverToolTip {
+                    parent: playPauseButton
+                    visible: playPauseButton.hovered
+                    delay: 800
+                    timeout: 5000
+                    text: "Play/Pause"
+                }
                 PointingCursor {}
                 onClicked: {
                     if (AppViewModel.playbackState === AppViewModel.Playing)
@@ -109,23 +146,41 @@ Rectangle {
             }
 
             Button {
+                id: stopButton
                 flat: true
                 implicitWidth: 28
                 implicitHeight: 24
+                hoverEnabled: true
                 icon.source: Qt.resolvedUrl("../icons/stop.svg")
                 icon.color: Theme.textPrimary
                 icon.width: 16; icon.height: 16
+                StyledHoverToolTip {
+                    parent: stopButton
+                    visible: stopButton.hovered
+                    delay: 800
+                    timeout: 5000
+                    text: "Stop"
+                }
                 PointingCursor {}
                 onClicked: AppViewModel.stop()
             }
 
             Button {
+                id: skipButton
                 flat: true
                 implicitWidth: 28
                 implicitHeight: 24
+                hoverEnabled: true
                 icon.source: Qt.resolvedUrl("../icons/skip_next.svg")
                 icon.color: Theme.textPrimary
                 icon.width: 16; icon.height: 16
+                StyledHoverToolTip {
+                    parent: skipButton
+                    visible: skipButton.hovered
+                    delay: 800
+                    timeout: 5000
+                    text: "Skip"
+                }
                 PointingCursor {}
                 onClicked: AppViewModel.next()
             }
@@ -217,9 +272,17 @@ Rectangle {
             }
 
             MouseArea {
+                id: muteMouseArea
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
+                StyledHoverToolTip {
+                    parent: muteMouseArea
+                    visible: muteMouseArea.containsMouse
+                    delay: 800
+                    timeout: 5000
+                    text: "Mute"
+                }
                 onClicked: {
                     if (Settings.volume > 0) {
                         root.lastNonZeroVolume = Settings.volume
@@ -260,12 +323,21 @@ Rectangle {
 
         // Settings button
         Button {
+            id: settingsButton
             flat: true
             implicitWidth: 28
             implicitHeight: 24
+            hoverEnabled: true
             icon.source: Qt.resolvedUrl("../icons/settings.svg")
             icon.color: Theme.textPrimary
             icon.width: 16; icon.height: 16
+            StyledHoverToolTip {
+                parent: settingsButton
+                visible: settingsButton.hovered
+                delay: 800
+                timeout: 5000
+                text: "Settings"
+            }
             PointingCursor {}
             onClicked: settingsRequested()
         }

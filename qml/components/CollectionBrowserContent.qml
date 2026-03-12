@@ -18,6 +18,25 @@ Item {
         cursorShape: Qt.IBeamCursor
     }
 
+    component StyledHoverToolTip: ToolTip {
+        id: toolTip
+        leftPadding: 5
+        rightPadding: 5
+        topPadding: 2
+        bottomPadding: 2
+        background: Rectangle {
+            color: Theme.surfaceAlt
+            border.color: "#3a3a3a"
+            border.width: 1
+            radius: Theme.radiusNone
+        }
+        contentItem: Text {
+            text: toolTip.text
+            color: "#3a3a3a"
+            font.pixelSize: 11
+        }
+    }
+
     component TopStripIconButton: Item {
         id: control
 
@@ -26,6 +45,7 @@ Item {
         property real idleOpacity: 0.9
         property bool interactive: true
         property real horizontalInset: 0
+        property string toolTipText: ""
 
         signal clicked()
 
@@ -54,6 +74,13 @@ Item {
             enabled: control.interactive
             hoverEnabled: true
             cursorShape: control.interactive ? Qt.PointingHandCursor : Qt.ArrowCursor
+            StyledHoverToolTip {
+                parent: buttonMouseArea
+                visible: buttonMouseArea.containsMouse && control.toolTipText.length > 0
+                delay: 800
+                timeout: 5000
+                text: control.toolTipText
+            }
             onClicked: control.clicked()
         }
     }
@@ -367,6 +394,7 @@ Item {
                             iconSource: Qt.resolvedUrl("../icons/home.svg")
                             iconSize: 14
                             horizontalInset: 2
+                            toolTipText: "Root"
                             onClicked: root.jumpToBreadcrumb(0)
                         }
 
@@ -489,6 +517,7 @@ Item {
                     id: sortButton
                     iconSource: Qt.resolvedUrl("../icons/sort.svg")
                     iconSize: 16
+                    toolTipText: "Sort"
                     onClicked: sortMenu.popup()
 
                     Menu {
@@ -531,6 +560,7 @@ Item {
                     id: groupByButton
                     iconSource: Qt.resolvedUrl("../icons/filter_alt.svg")
                     iconSize: 16
+                    toolTipText: "Group By"
                     onClicked: groupByMenu.popup()
 
                     Menu {
@@ -682,6 +712,7 @@ Item {
                     id: optionsButton
                     iconSource: Qt.resolvedUrl("../icons/more_vert.svg")
                     iconSize: 16
+                    toolTipText: "Menu"
                     onClicked: optionsMenu.popup()
 
                     Menu {
@@ -901,6 +932,7 @@ Item {
                         }
 
                         Label {
+                            id: titleLabel
                             text: gridDel.displayText || ""
                             color: Theme.textPrimary
                             font.pixelSize: 11
@@ -908,15 +940,18 @@ Item {
                             elide: Text.ElideRight
                             Layout.fillWidth: true
                             horizontalAlignment: Text.AlignLeft
+
                         }
 
                         Label {
+                            id: subtitleLabel
                             text: gridDel.subtitle || ""
                             color: Theme.textSecondary
                             font.pixelSize: 10
                             elide: Text.ElideRight
                             Layout.fillWidth: true
                             horizontalAlignment: Text.AlignLeft
+
                         }
                     }
 
@@ -926,6 +961,62 @@ Item {
                         hoverEnabled: true
                         acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
                         cursorShape: Qt.PointingHandCursor
+                        property point toolTipAnchorPos: Qt.point(0, 0)
+
+                        function updateToolTipAnchor(x, y) {
+                            toolTipAnchorPos = Qt.point(x + 8, y + 12)
+                        }
+
+                        function toolTipTextAt(x, y) {
+                            let titlePos = gridMouseArea.mapFromItem(titleLabel, 0, 0)
+                            if (x >= titlePos.x && x <= titlePos.x + titleLabel.width
+                                    && y >= titlePos.y && y <= titlePos.y + titleLabel.height)
+                                return titleLabel.text
+
+                            let subtitlePos = gridMouseArea.mapFromItem(subtitleLabel, 0, 0)
+                            if (x >= subtitlePos.x && x <= subtitlePos.x + subtitleLabel.width
+                                    && y >= subtitlePos.y && y <= subtitlePos.y + subtitleLabel.height)
+                                return subtitleLabel.text
+
+                            return ""
+                        }
+
+                        readonly property string hoveredToolTipText: containsMouse ? toolTipTextAt(mouseX, mouseY) : ""
+
+                        ToolTip {
+                            id: gridToolTip
+                            parent: gridMouseArea
+                            visible: gridMouseArea.containsMouse && gridMouseArea.hoveredToolTipText.length > 0
+                            delay: 800
+                            timeout: 5000
+                            text: gridMouseArea.hoveredToolTipText
+                            x: Math.max(0, gridMouseArea.toolTipAnchorPos.x)
+                            y: Math.max(0, gridMouseArea.toolTipAnchorPos.y)
+                            leftPadding: 5
+                            rightPadding: 5
+                            topPadding: 2
+                            bottomPadding: 2
+                            background: Rectangle {
+                                color: Theme.surfaceAlt
+                                border.color: "#3a3a3a"
+                                border.width: 1
+                                radius: Theme.radiusNone
+                            }
+                            contentItem: Text {
+                                text: gridToolTip.text
+                                color: "#3a3a3a"
+                                font.pixelSize: 11
+                            }
+                            onVisibleChanged: {
+                                if (visible)
+                                    gridMouseArea.updateToolTipAnchor(gridMouseArea.mouseX, gridMouseArea.mouseY)
+                            }
+                        }
+
+                        onHoveredToolTipTextChanged: {
+                            if (hoveredToolTipText.length > 0 && gridToolTip.visible)
+                                updateToolTipAnchor(mouseX, mouseY)
+                        }
 
                         onClicked: (mouse) => {
                             if (mouse.button === Qt.LeftButton) {
