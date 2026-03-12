@@ -6,6 +6,7 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QVariantList>
+#include <QVariantMap>
 #include <QTimer>
 #include <QRect>
 
@@ -28,15 +29,14 @@ class SessionManager : public QObject
     // UI state properties exposed to QML
     Q_PROPERTY(int currentPanel READ currentPanel WRITE setCurrentPanel NOTIFY currentPanelChanged)
     Q_PROPERTY(QVariantList playlistColumns READ playlistColumns WRITE setPlaylistColumns NOTIFY playlistColumnsChanged)
+    Q_PROPERTY(QVariantMap playlistTrackListLayout READ playlistTrackListLayout WRITE setPlaylistTrackListLayout NOTIFY playlistTrackListLayoutChanged)
     Q_PROPERTY(QStringList libraryGroupingLevels READ libraryGroupingLevels WRITE setLibraryGroupingLevels NOTIFY libraryGroupingLevelsChanged)
-    Q_PROPERTY(QVariantList floatingWindows READ floatingWindows WRITE setFloatingWindows NOTIFY floatingWindowsChanged)
 
 public:
-    explicit SessionManager(QObject *parent = nullptr);
-    ~SessionManager() override;
-    
     static SessionManager *create(QQmlEngine *qmlEngine, QJSEngine *jsEngine);
+    static SessionManager *ensureInstance(QObject *parent = nullptr);
     static SessionManager *instance();
+    ~SessionManager() override;
     
     // Initialize with dependencies (call after all managers are created)
     void initialize(PlaylistStore *playlistStore);
@@ -57,12 +57,12 @@ public:
     
     QVariantList playlistColumns() const;
     void setPlaylistColumns(const QVariantList &columns);
-    
+
+    QVariantMap playlistTrackListLayout() const;
+    void setPlaylistTrackListLayout(const QVariantMap &layout);
+
     QStringList libraryGroupingLevels() const;
     void setLibraryGroupingLevels(const QStringList &levels);
-    
-    QVariantList floatingWindows() const;
-    void setFloatingWindows(const QVariantList &windows);
     
     // Playback state (for optional restore)
     Q_INVOKABLE int lastPlaylistIndex() const;
@@ -72,12 +72,16 @@ public:
 signals:
     void currentPanelChanged();
     void playlistColumnsChanged();
+    void playlistTrackListLayoutChanged();
     void libraryGroupingLevelsChanged();
-    void floatingWindowsChanged();
     void sessionLoaded();
     void sessionSaved();
 
 private:
+    struct ConstructionTag {};
+
+    explicit SessionManager(ConstructionTag, QObject *parent = nullptr);
+
     QString sessionFilePath() const;
     QJsonObject buildSessionJson() const;
     bool parseSessionJson(const QJsonObject &json);
@@ -96,8 +100,8 @@ private:
     QRect m_windowGeometry;
     int m_currentPanel = 0;
     QVariantList m_playlistColumns;
+    QVariantMap m_playlistTrackListLayout;
     QStringList m_libraryGroupingLevels;
-    QVariantList m_floatingWindows;
     
     // Playback state
     int m_lastPlaylistIndex = -1;

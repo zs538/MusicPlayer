@@ -11,7 +11,7 @@
 
 SessionManager *SessionManager::s_instance = nullptr;
 
-SessionManager::SessionManager(QObject *parent)
+SessionManager::SessionManager(ConstructionTag, QObject *parent)
     : QObject(parent)
 {
     s_instance = this;
@@ -35,15 +35,25 @@ SessionManager::~SessionManager()
     if (m_dirty && m_initialized) {
         saveSession();
     }
-    s_instance = nullptr;
+    if (s_instance == this)
+        s_instance = nullptr;
 }
 
 SessionManager *SessionManager::create(QQmlEngine *qmlEngine, QJSEngine *jsEngine)
 {
     Q_UNUSED(jsEngine)
-    
+
+    SessionManager *instance = ensureInstance(qmlEngine);
+    QJSEngine::setObjectOwnership(instance, QJSEngine::CppOwnership);
+    return instance;
+}
+
+SessionManager *SessionManager::ensureInstance(QObject *parent)
+{
     if (!s_instance) {
-        s_instance = new SessionManager(qmlEngine);
+        s_instance = new SessionManager(ConstructionTag{}, parent);
+    } else if (!s_instance->parent() && parent) {
+        s_instance->setParent(parent);
     }
     return s_instance;
 }
@@ -189,6 +199,20 @@ void SessionManager::setPlaylistColumns(const QVariantList &columns)
     }
 }
 
+QVariantMap SessionManager::playlistTrackListLayout() const
+{
+    return m_playlistTrackListLayout;
+}
+
+void SessionManager::setPlaylistTrackListLayout(const QVariantMap &layout)
+{
+    if (m_playlistTrackListLayout != layout) {
+        m_playlistTrackListLayout = layout;
+        emit playlistTrackListLayoutChanged();
+        scheduleAutoSave();
+    }
+}
+
 QStringList SessionManager::libraryGroupingLevels() const
 {
     return m_libraryGroupingLevels;
@@ -199,20 +223,6 @@ void SessionManager::setLibraryGroupingLevels(const QStringList &levels)
     if (m_libraryGroupingLevels != levels) {
         m_libraryGroupingLevels = levels;
         emit libraryGroupingLevelsChanged();
-        scheduleAutoSave();
-    }
-}
-
-QVariantList SessionManager::floatingWindows() const
-{
-    return m_floatingWindows;
-}
-
-void SessionManager::setFloatingWindows(const QVariantList &windows)
-{
-    if (m_floatingWindows != windows) {
-        m_floatingWindows = windows;
-        emit floatingWindowsChanged();
         scheduleAutoSave();
     }
 }
@@ -238,13 +248,13 @@ QJsonObject SessionManager::buildSessionJson() const
 {
     QJsonObject json;
     
-    // Version 2 adds floating windows support
     json["version"] = 2;
     
     // UI state
     QJsonObject uiState;
     uiState["currentPanel"] = m_currentPanel;
     uiState["playlistColumns"] = QJsonArray::fromVariantList(m_playlistColumns);
+    uiState["playlistTrackListLayout"] = QJsonObject::fromVariantMap(m_playlistTrackListLayout);
     uiState["libraryGroupingLevels"] = QJsonArray::fromStringList(m_libraryGroupingLevels);
     json["uiState"] = uiState;
     
@@ -263,9 +273,6 @@ QJsonObject SessionManager::buildSessionJson() const
         json["displayedPlaylistId"] = m_playlistStore->displayedPlaylistId().toString();
     }
     
-    // Floating windows (version 2)
-    json["floatingWindows"] = QJsonArray::fromVariantList(m_floatingWindows);
-    
     return json;
 }
 
@@ -283,6 +290,15 @@ bool SessionManager::parseSessionJson(const QJsonObject &json)
         QJsonObject ui = json["uiState"].toObject();
         m_currentPanel = ui["currentPanel"].toInt(0);
         m_playlistColumns = ui["playlistColumns"].toArray().toVariantList();
+        m_playlistTrackListLayout = ui["playlistTrackListLayout"].toObject().toVariantMap();
+        const QVariantMap legacyTrackListLayout = ui["trackListLayout"].toObject().toVariantMap();
+        if (m_playlistTrackListLayout.isEmpty()) {
+            if (!m_playlistColumns.isEmpty()) {
+                m_playlistTrackListLayout.insert(QStringLiteral("columns"), m_playlistColumns);
+            } else if (!legacyTrackListLayout.isEmpty()) {
+                m_playlistTrackListLayout = legacyTrackListLayout;
+            }
+        }
         
         // Load library grouping levels
         QJsonArray groupingArr = ui["libraryGroupingLevels"].toArray();
@@ -293,6 +309,7 @@ bool SessionManager::parseSessionJson(const QJsonObject &json)
         
         emit currentPanelChanged();
         emit playlistColumnsChanged();
+        emit playlistTrackListLayoutChanged();
         emit libraryGroupingLevelsChanged();
     }
     
@@ -317,12 +334,6 @@ bool SessionManager::parseSessionJson(const QJsonObject &json)
         if (!displayedId.isEmpty()) {
             m_playlistStore->setDisplayedPlaylist(displayedId);
         }
-    }
-    
-    // Floating windows (version 2)
-    if (json.contains("floatingWindows")) {
-        m_floatingWindows = json["floatingWindows"].toArray().toVariantList();
-        emit floatingWindowsChanged();
     }
     
     return true;
@@ -400,6 +411,7 @@ QJsonArray SessionManager::serializePlaylists() const
                 trackObj["bpm"] = track.bpm;
                 trackObj["initialKey"] = track.initialKey;
                 trackObj["url"] = track.url;
+                trackObj["customTags"] = QJsonObject::fromVariantMap(track.customTags);
                 tracks.append(trackObj);
             }
             playlist["tracks"] = tracks;
@@ -488,6 +500,7 @@ bool SessionManager::deserializePlaylists(const QJsonArray &arr)
                 track.bpm = trackObj["bpm"].toInt();
                 track.initialKey = trackObj["initialKey"].toString();
                 track.url = trackObj["url"].toString();
+                track.customTags = trackObj["customTags"].toObject().toVariantMap();
                 
                 // Derive fileName from filePath if not stored (backward compatibility)
                 if (track.fileName.isEmpty() && !track.filePath.isEmpty()) {

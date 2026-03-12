@@ -26,8 +26,8 @@ class Settings : public QObject
     Q_PROPERTY(int gridCellMaxWidth READ gridCellMaxWidth WRITE setGridCellMaxWidth NOTIFY gridCellMaxWidthChanged)
     Q_PROPERTY(bool watcherEnabled READ watcherEnabled WRITE setWatcherEnabled NOTIFY watcherEnabledChanged)
     Q_PROPERTY(int periodicRescanMinutes READ periodicRescanMinutes WRITE setPeriodicRescanMinutes NOTIFY periodicRescanMinutesChanged)
-    Q_PROPERTY(int expandedTrackOpenMode READ expandedTrackOpenMode WRITE setExpandedTrackOpenMode NOTIFY expandedTrackOpenModeChanged)
-    Q_PROPERTY(int listGroupRowHeight READ listGroupRowHeight WRITE setListGroupRowHeight NOTIFY listGroupRowHeightChanged)
+    Q_PROPERTY(bool collectionPlayButtonEnabled READ collectionPlayButtonEnabled WRITE setCollectionPlayButtonEnabled NOTIFY collectionPlayButtonEnabledChanged)
+    Q_PROPERTY(bool collectionSingleClickOpen READ collectionSingleClickOpen WRITE setCollectionSingleClickOpen NOTIFY collectionSingleClickOpenChanged)
 
 public:
     enum AddTracksPolicy {
@@ -93,25 +93,27 @@ public:
     
     int periodicRescanMinutes() const;
     void setPeriodicRescanMinutes(int minutes);
-
-    int expandedTrackOpenMode() const;
-    void setExpandedTrackOpenMode(int mode);
-
-    int listGroupRowHeight() const;
-    void setListGroupRowHeight(int height);
+    
+    bool collectionPlayButtonEnabled() const;
+    void setCollectionPlayButtonEnabled(bool enabled);
+    
+    bool collectionSingleClickOpen() const;
+    void setCollectionSingleClickOpen(bool enabled);
 
     Q_INVOKABLE void save();
     Q_INVOKABLE void load();
 
-    // Per-group-type collection browsing settings
+    // Collection browsing settings
     Q_INVOKABLE QString groupTypeNextGroupBy(const QString &groupType) const;
     Q_INVOKABLE void setGroupTypeNextGroupBy(const QString &groupType, const QString &nextGroupBy);
     Q_INVOKABLE QString groupTypeOpenAction(const QString &groupType) const;
     Q_INVOKABLE void setGroupTypeOpenAction(const QString &groupType, const QString &openAction);
-    Q_INVOKABLE QString groupTypeViewMode(const QString &groupType) const;
-    Q_INVOKABLE void setGroupTypeViewMode(const QString &groupType, const QString &viewMode);
-    Q_INVOKABLE bool groupTypeExploreInWindow(const QString &groupType) const;
-    Q_INVOKABLE void setGroupTypeExploreInWindow(const QString &groupType, bool inWindow);
+    Q_INVOKABLE QString groupTypeSortBy(const QString &groupType, const QString &groupBy) const;
+    Q_INVOKABLE void setGroupTypeSortBy(const QString &groupType, const QString &groupBy, const QString &sortBy);
+    Q_INVOKABLE bool groupTypeSortAscending(const QString &groupType, const QString &groupBy) const;
+    Q_INVOKABLE void setGroupTypeSortAscending(const QString &groupType, const QString &groupBy, bool ascending);
+    Q_INVOKABLE QString groupTypeSubtitle(const QString &groupType, const QString &groupBy) const;
+    Q_INVOKABLE void setGroupTypeSubtitle(const QString &groupType, const QString &groupBy, const QString &subtitle);
 
 signals:
     void volumeChanged();
@@ -127,8 +129,8 @@ signals:
     void gridCellMaxWidthChanged();
     void watcherEnabledChanged();
     void periodicRescanMinutesChanged();
-    void expandedTrackOpenModeChanged();
-    void listGroupRowHeightChanged();
+    void collectionPlayButtonEnabledChanged();
+    void collectionSingleClickOpenChanged();
     void settingsChanged();
 
 private:
@@ -143,12 +145,12 @@ private:
     int m_previousButtonAction = RestartThenJump;
     int m_openingTracksAction = OpeningAppendToViewed;
     int m_generatedPlaylistCount = 5;
-    int m_gridCellMinWidth = 100;
-    int m_gridCellMaxWidth = 200;
+    int m_gridCellMinWidth = 110;
+    int m_gridCellMaxWidth = 130;
     bool m_watcherEnabled = true;
     int m_periodicRescanMinutes = 10;
-    int m_expandedTrackOpenMode = 0;
-    int m_listGroupRowHeight = 56;
+    bool m_collectionPlayButtonEnabled = true;
+    bool m_collectionSingleClickOpen = false;
 };
 
 #endif // SETTINGS_H

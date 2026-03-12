@@ -180,8 +180,20 @@ void QueueManager::onRowsMoved(const QModelIndex &parent, int start, int end,
 
 void QueueManager::onModelReset()
 {
-    // Don't auto-select on model reset - playback is independent
-    // Just invalidate the current position
+    if (!m_model)
+        return;
+
+    if (!m_currentTrackPath.isEmpty()) {
+        const int newIndex = m_model->indexOf(m_currentTrackPath);
+        if (newIndex >= 0) {
+            if (m_currentIndex != newIndex) {
+                m_currentIndex = newIndex;
+                emit currentIndexChanged(m_currentIndex);
+            }
+            return;
+        }
+    }
+
     if (m_currentIndex != -1) {
         m_currentIndex = -1;
         emit currentIndexChanged(m_currentIndex);

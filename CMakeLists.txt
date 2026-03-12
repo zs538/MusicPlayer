@@ -167,8 +167,6 @@ qt_add_executable(appmusicplayer
     src/PlaylistPanelController.cpp
     src/BrowseActivationService.h
     src/BrowseActivationService.cpp
-    src/WindowManager.h
-    src/WindowManager.cpp
     src/CoverImageProvider.h
     src/CoverImageProvider.cpp
     src/TrackFilter.h
@@ -192,15 +190,15 @@ set_source_files_properties(src/ViewedPlaylistRouter.h PROPERTIES
     QT_QML_SINGLETON_TYPE TRUE
 )
 
-set_source_files_properties(src/WindowManager.h PROPERTIES
-    QT_QML_SINGLETON_TYPE TRUE
-)
-
 set_source_files_properties(qml/Theme.qml PROPERTIES
     QT_QML_SINGLETON_TYPE TRUE
 )
 
 set_source_files_properties(qml/DragManager.qml PROPERTIES
+    QT_QML_SINGLETON_TYPE TRUE
+)
+
+set_source_files_properties(qml/components/TrackListColumnsSupport.qml PROPERTIES
     QT_QML_SINGLETON_TYPE TRUE
 )
 
@@ -213,11 +211,13 @@ qt_add_qml_module(appmusicplayer
         qml/DragManager.qml
         qml/components/CollectionBrowserContent.qml
         qml/components/IconImage.qml
+        qml/components/TrackColumnsHeader.qml
+        qml/components/TrackColumnsRow.qml
+        qml/components/TrackListColumnsSupport.qml
         qml/panels/CollectionPanel.qml
         qml/panels/PlaylistPanel.qml
         qml/panels/CoverPanel.qml
         qml/panels/ControlsStrip.qml
-        qml/windows/CollectionWindow.qml
         qml/windows/CoverWindow.qml
         qml/settings/SettingsWindow.qml
     RESOURCES
@@ -237,15 +237,20 @@ qt_add_qml_module(appmusicplayer
         qml/icons/album.svg
         qml/icons/expand_more.svg
         qml/icons/chevron_right.svg
+        qml/icons/search.svg
+        qml/icons/close.svg
+        qml/icons/sort.svg
+        qml/icons/filter_alt.svg
+        qml/icons/tab_group.svg
         qml/icons/more_vert.svg
         qml/icons/volume_up.svg
+        qml/icons/volume_off.svg
     SOURCES
         src/AppViewModel.h src/AppViewModel.cpp
         src/Settings.h src/Settings.cpp
         src/SessionManager.h src/SessionManager.cpp
         src/ViewedPlaylistRouter.h src/ViewedPlaylistRouter.cpp
         src/PlaylistPanelController.h src/PlaylistPanelController.cpp
-        src/WindowManager.h src/WindowManager.cpp
         src/CollectionBrowseModel.h src/CollectionBrowseModel.cpp
         src/library/LibraryDatabase.h src/library/LibraryDatabase.cpp
 )

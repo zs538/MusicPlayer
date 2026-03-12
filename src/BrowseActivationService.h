@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QUrl>
 #include <QList>
+#include <QStringList>
 #include <QVariantList>
 #include <QVariantMap>
 
@@ -39,11 +40,6 @@ public:
     // Drop handling
     Q_INVOKABLE void dropUrlsToViewed(const QList<QUrl> &urls);
 
-    // Collection browsing - open group for further exploration
-    Q_INVOKABLE void openCollectionGroup(const QVariantMap &currentPanelState,
-                                          const QString &groupType,
-                                          const QVariant &groupValue);
-    
     // Double-click queue action (uses settings for target playlist and autoplay)
     Q_INVOKABLE void addFilteredTracksToViewed(const QVariantList &filter,
                                                 const QString &groupType,
@@ -59,6 +55,7 @@ public:
     Q_INVOKABLE void appendFilteredTracksToViewed(const QVariantList &filter,
                                                    const QString &groupType,
                                                    const QVariant &groupValue);
+    Q_INVOKABLE void appendFilePathsToViewed(const QStringList &filePaths);
     Q_INVOKABLE void appendCollectionEntryToViewed(const QString &entryId);
     
     // Context menu: append after currently playing track
@@ -72,9 +69,6 @@ public:
                                                       const QString &groupType,
                                                       const QVariant &groupValue);
     Q_INVOKABLE void openCollectionEntryInNewPlaylist(const QString &entryId);
-
-signals:
-    void openCollectionPanelRequested(const QVariantMap &panelState);
 
 private:
     void applyTracksToPlaylist(const QStringList &filePaths, int startRow = 0);

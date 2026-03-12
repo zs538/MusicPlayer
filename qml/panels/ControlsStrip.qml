@@ -10,6 +10,7 @@ Rectangle {
     border.width: 1
 
     implicitHeight: 32
+    property real lastNonZeroVolume: Settings.volume > 0 ? Settings.volume : 1.0
 
     component PointingCursor: HoverHandler {
         cursorShape: Qt.PointingHandCursor
@@ -22,6 +23,50 @@ Rectangle {
         Layout.bottomMargin: 6
         color: Theme.border
         opacity: 0.9
+    }
+
+    component FlatSlider: Slider {
+        id: control
+        implicitHeight: 20
+        leftPadding: 0
+        rightPadding: 0
+
+        background: Item {
+            implicitHeight: 16
+
+            Rectangle {
+                x: 0
+                y: (parent.height - 5) / 2
+                width: parent.width
+                height: 5
+                radius: Theme.radiusNone
+                color: "#cfcfcf"
+                border.width: 1
+                border.color: "#a3a3a3"
+            }
+
+            Rectangle {
+                x: 0
+                y: (parent.height - 5) / 2
+                width: parent.width * control.visualPosition
+                height: 5
+                radius: Theme.radiusNone
+                color: "#313131"
+                border.width: 1
+                border.color: "#3d3d3d"
+            }
+        }
+
+        handle: Rectangle {
+            x: control.leftPadding + control.visualPosition * (control.availableWidth - width)
+            y: (control.height - height) / 2
+            width: 7
+            height: 13
+            radius: Theme.radiusNone
+            color: "#f5f5f5"
+            border.width: 1
+            border.color: "#4a4a4a"
+        }
     }
 
     RowLayout {
@@ -104,39 +149,47 @@ Rectangle {
 
         // Center: Seek bar with times
         Label {
-            text: formatTime(AppViewModel.positionMs)
+            text: formatTime(progressSlider.displayValue)
             color: Theme.textPrimary
             font.pixelSize: 10
         }
 
-        Slider {
+        FlatSlider {
             id: progressSlider
             Layout.fillWidth: true
             Layout.preferredHeight: 20
             from: 0
             to: AppViewModel.durationMs > 0 ? AppViewModel.durationMs : 1
-            value: AppViewModel.positionMs
+            value: displayValue
             hoverEnabled: true
             PointingCursor {}
 
             property bool seeking: false
+            property real displayValue: AppViewModel.positionMs
 
             onPressedChanged: {
+                if (pressed) {
+                    displayValue = value
+                    return
+                }
+
                 if (!pressed && seeking) {
-                    AppViewModel.seek(value)
+                    displayValue = value
+                    AppViewModel.seek(displayValue)
                     seeking = false
                 }
             }
 
             onMoved: {
                 seeking = true
+                displayValue = value
             }
 
             Binding {
                 target: progressSlider
-                property: "value"
+                property: "displayValue"
                 value: AppViewModel.positionMs
-                when: !progressSlider.pressed
+                when: !progressSlider.pressed && !progressSlider.seeking
             }
         }
 
@@ -149,15 +202,36 @@ Rectangle {
         SectionSeparator {}
 
         // Right: Volume
-        Image {
-            source: Qt.resolvedUrl("../icons/volume_up.svg")
+        Item {
+            id: volumeButton
             Layout.preferredWidth: 14
             Layout.preferredHeight: 14
-            sourceSize: Qt.size(28, 28)
-            fillMode: Image.PreserveAspectFit
+
+            Image {
+                anchors.fill: parent
+                source: Settings.volume > 0
+                    ? Qt.resolvedUrl("../icons/volume_up.svg")
+                    : Qt.resolvedUrl("../icons/volume_off.svg")
+                sourceSize: Qt.size(28, 28)
+                fillMode: Image.PreserveAspectFit
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                    if (Settings.volume > 0) {
+                        root.lastNonZeroVolume = Settings.volume
+                        Settings.volume = 0
+                    } else {
+                        Settings.volume = root.lastNonZeroVolume > 0 ? root.lastNonZeroVolume : 1.0
+                    }
+                }
+            }
         }
 
-        Slider {
+        FlatSlider {
             id: volumeSlider
             Layout.preferredWidth: 80
             Layout.preferredHeight: 20
@@ -166,7 +240,12 @@ Rectangle {
             value: Settings.volume
             hoverEnabled: true
             PointingCursor {}
-            onMoved: Settings.volume = value
+            onMoved: {
+                Settings.volume = value
+                if (value > 0) {
+                    root.lastNonZeroVolume = value
+                }
+            }
         }
 
         Label {
@@ -174,6 +253,7 @@ Rectangle {
             color: Theme.textSecondary
             font.pixelSize: 10
             Layout.preferredWidth: 30
+            horizontalAlignment: Text.AlignHCenter
         }
 
         SectionSeparator {}

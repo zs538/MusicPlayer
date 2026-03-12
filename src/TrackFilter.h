@@ -43,6 +43,26 @@ inline QVariantList trackFilterToVariant(const TrackFilter &filter)
     return list;
 }
 
+inline bool isCustomGroupType(const QString &groupType)
+{
+    return groupType.startsWith("custom:") && groupType.size() > 7;
+}
+
+inline QString customGroupKey(const QString &groupType)
+{
+    return isCustomGroupType(groupType) ? groupType.mid(7).trimmed().toUpper() : QString();
+}
+
+inline QString groupTypeToSparseAttributeKey(const QString &groupType)
+{
+    if (groupType == "performer") return "_performer";
+    if (groupType == "composer") return "_composer";
+    if (groupType == "originalyear") return "_original_year";
+    if (groupType == "bpm") return "_bpm";
+    if (groupType == "initialkey") return "_initial_key";
+    return QString();
+}
+
 inline QString groupTypeToColumn(const QString &groupType)
 {
     // Use COALESCE for albumartist to fall back to artist when album_artist is empty

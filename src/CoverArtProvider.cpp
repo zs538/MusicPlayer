@@ -106,7 +106,7 @@ QString CoverArtProvider::extractEmbeddedCover(const QString &filePath)
     
     // Check if already extracted
     if (QFileInfo::exists(cachedPath)) {
-        return "file://" + cachedPath;
+        return QUrl::fromLocalFile(cachedPath).toString();
     }
     
     QImage coverImage;
@@ -182,7 +182,7 @@ QString CoverArtProvider::extractEmbeddedCover(const QString &filePath)
         // Save to cache
         QDir().mkpath(cacheDir);
         if (coverImage.save(cachedPath, "JPEG", 90)) {
-            return "file://" + cachedPath;
+            return QUrl::fromLocalFile(cachedPath).toString();
         }
     }
     
@@ -212,7 +212,7 @@ QString CoverArtProvider::findFolderCover(const QString &filePath, const QString
         
         for (const QString &imageFile : imageFiles) {
             if (matchesPattern(imageFile, expandedPattern, album, artist)) {
-                return "file://" + dir.absoluteFilePath(imageFile);
+                return QUrl::fromLocalFile(dir.absoluteFilePath(imageFile)).toString();
             }
         }
     }

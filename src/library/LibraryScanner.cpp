@@ -36,6 +36,16 @@ void LibraryScanner::scanFolder(const QString &path)
 
 void LibraryScanner::scanFolders(const QStringList &paths, bool detectDeletions)
 {
+    startScan(paths, detectDeletions, false);
+}
+
+void LibraryScanner::rescanFiles(const QStringList &filePaths)
+{
+    startScan(filePaths, false, true);
+}
+
+void LibraryScanner::startScan(const QStringList &paths, bool detectDeletions, bool inputPathsAreFiles)
+{
     if (m_scanning)
         return;
     
@@ -58,8 +68,8 @@ void LibraryScanner::scanFolders(const QStringList &paths, bool detectDeletions)
     m_scanThread = new QThread();
     
     // Use QtConcurrent-style: run doScan in the thread
-    connect(m_scanThread, &QThread::started, this, [this, paths, detectDeletions]() {
-        doScan(paths, detectDeletions);
+    connect(m_scanThread, &QThread::started, this, [this, paths, detectDeletions, inputPathsAreFiles]() {
+        doScan(paths, detectDeletions, inputPathsAreFiles);
         
         QMetaObject::invokeMethod(this, [this]() {
             m_scanning = false;
@@ -92,11 +102,28 @@ void LibraryScanner::cancelScan()
     m_cancelRequested = true;
 }
 
-void LibraryScanner::doScan(const QStringList &paths, bool detectDeletions)
+void LibraryScanner::doScan(const QStringList &paths, bool detectDeletions, bool inputPathsAreFiles)
 {
     QStringList allFiles;
-    for (const QString &path : paths) {
-        allFiles.append(collectAudioFiles(path));
+
+    if (inputPathsAreFiles) {
+        QSet<QString> seenFiles;
+        for (const QString &path : paths) {
+            const QString normalizedPath = LibraryDatabase::normalizeFileSystemPath(path);
+            if (normalizedPath.isEmpty() || seenFiles.contains(normalizedPath)) {
+                continue;
+            }
+            if (!QFileInfo::exists(normalizedPath) || !isAudioFile(normalizedPath)) {
+                continue;
+            }
+
+            seenFiles.insert(normalizedPath);
+            allFiles.append(normalizedPath);
+        }
+    } else {
+        for (const QString &path : paths) {
+            allFiles.append(collectAudioFiles(path));
+        }
     }
     
     m_totalFiles = allFiles.size();
@@ -121,10 +148,19 @@ void LibraryScanner::doScan(const QStringList &paths, bool detectDeletions)
         
         // Enable WAL mode and set busy timeout for better concurrency
         QSqlQuery pragma(db);
+        pragma.exec("PRAGMA foreign_keys=ON");
         pragma.exec("PRAGMA journal_mode=WAL");
         pragma.exec("PRAGMA busy_timeout=5000");
         
         QString upsertSql = LibraryDatabase::upsertTrackSql();
+        QSqlQuery upsertQuery(db);
+        upsertQuery.prepare(upsertSql);
+        QSqlQuery idQuery(db);
+        idQuery.prepare("SELECT id FROM tracks WHERE file_path = :file_path");
+        QSqlQuery deleteAttributesQuery(db);
+        deleteAttributesQuery.prepare("DELETE FROM track_attributes WHERE track_id = :track_id");
+        QSqlQuery insertAttributeQuery(db);
+        insertAttributeQuery.prepare("INSERT INTO track_attributes (track_id, key, value) VALUES (:track_id, :key, :value)");
         
         // Wrap in transaction for much better performance
         db.transaction();
@@ -138,11 +174,31 @@ void LibraryScanner::doScan(const QStringList &paths, bool detectDeletions)
             
             LibraryTrack track = MetadataExtractor::extractLibraryTrack(filePath);
             if (!track.filePath.isEmpty()) {
-                QSqlQuery query(db);
-                query.prepare(upsertSql);
-                LibraryDatabase::bindTrackToQuery(query, track);
-                if (!query.exec()) {
-                    qWarning() << "Scanner: Failed to insert track:" << query.lastError().text();
+                LibraryDatabase::bindTrackToQuery(upsertQuery, track);
+                if (!upsertQuery.exec()) {
+                    qWarning() << "Scanner: Failed to insert track:" << upsertQuery.lastError().text();
+                } else {
+                    idQuery.bindValue(":file_path", track.filePath);
+                    if (idQuery.exec() && idQuery.next()) {
+                        const qint64 trackId = idQuery.value(0).toLongLong();
+                        deleteAttributesQuery.bindValue(":track_id", trackId);
+                        if (!deleteAttributesQuery.exec()) {
+                            qWarning() << "Scanner: Failed to clear track attributes:" << deleteAttributesQuery.lastError().text();
+                        } else {
+                            const QVector<QPair<QString, QString>> attributes = LibraryDatabase::sparseAttributesForTrack(track);
+                            for (const auto &attribute : attributes) {
+                                insertAttributeQuery.bindValue(":track_id", trackId);
+                                insertAttributeQuery.bindValue(":key", attribute.first);
+                                insertAttributeQuery.bindValue(":value", attribute.second);
+                                if (!insertAttributeQuery.exec()) {
+                                    qWarning() << "Scanner: Failed to insert track attribute:" << insertAttributeQuery.lastError().text();
+                                    break;
+                                }
+                            }
+                        }
+                    } else {
+                        qWarning() << "Scanner: Failed to resolve track id after insert:" << idQuery.lastError().text();
+                    }
                 }
             }
             

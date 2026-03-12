@@ -4,6 +4,7 @@
 #include <QAbstractListModel>
 #include <QUrl>
 #include <QString>
+#include <QVariantMap>
 #include <QVector>
 #include <QDateTime>
 
@@ -33,6 +34,7 @@ struct TrackInfo {
     QString comment;
     int bpm = 0;
     QString initialKey;
+    QVariantMap customTags;
     
     bool isValid() const { return !filePath.isEmpty(); }
 };
@@ -70,6 +72,7 @@ public:
         CommentRole,
         BpmRole,
         InitialKeyRole,
+        TrackDataRole,
         DisplayRole
     };
     Q_ENUM(Roles)
@@ -97,6 +100,7 @@ public:
     Q_INVOKABLE void removeTrack(int index);
     Q_INVOKABLE void removeRows(int index, int count);
     Q_INVOKABLE void moveRow(int from, int to);
+    Q_INVOKABLE void sortByColumn(const QString &key, bool ascending = true);
     Q_INVOKABLE void clear();
     
     void updateTrackMetadata(int index, const TrackInfo &track);

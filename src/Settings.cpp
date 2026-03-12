@@ -3,6 +3,20 @@
 
 static Settings *s_instance = nullptr;
 
+namespace {
+
+QString collectionViewSettingKey(const QString &groupType, const QString &groupBy, const QString &settingName)
+{
+    return QStringLiteral("collection/%1/views/%2/%3").arg(groupType, groupBy, settingName);
+}
+
+QString legacyCollectionViewSettingKey(const QString &groupBy, const QString &settingName)
+{
+    return QStringLiteral("collection/%1/%2").arg(groupBy, settingName);
+}
+
+}
+
 Settings::Settings(QObject *parent)
     : QObject(parent)
     , m_settings("MusicPlayer", "MusicPlayer-")
@@ -122,8 +136,8 @@ void Settings::save()
     m_settings.setValue("appearance/gridCellMaxWidth", m_gridCellMaxWidth);
     m_settings.setValue("library/watcherEnabled", m_watcherEnabled);
     m_settings.setValue("library/periodicRescanMinutes", m_periodicRescanMinutes);
-    m_settings.setValue("behavior/expandedTrackOpenMode", m_expandedTrackOpenMode);
-    m_settings.setValue("appearance/listGroupRowHeight", m_listGroupRowHeight);
+    m_settings.setValue("collection/playButtonEnabled", m_collectionPlayButtonEnabled);
+    m_settings.setValue("collection/singleClickOpen", m_collectionSingleClickOpen);
     m_settings.sync();
 }
 
@@ -141,8 +155,8 @@ void Settings::load()
     m_gridCellMaxWidth = m_settings.value("appearance/gridCellMaxWidth", 200).toInt();
     m_watcherEnabled = m_settings.value("library/watcherEnabled", true).toBool();
     m_periodicRescanMinutes = m_settings.value("library/periodicRescanMinutes", 10).toInt();
-    m_expandedTrackOpenMode = m_settings.value("behavior/expandedTrackOpenMode", 0).toInt();
-    m_listGroupRowHeight = m_settings.value("appearance/listGroupRowHeight", 56).toInt();
+    m_collectionPlayButtonEnabled = m_settings.value("collection/playButtonEnabled", true).toBool();
+    m_collectionSingleClickOpen = m_settings.value("collection/singleClickOpen", false).toBool();
     
     // Load cover art patterns with defaults
     QStringList defaultPatterns = {
@@ -292,71 +306,97 @@ void Settings::setGroupTypeOpenAction(const QString &groupType, const QString &o
     emit settingsChanged();
 }
 
-QString Settings::groupTypeViewMode(const QString &groupType) const
+QString Settings::groupTypeSortBy(const QString &groupType, const QString &groupBy) const
 {
-    QString key = QString("collection/%1/viewMode").arg(groupType);
-    
-    // Defaults: grid for visual types, list for others
+    const QString key = collectionViewSettingKey(groupType, groupBy, QStringLiteral("sortBy"));
+    const QString legacyKey = legacyCollectionViewSettingKey(groupBy, QStringLiteral("sortBy"));
+
     static const QHash<QString, QString> defaults = {
-        {"albumartist", "grid"},
-        {"artist", "grid"},
-        {"album", "grid"},
-        {"genre", "grid"}
+        {"all", "name"},
+        {"albumartist", "name"},
+        {"artist", "name"},
+        {"album", "year"},
+        {"disc", "name"},
+        {"genre", "name"},
+        {"year", "year"},
+        {"filetype", "name"},
+        {"bitrate", "name"},
+        {"none", "name"}
     };
-    
-    return m_settings.value(key, defaults.value(groupType, "list")).toString();
+
+    if (m_settings.contains(key))
+        return m_settings.value(key).toString();
+
+    if (m_settings.contains(legacyKey))
+        return m_settings.value(legacyKey).toString();
+
+    return defaults.value(groupBy, "name");
 }
 
-void Settings::setGroupTypeViewMode(const QString &groupType, const QString &viewMode)
+void Settings::setGroupTypeSortBy(const QString &groupType, const QString &groupBy, const QString &sortBy)
 {
-    QString key = QString("collection/%1/viewMode").arg(groupType);
-    m_settings.setValue(key, viewMode);
+    const QString key = collectionViewSettingKey(groupType, groupBy, QStringLiteral("sortBy"));
+    m_settings.setValue(key, sortBy);
     emit settingsChanged();
 }
 
-bool Settings::groupTypeExploreInWindow(const QString &groupType) const
+bool Settings::groupTypeSortAscending(const QString &groupType, const QString &groupBy) const
 {
-    QString key = QString("collection/%1/exploreInWindow").arg(groupType);
-    return m_settings.value(key, false).toBool();
+    const QString key = collectionViewSettingKey(groupType, groupBy, QStringLiteral("sortAscending"));
+    const QString legacyKey = legacyCollectionViewSettingKey(groupBy, QStringLiteral("sortAscending"));
+
+    static const QHash<QString, bool> defaults = {
+        {"all", true},
+        {"albumartist", true},
+        {"artist", true},
+        {"album", false},
+        {"disc", true},
+        {"genre", true},
+        {"year", false},
+        {"filetype", true},
+        {"bitrate", true},
+        {"none", true}
+    };
+
+    if (m_settings.contains(key))
+        return m_settings.value(key).toBool();
+
+    if (m_settings.contains(legacyKey))
+        return m_settings.value(legacyKey).toBool();
+
+    return defaults.value(groupBy, true);
 }
 
-void Settings::setGroupTypeExploreInWindow(const QString &groupType, bool inWindow)
+void Settings::setGroupTypeSortAscending(const QString &groupType, const QString &groupBy, bool ascending)
 {
-    QString key = QString("collection/%1/exploreInWindow").arg(groupType);
-    m_settings.setValue(key, inWindow);
+    const QString key = collectionViewSettingKey(groupType, groupBy, QStringLiteral("sortAscending"));
+    m_settings.setValue(key, ascending);
     emit settingsChanged();
 }
 
-int Settings::expandedTrackOpenMode() const
+QString Settings::groupTypeSubtitle(const QString &groupType, const QString &groupBy) const
 {
-    return m_expandedTrackOpenMode;
+    const QString key = collectionViewSettingKey(groupType, groupBy, QStringLiteral("subtitle"));
+    const QString legacyKey = legacyCollectionViewSettingKey(groupBy, QStringLiteral("subtitle"));
+
+    static const QHash<QString, QString> defaults = {
+        {"none", "duration"}
+    };
+
+    if (m_settings.contains(key))
+        return m_settings.value(key).toString();
+
+    if (m_settings.contains(legacyKey))
+        return m_settings.value(legacyKey).toString();
+
+    return defaults.value(groupBy, "count");
 }
 
-void Settings::setExpandedTrackOpenMode(int mode)
+void Settings::setGroupTypeSubtitle(const QString &groupType, const QString &groupBy, const QString &subtitle)
 {
-    mode = qBound(0, mode, 1);
-    if (m_expandedTrackOpenMode != mode) {
-        m_expandedTrackOpenMode = mode;
-        m_settings.setValue("behavior/expandedTrackOpenMode", mode);
-        emit expandedTrackOpenModeChanged();
-        emit settingsChanged();
-    }
-}
-
-int Settings::listGroupRowHeight() const
-{
-    return m_listGroupRowHeight;
-}
-
-void Settings::setListGroupRowHeight(int height)
-{
-    height = qBound(32, height, 120);
-    if (m_listGroupRowHeight != height) {
-        m_listGroupRowHeight = height;
-        m_settings.setValue("appearance/listGroupRowHeight", height);
-        emit listGroupRowHeightChanged();
-        emit settingsChanged();
-    }
+    const QString key = collectionViewSettingKey(groupType, groupBy, QStringLiteral("subtitle"));
+    m_settings.setValue(key, subtitle);
+    emit settingsChanged();
 }
 
 bool Settings::watcherEnabled() const
@@ -386,6 +426,36 @@ void Settings::setPeriodicRescanMinutes(int minutes)
         m_periodicRescanMinutes = minutes;
         m_settings.setValue("library/periodicRescanMinutes", minutes);
         emit periodicRescanMinutesChanged();
+        emit settingsChanged();
+    }
+}
+
+bool Settings::collectionPlayButtonEnabled() const
+{
+    return m_collectionPlayButtonEnabled;
+}
+
+void Settings::setCollectionPlayButtonEnabled(bool enabled)
+{
+    if (m_collectionPlayButtonEnabled != enabled) {
+        m_collectionPlayButtonEnabled = enabled;
+        m_settings.setValue("collection/playButtonEnabled", enabled);
+        emit collectionPlayButtonEnabledChanged();
+        emit settingsChanged();
+    }
+}
+
+bool Settings::collectionSingleClickOpen() const
+{
+    return m_collectionSingleClickOpen;
+}
+
+void Settings::setCollectionSingleClickOpen(bool enabled)
+{
+    if (m_collectionSingleClickOpen != enabled) {
+        m_collectionSingleClickOpen = enabled;
+        m_settings.setValue("collection/singleClickOpen", enabled);
+        emit collectionSingleClickOpenChanged();
         emit settingsChanged();
     }
 }

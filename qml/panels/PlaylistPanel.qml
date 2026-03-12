@@ -19,10 +19,38 @@ Rectangle {
     readonly property int playlistRowHeight: 22
 
     property string playlistId: ViewedPlaylistRouter.viewedPlaylistId
+    property var playlistTrackListLayout: TrackListColumnsSupport.ensureLayout(SessionManager.playlistTrackListLayout)
+    property var customTagKeys: AppViewModel.libraryDatabase ? AppViewModel.libraryDatabase.customTagKeys() : []
+    property string playlistSortKey: ""
+    property bool playlistSortAscending: true
     property bool isUserCreated: {
         let idx = AppViewModel.playlistStore.indexOfUuid(playlistId)
         return idx >= 0 ? AppViewModel.playlistStore.tabIsUserCreated(idx) : true
     }
+
+    function setPlaylistTrackListLayout(layout) {
+        let normalized = TrackListColumnsSupport.ensureLayout(layout)
+        playlistTrackListLayout = normalized
+        SessionManager.playlistTrackListLayout = normalized
+        SessionManager.playlistColumns = normalized.columns
+    }
+    function resetPlaylistSortState() {
+        playlistSortKey = ""
+        playlistSortAscending = true
+    }
+    function togglePlaylistSort(key) {
+        let normalizedKey = String(key || "")
+        if (!normalizedKey.length)
+            return
+        if (playlistSortKey === normalizedKey)
+            playlistSortAscending = !playlistSortAscending
+        else {
+            playlistSortKey = normalizedKey
+            playlistSortAscending = true
+        }
+        controller.sortByColumn(normalizedKey, playlistSortAscending)
+    }
+    onPlaylistIdChanged: resetPlaylistSortState()
 
     PlaylistPanelController {
         id: controller
@@ -40,6 +68,25 @@ Rectangle {
                 listView.positionViewAtIndex(index, ListView.Center)
             }
         }
+    }
+
+    Connections {
+        target: AppViewModel.libraryDatabase
+        function onDatabaseChanged() {
+            root.customTagKeys = AppViewModel.libraryDatabase ? AppViewModel.libraryDatabase.customTagKeys() : []
+        }
+    }
+
+    Connections {
+        target: SessionManager
+        function onPlaylistTrackListLayoutChanged() {
+            root.playlistTrackListLayout = TrackListColumnsSupport.ensureLayout(SessionManager.playlistTrackListLayout)
+        }
+    }
+
+    Component.onCompleted: {
+        if (!SessionManager.playlistTrackListLayout.columns || SessionManager.playlistTrackListLayout.columns.length === 0)
+            root.setPlaylistTrackListLayout(root.playlistTrackListLayout)
     }
 
     ColumnLayout {
@@ -269,228 +316,190 @@ Rectangle {
             }
         }
 
-    ListView {
-        id: listView
-        Layout.fillWidth: true
-        Layout.fillHeight: true
-        clip: true
-        interactive: false
-        model: controller.model
-        boundsBehavior: Flickable.StopAtBounds
-        
-        // Bottom margin so user can click below entries
-        footer: Item { width: 1; height: 20 }
-
-        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-        Behavior on contentY { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
-        WheelHandler {
-            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-            onWheel: (e) => listView.contentY = Math.max(0, Math.min(listView.contentHeight - listView.height, listView.contentY - e.angleDelta.y))
+        TrackColumnsHeader {
+            Layout.fillWidth: true
+            Layout.preferredHeight: height
+            layout: root.playlistTrackListLayout
+            customTagKeys: root.customTagKeys
+            rowHeight: root.playlistRowHeight
+            leftMargin: 2
+            rightMargin: 2
+            onLayoutEdited: (layout) => root.setPlaylistTrackListLayout(layout)
+            onColumnClicked: (key) => root.togglePlaylistSort(key)
         }
-        
-        // Click on empty area to deselect, drag to select from bottom
-        MouseArea {
-            anchors.fill: parent
-            z: -1
-            property bool isDragSelecting: false
-            property bool didDragSelect: false  // Track if drag selection actually occurred
+
+        ListView {
+            id: listView
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            clip: true
+            interactive: false
+            model: controller.model
+            boundsBehavior: Flickable.StopAtBounds
             
-            onPressed: {
-                // Check if click is below all entries (in empty space)
-                let clickY = mouseY + listView.contentY
-                let lastEntryBottom = listView.count * root.playlistRowHeight
-                if (clickY >= lastEntryBottom) {
-                    isDragSelecting = true
-                    didDragSelect = false
-                    controller.clearSelection()
-                }
+            footer: Item { width: 1; height: 20 }
+
+            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+            Behavior on contentY { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+            WheelHandler {
+                acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                onWheel: (e) => listView.contentY = Math.max(0, Math.min(listView.contentHeight - listView.height, listView.contentY - e.angleDelta.y))
             }
             
-            onPositionChanged: (mouse) => {
-                if (pressed && isDragSelecting && listView.count > 0) {
-                    let globalY = mouse.y + listView.contentY
+            MouseArea {
+                anchors.fill: parent
+                z: -1
+                property bool isDragSelecting: false
+                property bool didDragSelect: false
+                
+                onPressed: {
+                    let clickY = mouseY + listView.contentY
                     let lastEntryBottom = listView.count * root.playlistRowHeight
-                    // Only select if dragging into entry area
-                    if (globalY < lastEntryBottom) {
-                        let hoverIndex = Math.floor(globalY / root.playlistRowHeight)
-                        hoverIndex = Math.max(0, Math.min(listView.count - 1, hoverIndex))
-                        controller.selectRange(hoverIndex, listView.count - 1)
-                        didDragSelect = true
-                    } else {
+                    if (clickY >= lastEntryBottom) {
+                        isDragSelecting = true
+                        didDragSelect = false
                         controller.clearSelection()
                     }
                 }
+                
+                onPositionChanged: (mouse) => {
+                    if (pressed && isDragSelecting && listView.count > 0) {
+                        let globalY = mouse.y + listView.contentY
+                        let lastEntryBottom = listView.count * root.playlistRowHeight
+                        if (globalY < lastEntryBottom) {
+                            let hoverIndex = Math.floor(globalY / root.playlistRowHeight)
+                            hoverIndex = Math.max(0, Math.min(listView.count - 1, hoverIndex))
+                            controller.selectRange(hoverIndex, listView.count - 1)
+                            didDragSelect = true
+                        } else {
+                            controller.clearSelection()
+                        }
+                    }
+                }
+                
+                onReleased: isDragSelecting = false
+                onCanceled: {
+                    isDragSelecting = false
+                    didDragSelect = false
+                }
+                
+                onClicked: {
+                    if (!didDragSelect) controller.clearSelection()
+                    didDragSelect = false
+                }
             }
-            
-            onReleased: {
-                isDragSelecting = false
-                // didDragSelect stays true until next press
-            }
-            onCanceled: {
-                isDragSelecting = false
-                didDragSelect = false
-            }
-            
-            onClicked: {
-                // Only clear if this was a simple click, not a drag select
-                if (!didDragSelect) controller.clearSelection()
-                didDragSelect = false
-            }
-        }
-
-        // Drop indicator
-        Rectangle {
-            id: dropIndicator
-            width: parent.width
-            height: 2
-            color: Theme.accent
-            visible: DragManager.isDragging && DragManager.dropTargetId === root.playlistId
-            y: Math.max(0, DragManager.dropTargetIndex * root.playlistRowHeight - listView.contentY)
-            z: 100
-        }
-
-        delegate: Rectangle {
-            id: del
-            width: listView.width
-            height: root.playlistRowHeight
-
-            required property int index
-            required property string filePath
-            required property string title
-            required property var durationMs
-
-            property bool selected: controller.isRowSelected(index)
-            property bool playing: AppViewModel.currentIndex === index &&
-                ViewedPlaylistRouter.viewedPlaylistId === ViewedPlaylistRouter.activePlaylistId
-
-            Connections {
-                target: controller
-                function onSelectionChanged() { del.selected = controller.isRowSelected(del.index) }
-            }
-
-            color: selected ? Theme.selected : ma.containsMouse ? Theme.hover : "transparent"
-            opacity: DragManager.isDragging && DragManager.sourceId === root.playlistId && DragManager.draggedIndices.indexOf(index) >= 0 ? 0.4 : 1
 
             Rectangle {
-                anchors.left: parent.left
-                anchors.top: parent.top
-                anchors.bottom: parent.bottom
-                width: del.playing ? 3 : 0
+                id: dropIndicator
+                width: parent.width
+                height: 2
                 color: Theme.accent
-                visible: del.playing
+                visible: DragManager.isDragging && DragManager.dropTargetId === root.playlistId
+                y: Math.max(0, DragManager.dropTargetIndex * root.playlistRowHeight - listView.contentY)
+                z: 100
             }
 
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: del.playing ? 8 : 6
-                anchors.rightMargin: 6
-                anchors.topMargin: 2
-                anchors.bottomMargin: 2
-                spacing: 6
+            delegate: Rectangle {
+                id: del
+                width: listView.width
+                height: root.playlistRowHeight
 
-                Label {
-                    text: del.playing ? "▶" : ""
-                    color: Theme.accent
-                    font.pixelSize: 10
-                    font.bold: true
-                    Layout.preferredWidth: 10
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
+                required property int index
+                required property string filePath
+                required property var trackData
+
+                property bool selected: controller.isRowSelected(index)
+                property bool playing: AppViewModel.currentIndex === index &&
+                    ViewedPlaylistRouter.viewedPlaylistId === ViewedPlaylistRouter.activePlaylistId
+
+                Connections {
+                    target: controller
+                    function onSelectionChanged() { del.selected = controller.isRowSelected(del.index) }
                 }
 
-                Label {
-                    text: del.title || del.filePath.split('/').pop()
-                    color: del.playing ? Theme.accent : Theme.textPrimary
-                    font.pixelSize: 11
-                    font.bold: del.playing
-                    elide: Text.ElideRight
-                    Layout.fillWidth: true
-                    verticalAlignment: Text.AlignVCenter
+                color: selected ? Theme.pressed : ma.containsMouse ? Theme.hover : "transparent"
+                opacity: DragManager.isDragging && DragManager.sourceId === root.playlistId && DragManager.draggedIndices.indexOf(index) >= 0 ? 0.4 : 1
+
+                TrackColumnsRow {
+                    anchors.fill: parent
+                    columns: root.playlistTrackListLayout.columns
+                    trackData: del.trackData
+                    leftMargin: 2
+                    rightMargin: 2
+                    primaryTextColor: del.playing ? "#000000" : Theme.textPrimary
+                    secondaryTextColor: del.playing ? "#000000" : Theme.textSecondary
+                    fontPixelSize: 11
+                    boldPrimary: del.playing
                 }
 
-                Label {
-                    text: {
-                        let ms = del.durationMs || 0
-                        if (!ms) return ""
-                        let s = Math.floor(ms / 1000), m = Math.floor(s / 60)
-                        return m + ":" + String(s % 60).padStart(2, '0')
+                MouseArea {
+                    id: ma
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                    cursorShape: DragManager.isDragging && DragManager.sourceId === root.playlistId ? Qt.ClosedHandCursor : Qt.ArrowCursor
+                    property point pressPos
+
+                    onPressed: function(mouse) {
+                        if (mouse.button === Qt.LeftButton) pressPos = Qt.point(mouse.x, mouse.y)
                     }
-                    color: Theme.textSecondary
-                    font.pixelSize: 11
-                    Layout.preferredWidth: 40
-                    horizontalAlignment: Text.AlignRight
-                    verticalAlignment: Text.AlignVCenter
-                }
-            }
 
-            MouseArea {
-                id: ma
-                anchors.fill: parent
-                hoverEnabled: true
-                acceptedButtons: Qt.LeftButton | Qt.RightButton
-                cursorShape: DragManager.isDragging && DragManager.sourceId === root.playlistId ? Qt.ClosedHandCursor : Qt.ArrowCursor
-                property point pressPos
-
-                onPressed: function(mouse) {
-                    if (mouse.button === Qt.LeftButton) pressPos = Qt.point(mouse.x, mouse.y)
-                }
-
-                onClicked: function(mouse) {
-                    if (mouse.button === Qt.RightButton) {
-                        if (!del.selected) controller.clickRow(del.index, false, false)
-                        contextMenu.popup()
-                    } else if (!DragManager.isDragging) {
-                        controller.clickRow(del.index, mouse.modifiers & Qt.ControlModifier, mouse.modifiers & Qt.ShiftModifier)
-                    }
-                }
-
-                onDoubleClicked: AppViewModel.browseActivation.activatePlaylistRow(del.index)
-
-                onPositionChanged: function(mouse) {
-                    if (pressed && !DragManager.isDragging) {
-                        let dx = mouse.x - pressPos.x, dy = mouse.y - pressPos.y
-                        if (dx*dx + dy*dy > 25) {
+                    onClicked: function(mouse) {
+                        if (mouse.button === Qt.RightButton) {
                             if (!del.selected) controller.clickRow(del.index, false, false)
-                            let indices = controller.selectedRows()
-                            let items = []
-                            for (let i = 0; i < indices.length; i++) {
-                                let idx = controller.model.index(indices[i], 0)
-                                items.push({ filePath: controller.model.data(idx, 257) })
-                            }
-                            DragManager.startDrag(indices, items, root.playlistId)
+                            contextMenu.popup()
+                        } else if (!DragManager.isDragging) {
+                            controller.clickRow(del.index, mouse.modifiers & Qt.ControlModifier, mouse.modifiers & Qt.ShiftModifier)
                         }
                     }
-                    if (DragManager.isDragging) {
-                        let y = mapToItem(listView, mouse.x, mouse.y).y + listView.contentY
-                        DragManager.setDropTarget(root.playlistId, Math.max(0, Math.min(Math.round(y / del.height), listView.count)))
-                    }
-                }
 
-                onReleased: {
-                    if (DragManager.isDragging) {
-                        let drop = DragManager.endDrag()
-                        if (drop.valid && drop.sourceId === drop.targetId && drop.sourceId === root.playlistId) {
-                            controller.moveSelectedTo(drop.targetIndex)
+                    onDoubleClicked: AppViewModel.browseActivation.activatePlaylistRow(del.index)
+
+                    onPositionChanged: function(mouse) {
+                        if (pressed && !DragManager.isDragging) {
+                            let dx = mouse.x - pressPos.x, dy = mouse.y - pressPos.y
+                            if (dx*dx + dy*dy > 25) {
+                                if (!del.selected) controller.clickRow(del.index, false, false)
+                                let indices = controller.selectedRows()
+                                let items = []
+                                for (let i = 0; i < indices.length; i++) {
+                                    let idx = controller.model.index(indices[i], 0)
+                                    items.push({ filePath: controller.model.data(idx, 257) })
+                                }
+                                DragManager.startDrag(indices, items, root.playlistId)
+                            }
+                        }
+                        if (DragManager.isDragging) {
+                            let y = mapToItem(listView, mouse.x, mouse.y).y + listView.contentY
+                            DragManager.setDropTarget(root.playlistId, Math.max(0, Math.min(Math.round(y / del.height), listView.count)))
+                        }
+                    }
+
+                    onReleased: {
+                        if (DragManager.isDragging) {
+                            let drop = DragManager.endDrag()
+                            if (drop.valid && drop.sourceId === drop.targetId && drop.sourceId === root.playlistId) {
+                                controller.moveSelectedTo(drop.targetIndex)
+                            }
                         }
                     }
                 }
             }
-        }
 
-        DropArea {
-            anchors.fill: parent
-            keys: ["text/uri-list"]
-            onDropped: (drop) => { if (drop.hasUrls) AppViewModel.browseActivation.dropUrlsToViewed(drop.urls) }
-            Rectangle { anchors.fill: parent; color: Theme.accent; opacity: parent.containsDrag ? 0.2 : 0 }
-        }
+            DropArea {
+                anchors.fill: parent
+                keys: ["text/uri-list"]
+                onDropped: (drop) => { if (drop.hasUrls) AppViewModel.browseActivation.dropUrlsToViewed(drop.urls) }
+                Rectangle { anchors.fill: parent; color: Theme.accent; opacity: parent.containsDrag ? 0.2 : 0 }
+            }
 
-        Label {
-            anchors.centerIn: parent
-            text: "Empty playlist"
-            color: Theme.textMuted
-            visible: listView.count === 0
+            Label {
+                anchors.centerIn: parent
+                text: "Empty playlist"
+                color: Theme.textMuted
+                visible: listView.count === 0
+            }
         }
-    }
 
     } // end ColumnLayout
 
@@ -507,6 +516,12 @@ Rectangle {
         id: contextMenu
 
         MenuItem {
+            text: root.playlistTrackListLayout.headerVisible ? "Hide column header" : "Show column header"
+            PointingCursor {}
+            onTriggered: root.setPlaylistTrackListLayout(TrackListColumnsSupport.setHeaderVisible(root.playlistTrackListLayout, !root.playlistTrackListLayout.headerVisible))
+        }
+        MenuSeparator {}
+        MenuItem {
             text: "Play"
             enabled: controller.selectedCount > 0
             PointingCursor {}
@@ -517,6 +532,12 @@ Rectangle {
             enabled: controller.selectedCount > 0
             PointingCursor {}
             onTriggered: controller.removeSelected()
+        }
+        MenuItem {
+            text: "Rescan track(s)"
+            enabled: controller.selectedCount > 0
+            PointingCursor {}
+            onTriggered: AppViewModel.rescanPlaylistSelection(root.playlistId, controller.selectedRows())
         }
         MenuSeparator {}
         MenuItem {

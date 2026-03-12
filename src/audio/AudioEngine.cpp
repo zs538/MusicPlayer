@@ -222,6 +222,7 @@ void AudioEngine::stop()
     }
     m_audioThread.reset();
     m_audioWorker = nullptr;
+    m_audioWorkerGeneration.fetch_add(1);
     m_audioInitialized = false;
     m_cachedProcessedUSecs = 0;
 
@@ -275,6 +276,8 @@ void AudioEngine::seek(qint64 positionMs)
     
     // Stop audio output and clear buffers for clean seek
     bool wasPlaying = (m_state == Playing);
+    bool wasPaused = (m_state == Paused);
+    m_audioWorkerGeneration.fetch_add(1);
     if (m_audioThread && m_audioThread->isRunning()) {
         QMetaObject::invokeMethod(m_audioWorker, "stop", Qt::BlockingQueuedConnection);
         m_audioThread->quit();
@@ -305,16 +308,18 @@ void AudioEngine::seek(qint64 positionMs)
                            << "seekRet=" << seekRet;
     
     // Restart audio output
-    if (wasPlaying) {
+    if (wasPlaying || wasPaused) {
         // Recreate audio output in new thread for clean state
         initAudioOutput(m_outputSampleRate, 2);
-        if (m_audioWorker) {
+        if (wasPlaying && m_audioWorker) {
             QMetaObject::invokeMethod(m_audioWorker, "resume", Qt::QueuedConnection);
         }
     }
 
     // Always restart decode thread after seek
     startDecodeThread();
+
+    emit positionMsChanged(positionMs);
 }
 
 void AudioEngine::prepareNext(const QString &filePath)
@@ -507,6 +512,8 @@ void AudioEngine::closeNextFile()
 
 bool AudioEngine::initAudioOutput(int sampleRate, int channels)
 {
+    const quint64 workerGeneration = m_audioWorkerGeneration.fetch_add(1) + 1;
+
     // Create dedicated audio output thread with high priority
     m_audioThread = std::make_unique<QThread>();
     m_audioThread->setObjectName(QStringLiteral("AudioOutputThread"));
@@ -521,7 +528,12 @@ bool AudioEngine::initAudioOutput(int sampleRate, int channels)
     connect(m_audioWorker, &AudioOutputWorker::stateChanged,
             this, &AudioEngine::onAudioStateChanged, Qt::QueuedConnection);
     connect(m_audioWorker, &AudioOutputWorker::positionUpdated,
-            this, &AudioEngine::onPositionUpdated, Qt::QueuedConnection);
+            this, [this, workerGeneration](qint64 processedUSecs) {
+                if (m_audioWorkerGeneration.load() != workerGeneration) {
+                    return;
+                }
+                onPositionUpdated(processedUSecs);
+            }, Qt::QueuedConnection);
     
     // Clean up worker when thread finishes
     connect(m_audioThread.get(), &QThread::finished, m_audioWorker, &QObject::deleteLater);

@@ -178,6 +178,7 @@ QVariantList LibraryTreeModel::tracksForNode(const QString &nodeKey) const
         map["comment"] = track.comment;
         map["bpm"] = track.bpm;
         map["initialKey"] = track.initialKey;
+        map["customTags"] = track.customTags;
         result.append(map);
     }
     
@@ -270,6 +271,22 @@ QString LibraryTreeModel::getGroupKey(const LibraryTrack &track, const QString &
         QString yearPart = track.year > 0 ? QString::number(track.year) + " - " : "";
         QString albumPart = track.album.isEmpty() ? "Unknown Album" : track.album;
         return yearPart + albumPart;
+    }
+    if (isCustomGroupType(level)) {
+        const QString key = customGroupKey(level);
+        const QVariant value = track.customTags.value(key);
+        if (!value.isValid())
+            return "Unknown";
+        if (value.typeId() == QMetaType::QStringList) {
+            const QStringList values = value.toStringList();
+            return values.isEmpty() ? "Unknown" : values.first();
+        }
+        if (value.typeId() == QMetaType::QVariantList) {
+            const QVariantList values = value.toList();
+            return values.isEmpty() ? "Unknown" : values.first().toString();
+        }
+        const QString single = value.toString().trimmed();
+        return single.isEmpty() ? "Unknown" : single;
     }
     return "";
 }

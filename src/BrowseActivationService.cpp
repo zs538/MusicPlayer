@@ -50,7 +50,6 @@ void BrowseActivationService::activateCollectionEntry(const QString &entryId)
         QString filePath = entryId.mid(2);
         applyTracksToPlaylist({filePath}, 0);
     }
-    // Note: "g:" group entries are now handled via openCollectionGroup() with filter-based state
 }
 
 void BrowseActivationService::dropUrlsToViewed(const QList<QUrl> &urls)
@@ -176,49 +175,6 @@ bool BrowseActivationService::shouldAutoplay() const
     default:
         return false;
     }
-}
-
-void BrowseActivationService::openCollectionGroup(const QVariantMap &currentPanelState,
-                                                   const QString &groupType,
-                                                   const QVariant &groupValue)
-{
-    // Build new panel state by extending current filter with the group condition
-    QVariantList currentFilter = currentPanelState.value("filter").toList();
-    
-    QVariantMap newCondition;
-    newCondition["field"] = groupType;
-    newCondition["op"] = "=";
-    newCondition["value"] = groupValue;
-    currentFilter.append(newCondition);
-    
-    // Look up per-group-type settings from Settings
-    Settings *settings = Settings::instance();
-    QString nextGroupBy = settings ? settings->groupTypeNextGroupBy(groupType) : "none";
-    QString openAction = settings ? settings->groupTypeOpenAction(groupType) : "openPanel";
-    
-    // Build display title
-    QString title = groupValue.toString();
-    if (title.isEmpty()) {
-        title = QString("Unknown %1").arg(groupType);
-    }
-    
-    // Build new panel state
-    QVariantMap newPanelState;
-    newPanelState["panelContextType"] = groupType;
-    newPanelState["filter"] = currentFilter;
-    newPanelState["groupBy"] = nextGroupBy;
-    newPanelState["title"] = title;
-    
-    // Handle different open actions
-    if (openAction == "queueTracks") {
-        // Queue tracks - this is now handled by QML calling addFilteredTracksToViewed directly
-        // But keep this as a fallback
-        addFilteredTracksToViewed(currentPanelState.value("filter").toList(), groupType, groupValue);
-        return;
-    }
-    
-    // Default: open in new panel (further explore)
-    emit openCollectionPanelRequested(newPanelState);
 }
 
 void BrowseActivationService::addFilteredTracksToViewed(const QVariantList &filter,
@@ -387,6 +343,33 @@ void BrowseActivationService::appendFilteredTracksToViewed(const QVariantList &f
     }
 }
 
+void BrowseActivationService::appendFilePathsToViewed(const QStringList &filePaths)
+{
+    if (!m_store || filePaths.isEmpty())
+        return;
+
+    TrackListModel *model = m_store->displayedPlaylist();
+    if (!model)
+        return;
+
+    for (const QString &filePath : filePaths) {
+        if (filePath.isEmpty())
+            continue;
+
+        if (m_libraryDb) {
+            auto libOpt = m_libraryDb->trackByPath(filePath);
+            if (libOpt.has_value()) {
+                model->addTrack(MetadataExtractor::toTrackInfo(*libOpt));
+                continue;
+            }
+        }
+
+        TrackInfo track = MetadataExtractor::extractTrackInfo(filePath);
+        if (track.isValid())
+            model->addTrack(track);
+    }
+}
+
 void BrowseActivationService::appendCollectionEntryToViewed(const QString &entryId)
 {
     if (!m_store || !router())
@@ -508,7 +491,19 @@ void BrowseActivationService::openFilteredTracksInNewPlaylist(const QVariantList
             playlistName = artist + " - " + groupValue.toString();
     }
     
-    // Always create a new generated playlist for this action
+    // Check if a generated playlist with this name already exists
+    QString existingId = m_store->findGeneratedPlaylistByName(playlistName);
+    if (!existingId.isEmpty()) {
+        // Playlist already exists - switch to it and play from start
+        router()->setViewedPlaylistId(existingId);
+        if (shouldAutoplay() && m_app) {
+            router()->setActiveToViewed();
+            m_app->playIndex(0);
+        }
+        return;
+    }
+    
+    // Create a new generated playlist
     QString targetId = m_store->getOrCreateGeneratedPlaylist(playlistName);
     if (targetId.isEmpty())
         return;

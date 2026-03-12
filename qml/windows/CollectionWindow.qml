@@ -32,5 +32,6 @@ Window {
         initialFilter: root.initFilter
         initialGroupBy: root.initGroupBy
         windowTitle: root.title
+        showBreadcrumbHomeButton: false
     }
 }

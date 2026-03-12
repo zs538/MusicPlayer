@@ -35,11 +35,17 @@ public:
     static QStringList coverPatterns();
     
     // Static methods for worker thread access
+    static QString sourceForFilePath(const QString &filePath);
+    static QString sourceForFilePaths(const QStringList &filePaths);
+    static QString decodeFilePathId(const QString &id);
+    static QStringList decodeFilePathIds(const QString &id);
     static QImage loadCoverForPath(const QString &filePath, const QSize &requestedSize);
     static QImage loadEmbeddedCover(const QString &filePath);
     static QImage loadFolderCover(const QString &folderPath, const QString &album = {}, const QString &artist = {});
     static QImage getCached(const QString &key);
     static void putCached(const QString &key, const QImage &image);
+    static QImage getOriginalCached(const QString &key);
+    static void putOriginalCached(const QString &key, const QImage &image);
     static void clearCache();
 
 private:
@@ -47,6 +53,8 @@ private:
     
     static QCache<QString, QImage> s_cache;
     static QMutex s_cacheMutex;
+    static QCache<QString, QImage> s_originalCache;
+    static QMutex s_originalCacheMutex;
     static QStringList s_coverPatterns;
     static QMutex s_patternsMutex;
     static CoverImageProvider *s_instance;

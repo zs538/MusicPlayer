@@ -6,6 +6,8 @@
 #include "SessionManager.h"
 #include "Settings.h"
 #include "MetadataExtractor.h"
+#include "CoverImageProvider.h"
+#include "TrackFilter.h"
 #include "audio/AudioEngine.h"
 #include "library/LibraryDatabase.h"
 #include "library/LibraryScanner.h"
@@ -64,27 +66,11 @@ AppViewModel::AppViewModel(QObject *parent)
                  << ", periodic:" << settings->periodicRescanMinutes() << "min";
     });
     connect(m_libraryScanner, &LibraryScanner::scanFinished, this, [this]() {
-        // Notify database changed so all models (CollectionBrowseModel, etc.) refresh
         if (m_libraryDb) {
             m_libraryDb->notifyDatabaseChanged();
         }
         emit libraryTrackCountChanged();
-
-        // Refresh playlist tracks' metadata from the library database
-        TrackListModel *playlist = m_playlistStore ? m_playlistStore->displayedPlaylist() : nullptr;
-        if (playlist && m_libraryDb) {
-            for (int i = 0; i < playlist->count(); ++i) {
-                TrackInfo t = playlist->trackAt(i);
-                if (t.filePath.isEmpty())
-                    continue;
-
-                auto libOpt = m_libraryDb->trackByPath(t.filePath);
-                if (!libOpt.has_value())
-                    continue;
-
-                playlist->updateTrackMetadata(i, MetadataExtractor::toTrackInfo(*libOpt));
-            }
-        }
+        refreshPlaylistMetadataFromLibrary();
     });
     
     m_queueManager->setPlaylistModel(m_playlistStore->activePlaylist());
@@ -133,10 +119,7 @@ AppViewModel::AppViewModel(QObject *parent)
     }
     
     // Initialize SessionManager and load session if enabled
-    SessionManager *sessionMgr = SessionManager::instance();
-    if (!sessionMgr) {
-        sessionMgr = new SessionManager(this);
-    }
+    SessionManager *sessionMgr = SessionManager::ensureInstance(this);
     sessionMgr->initialize(m_playlistStore);
     
     // Initialize ViewedPlaylistRouter - don't create here, let QML create via create()
@@ -250,6 +233,25 @@ AppViewModel *AppViewModel::create(QQmlEngine *qmlEngine, QJSEngine *jsEngine)
 AppViewModel *AppViewModel::instance()
 {
     return s_instance;
+}
+
+QString AppViewModel::coverImageSourceForFile(const QString &filePath) const
+{
+    return CoverImageProvider::sourceForFilePath(filePath);
+}
+
+QString AppViewModel::coverImageSourceForFiles(const QStringList &filePaths) const
+{
+    return CoverImageProvider::sourceForFilePaths(filePaths);
+}
+
+QString AppViewModel::localFileUrlForPath(const QString &filePath) const
+{
+    if (filePath.isEmpty()) {
+        return QString();
+    }
+
+    return QUrl::fromLocalFile(filePath).toString();
 }
 
 void AppViewModel::play()
@@ -479,6 +481,62 @@ void AppViewModel::rescanLibrary()
     m_libraryScanner->rescanAll();
 }
 
+void AppViewModel::rescanCollectionEntry(const QVariantList &filter, const QString &entryType,
+                                         const QString &groupType, const QVariant &groupValue,
+                                         const QString &filePath)
+{
+    QStringList filePaths;
+
+    if (entryType == QStringLiteral("group")) {
+        if (!m_libraryDb) {
+            return;
+        }
+
+        TrackFilter trackFilter = trackFilterFromVariant(filter);
+        if (!groupType.isEmpty()) {
+            FilterCondition condition;
+            condition.field = groupType;
+            condition.op = QStringLiteral("=");
+            condition.value = groupValue;
+            trackFilter.append(condition);
+        }
+
+        const QVector<LibraryTrack> tracks = m_libraryDb->tracksMatchingFilter(trackFilter);
+        for (const LibraryTrack &track : tracks) {
+            if (!track.filePath.isEmpty()) {
+                filePaths.append(track.filePath);
+            }
+        }
+    } else if (!filePath.isEmpty()) {
+        filePaths.append(filePath);
+    }
+
+    rescanFiles(filePaths);
+}
+
+void AppViewModel::rescanPlaylistSelection(const QString &playlistId, const QVariantList &rows)
+{
+    if (!m_playlistStore) {
+        return;
+    }
+
+    TrackListModel *playlist = m_playlistStore->getPlaylistModel(playlistId);
+    if (!playlist) {
+        return;
+    }
+
+    QStringList filePaths;
+    for (const QVariant &rowValue : rows) {
+        const int row = rowValue.toInt();
+        const TrackInfo track = playlist->trackAt(row);
+        if (!track.filePath.isEmpty()) {
+            filePaths.append(track.filePath);
+        }
+    }
+
+    rescanFiles(filePaths);
+}
+
 QStringList AppViewModel::libraryFolders() const
 {
     return m_libraryDb->watchFolders();
@@ -507,6 +565,67 @@ void AppViewModel::removeWatchFolder(const QString &path)
     m_libraryDb->notifyDatabaseChanged();
     emit libraryFoldersChanged();
     emit libraryTrackCountChanged();
+}
+
+void AppViewModel::rescanFiles(const QStringList &filePaths)
+{
+    if (!m_libraryScanner) {
+        return;
+    }
+
+    QStringList normalizedPaths;
+    for (const QString &filePath : filePaths) {
+        const QString normalizedPath = LibraryDatabase::normalizeFileSystemPath(filePath);
+        if (!normalizedPath.isEmpty() && !normalizedPaths.contains(normalizedPath)) {
+            normalizedPaths.append(normalizedPath);
+        }
+    }
+
+    if (normalizedPaths.isEmpty()) {
+        return;
+    }
+
+    m_libraryScanner->rescanFiles(normalizedPaths);
+}
+
+void AppViewModel::refreshPlaylistMetadataFromLibrary()
+{
+    if (!m_playlistStore || !m_libraryDb) {
+        return;
+    }
+
+    const QString currentTrackPath = m_queueManager ? m_queueManager->currentTrack().filePath : QString();
+    TrackInfo refreshedCurrentTrack;
+
+    for (const PlaylistStore::Tab &tab : m_playlistStore->tabs()) {
+        TrackListModel *playlist = tab.model;
+        if (!playlist) {
+            continue;
+        }
+
+        for (int i = 0; i < playlist->count(); ++i) {
+            const TrackInfo existingTrack = playlist->trackAt(i);
+            if (existingTrack.filePath.isEmpty()) {
+                continue;
+            }
+
+            auto libraryTrack = m_libraryDb->trackByPath(existingTrack.filePath);
+            if (!libraryTrack.has_value()) {
+                continue;
+            }
+
+            const TrackInfo refreshedTrack = MetadataExtractor::toTrackInfo(*libraryTrack);
+            playlist->updateTrackMetadata(i, refreshedTrack);
+
+            if (!currentTrackPath.isEmpty() && refreshedTrack.filePath == currentTrackPath) {
+                refreshedCurrentTrack = refreshedTrack;
+            }
+        }
+    }
+
+    if (refreshedCurrentTrack.isValid()) {
+        updateNowPlaying(refreshedCurrentTrack);
+    }
 }
 
 int AppViewModel::libraryTrackCount() const
@@ -585,7 +704,7 @@ void AppViewModel::updateNowPlaying(const TrackInfo &track)
         m_nowPlayingArtist = track.artist;
         
         // Use async image provider to avoid blocking GUI thread with TagLib/QImage work
-        m_nowPlayingCoverUrl = QStringLiteral("image://cover/") + track.filePath;
+        m_nowPlayingCoverUrl = coverImageSourceForFile(track.filePath);
         
         emit nowPlayingChanged();
     }

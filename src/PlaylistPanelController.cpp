@@ -184,6 +184,15 @@ void PlaylistPanelController::moveSelectedTo(int targetRow)
     m_selectionModel->select(selection, QItemSelectionModel::Select);
 }
 
+void PlaylistPanelController::sortByColumn(const QString &key, bool ascending)
+{
+    if (!m_model || key.trimmed().isEmpty())
+        return;
+
+    clearSelection();
+    m_model->sortByColumn(key, ascending);
+}
+
 void PlaylistPanelController::updateSelectionCache()
 {
     m_selectedRowsCache.clear();

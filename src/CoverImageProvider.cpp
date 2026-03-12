@@ -3,6 +3,9 @@
 #include <QDir>
 #include <QImage>
 #include <QDebug>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonParseError>
 #include <QRegularExpression>
 #include <taglib/fileref.h>
 #include <taglib/tag.h>
@@ -22,6 +25,8 @@
 CoverImageProvider *CoverImageProvider::s_instance = nullptr;
 QCache<QString, QImage> CoverImageProvider::s_cache(300);
 QMutex CoverImageProvider::s_cacheMutex;
+QCache<QString, QImage> CoverImageProvider::s_originalCache(128);
+QMutex CoverImageProvider::s_originalCacheMutex;
 QStringList CoverImageProvider::s_coverPatterns = {
     "cover.jpg", "cover.jpeg", "cover.png",
     "folder.jpg", "folder.png",
@@ -54,6 +59,8 @@ void CoverImageProvider::setCoverPatterns(const QStringList &patterns)
     // Invalidate cache when patterns change
     QMutexLocker cacheLocker(&s_cacheMutex);
     s_cache.clear();
+    QMutexLocker originalCacheLocker(&s_originalCacheMutex);
+    s_originalCache.clear();
 }
 
 QStringList CoverImageProvider::coverPatterns()
@@ -85,10 +92,96 @@ void CoverImageProvider::putCached(const QString &key, const QImage &image)
     s_cache.insert(key, new QImage(image));
 }
 
+QImage CoverImageProvider::getOriginalCached(const QString &key)
+{
+    QMutexLocker locker(&s_originalCacheMutex);
+    if (QImage *cached = s_originalCache.object(key)) {
+        return *cached;
+    }
+    return QImage();
+}
+
+void CoverImageProvider::putOriginalCached(const QString &key, const QImage &image)
+{
+    QMutexLocker locker(&s_originalCacheMutex);
+    s_originalCache.insert(key, new QImage(image));
+}
+
 void CoverImageProvider::clearCache()
 {
     QMutexLocker locker(&s_cacheMutex);
     s_cache.clear();
+    QMutexLocker originalLocker(&s_originalCacheMutex);
+    s_originalCache.clear();
+}
+
+QString CoverImageProvider::sourceForFilePath(const QString &filePath)
+{
+    if (filePath.isEmpty()) {
+        return QString();
+    }
+
+    const QByteArray encodedPath = filePath.toUtf8().toBase64(QByteArray::Base64UrlEncoding | QByteArray::OmitTrailingEquals);
+    return QStringLiteral("image://cover/") + QString::fromLatin1(encodedPath);
+}
+
+QString CoverImageProvider::sourceForFilePaths(const QStringList &filePaths)
+{
+    QStringList normalizedPaths;
+    normalizedPaths.reserve(filePaths.size());
+    for (const QString &filePath : filePaths) {
+        if (!filePath.isEmpty() && !normalizedPaths.contains(filePath))
+            normalizedPaths.append(filePath);
+    }
+
+    if (normalizedPaths.isEmpty())
+        return {};
+    if (normalizedPaths.size() == 1)
+        return sourceForFilePath(normalizedPaths.constFirst());
+
+    QJsonArray pathsArray;
+    for (const QString &filePath : normalizedPaths)
+        pathsArray.append(filePath);
+
+    const QByteArray encodedPaths = QJsonDocument(pathsArray).toJson(QJsonDocument::Compact)
+                                       .toBase64(QByteArray::Base64UrlEncoding | QByteArray::OmitTrailingEquals);
+    return QStringLiteral("image://cover/multi:") + QString::fromLatin1(encodedPaths);
+}
+
+QString CoverImageProvider::decodeFilePathId(const QString &id)
+{
+    const QStringList filePaths = decodeFilePathIds(id);
+    return filePaths.isEmpty() ? QString() : filePaths.constFirst();
+}
+
+QStringList CoverImageProvider::decodeFilePathIds(const QString &id)
+{
+    if (id.isEmpty())
+        return {};
+
+    if (id.startsWith(QStringLiteral("multi:"))) {
+        const QByteArray decodedPayload = QByteArray::fromBase64(id.mid(6).toLatin1(), QByteArray::Base64UrlEncoding);
+        QJsonParseError parseError;
+        const QJsonDocument document = QJsonDocument::fromJson(decodedPayload, &parseError);
+        if (parseError.error != QJsonParseError::NoError || !document.isArray())
+            return {};
+
+        QStringList filePaths;
+        const QJsonArray pathsArray = document.array();
+        filePaths.reserve(pathsArray.size());
+        for (const QJsonValue &value : pathsArray) {
+            const QString filePath = value.toString();
+            if (!filePath.isEmpty() && !filePaths.contains(filePath))
+                filePaths.append(filePath);
+        }
+        return filePaths;
+    }
+
+    const QByteArray decodedPath = QByteArray::fromBase64(id.toLatin1(), QByteArray::Base64UrlEncoding);
+    if (!decodedPath.isEmpty())
+        return {QString::fromUtf8(decodedPath)};
+
+    return {id};
 }
 
 QImage CoverImageProvider::loadCoverForPath(const QString &filePath, const QSize &)
@@ -256,10 +349,23 @@ void CoverImageResponse::run()
             emit finished();
             return;
         }
-        
+
+        const QStringList filePaths = CoverImageProvider::decodeFilePathIds(m_id);
+
         // Load the image (runs on worker thread, not blocking render)
-        if (!m_id.isEmpty() && QFileInfo::exists(m_id)) {
-            m_image = CoverImageProvider::loadCoverForPath(m_id, m_requestedSize);
+        for (const QString &filePath : filePaths) {
+            if (filePath.isEmpty() || !QFileInfo::exists(filePath))
+                continue;
+
+            m_image = CoverImageProvider::getOriginalCached(filePath);
+            if (m_image.isNull()) {
+                m_image = CoverImageProvider::loadCoverForPath(filePath, m_requestedSize);
+                if (!m_image.isNull())
+                    CoverImageProvider::putOriginalCached(filePath, m_image);
+            }
+
+            if (!m_image.isNull())
+                break;
         }
         
         // Create placeholder if no image found

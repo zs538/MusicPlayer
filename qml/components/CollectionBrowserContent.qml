@@ -18,61 +18,230 @@ Item {
         cursorShape: Qt.IBeamCursor
     }
 
+    component TopStripIconButton: Item {
+        id: control
+
+        property url iconSource: ""
+        property real iconSize: 14
+        property real idleOpacity: 0.9
+        property bool interactive: true
+        property real horizontalInset: 0
+
+        signal clicked()
+
+        implicitWidth: 24 - horizontalInset
+        implicitHeight: 24
+        width: implicitWidth
+        height: implicitHeight
+
+        Image {
+            anchors.centerIn: parent
+            width: control.iconSize
+            height: control.iconSize
+            source: control.iconSource
+            sourceSize: Qt.size(control.iconSize * 2, control.iconSize * 2)
+            opacity: buttonMouseArea.pressed ? Math.max(0.4, control.idleOpacity - 0.18) : control.idleOpacity
+        }
+
+        HoverHandler {
+            enabled: control.interactive
+            cursorShape: Qt.PointingHandCursor
+        }
+
+        MouseArea {
+            id: buttonMouseArea
+            anchors.fill: parent
+            enabled: control.interactive
+            hoverEnabled: true
+            cursorShape: control.interactive ? Qt.PointingHandCursor : Qt.ArrowCursor
+            onClicked: control.clicked()
+        }
+    }
+
     // Initial state (set once by parent)
     property var initialFilter: []
     property string initialGroupBy: "albumartist"
 
-    // View options
-    property bool showHeader: false
-    property string viewMode: Settings.groupTypeViewMode(initialGroupBy)
     property string windowTitle: ""
-    property bool expandableGroups: false
-    property var expandedGroups: ({})
+    property bool showBreadcrumbHomeButton: true
+    property var _customGroupKeys: []
+    property bool _loadingSortSettings: false
+    property bool _loadingSubtitleSettings: false
 
-    property bool _loadingViewMode: false
-    onViewModeChanged: { if (!_loadingViewMode) Settings.setGroupTypeViewMode(browserModel.groupBy, viewMode) }
-
-    // Expose model for parent access
     readonly property alias model: browserModel
+    readonly property real _scrollY: gridView.contentY
 
-    // Current scroll position (whichever view is active)
-    readonly property real _scrollY: viewMode === "grid" ? gridView.contentY : listView.contentY
+    function doNavigate(filter, groupBy) {
+        browserModel.navigate(filter, groupBy, _scrollY)
+    }
+    function doGoBack() {
+        browserModel.goBack(_scrollY)
+    }
+    function doGoForward() {
+        browserModel.goForward(_scrollY)
+    }
+    function jumpToBreadcrumb(index) {
+        browserModel.jumpToBreadcrumb(index, _scrollY)
+    }
+    function groupLabel(groupBy) {
+        return groupBy.indexOf("custom:") === 0 ? "Custom: " + groupBy.slice(7) :
+               groupBy === "artist" ? "Artists" :
+               groupBy === "albumartist" ? "Album Artists" :
+               groupBy === "album" ? "Albums" :
+               groupBy === "genre" ? "Genres" :
+               groupBy === "year" ? "Years" :
+               groupBy === "disc" ? "Discs" :
+               groupBy === "performer" ? "Performers" :
+               groupBy === "composer" ? "Composers" :
+               groupBy === "originalyear" ? "Original Years" :
+               groupBy === "bpm" ? "BPM" :
+               groupBy === "initialkey" ? "Keys" :
+               groupBy === "bitrate" ? "Bitrates" :
+               groupBy === "filetype" ? "File Types" :
+               groupBy === "none" ? "Tracks" : groupBy
+    }
+    function customGroupBy(key) {
+        return "custom:" + key
+    }
+    function contextGroupTypeForFilter(filter) {
+        return filter.length > 0 ? filter[filter.length - 1].field : "all"
+    }
+    function currentContextGroupType() {
+        return root.contextGroupTypeForFilter(browserModel.filter)
+    }
+    function refreshCustomGroupKeys() {
+        root._customGroupKeys = AppViewModel.libraryDatabase ? AppViewModel.libraryDatabase.customTagKeys() : []
+    }
+    function applyStoredSortSettings(groupType, groupBy) {
+        root._loadingSortSettings = true
+        browserModel.sortBy = Settings.groupTypeSortBy(groupType, groupBy)
+        browserModel.sortAscending = Settings.groupTypeSortAscending(groupType, groupBy)
+        root._loadingSortSettings = false
+    }
+    function applyStoredSubtitleSettings(groupType, groupBy) {
+        root._loadingSubtitleSettings = true
+        browserModel.subtitleKey = Settings.groupTypeSubtitle(groupType, groupBy)
+        root._loadingSubtitleSettings = false
+    }
+    function setSortOption(sortBy) {
+        browserModel.sortBy = sortBy
+        Settings.setGroupTypeSortBy(root.currentContextGroupType(), browserModel.groupBy, sortBy)
+    }
+    function setSortAscending(ascending) {
+        browserModel.sortAscending = ascending
+        Settings.setGroupTypeSortAscending(root.currentContextGroupType(), browserModel.groupBy, ascending)
+    }
+    function applyCurrentContextSettings() {
+        const groupType = root.currentContextGroupType()
+        const groupBy = browserModel.groupBy
+        root.applyStoredSortSettings(groupType, groupBy)
+        root.applyStoredSubtitleSettings(groupType, groupBy)
+    }
+    function sortOptions() {
+        if (browserModel.groupBy === "none") {
+            return [
+                { text: "Name", key: "name" },
+                { text: "Track Number", key: "trackNumber" },
+                { text: "Year", key: "year" },
+                { text: "Duration", key: "duration" },
+                { text: "Date Updated", key: "dateUpdated" }
+            ]
+        }
 
-    // Navigation helpers — pass current scroll position to model
-    function doNavigate(filter, groupBy) { browserModel.navigate(filter, groupBy, _scrollY) }
-    function doGoBack() { browserModel.goBack(_scrollY) }
-    function doGoForward() { browserModel.goForward(_scrollY) }
+        return [
+            { text: "Name", key: "name" },
+            { text: "Year", key: "year" },
+            { text: "Duration", key: "duration" },
+            { text: "Track Count", key: "count" },
+            { text: "Date Updated", key: "dateUpdated" }
+        ]
+    }
+    function setSubtitleOption(subtitleKey) {
+        browserModel.subtitleKey = subtitleKey
+        Settings.setGroupTypeSubtitle(root.currentContextGroupType(), browserModel.groupBy, subtitleKey)
+    }
+    function subtitleOptions() {
+        if (browserModel.groupBy === "none") {
+            return [
+                { text: "Track", key: "trackNumber" },
+                { text: "Duration", key: "duration" },
+                { text: "Track - Duration", key: "trackNumberDuration" },
+                { text: "Year", key: "year" },
+                { text: "Date Updated", key: "dateUpdated" },
+                { text: "Artist", key: "artist" },
+                { text: "Album Artist", key: "albumArtist" },
+                { text: "Album", key: "album" },
+                { text: "Track - Album", key: "trackNumberAlbum" },
+                { text: "Artist - Album", key: "artistAlbum" },
+                { text: "Album Artist - Album", key: "albumArtistAlbum" },
+                { text: "File Type", key: "fileType" },
+                { text: "Bitrate", key: "bitrate" }
+            ]
+        }
 
-    // Scroll restore after back/forward navigation (direct — no Timer needed
-    // because swapEntries avoids model reset, so the view is already laid out)
+        return [
+            { text: "Track Count", key: "count" },
+            { text: "Duration", key: "duration" },
+            { text: "Tracks - Duration", key: "countDuration" },
+            { text: "Album Artist", key: "albumArtist" },
+            { text: "Album Artist - Year", key: "albumArtistYear" },
+            { text: "Album Artist - Tracks", key: "albumArtistCount" },
+            { text: "Year - Album Artist", key: "yearAlbumArtist" },
+            { text: "Year", key: "year" },
+            { text: "Year - Tracks", key: "yearCount" },
+            { text: "Date Updated", key: "dateUpdated" }
+        ]
+    }
+
     property bool _restoring: false
     Connections {
         target: browserModel
         function onPendingScrollYChanged() {
             root._restoring = true
-            if (root.viewMode === "grid") gridView.contentY = browserModel.pendingScrollY
-            else listView.contentY = browserModel.pendingScrollY
+            gridView.contentY = browserModel.pendingScrollY
             root._restoring = false
         }
     }
+
+    Connections {
+        target: AppViewModel.libraryDatabase
+        function onDatabaseChanged() {
+            root.refreshCustomGroupKeys()
+        }
+    }
+
+    Component.onCompleted: refreshCustomGroupKeys()
 
     CollectionBrowseModel {
         id: browserModel
         database: AppViewModel.libraryDatabase
         filter: root.initialFilter
         groupBy: root.initialGroupBy
+        sortBy: Settings.groupTypeSortBy(root.contextGroupTypeForFilter(root.initialFilter), root.initialGroupBy)
+        sortAscending: Settings.groupTypeSortAscending(root.contextGroupTypeForFilter(root.initialFilter), root.initialGroupBy)
+        subtitleKey: Settings.groupTypeSubtitle(root.contextGroupTypeForFilter(root.initialFilter), root.initialGroupBy)
+        onFilterChanged: root.applyCurrentContextSettings()
         onGroupByChanged: {
-            root._loadingViewMode = true
-            root.viewMode = Settings.groupTypeViewMode(browserModel.groupBy)
-            root._loadingViewMode = false
+            Settings.setGroupTypeNextGroupBy(root.currentContextGroupType(), browserModel.groupBy)
+            root.applyCurrentContextSettings()
             root._currentOpenAction = Settings.groupTypeOpenAction(browserModel.groupBy)
+        }
+        onSortByChanged: {
+            if (!root._loadingSortSettings)
+                Settings.setGroupTypeSortBy(root.currentContextGroupType(), browserModel.groupBy, browserModel.sortBy)
+        }
+        onSortAscendingChanged: {
+            if (!root._loadingSortSettings)
+                Settings.setGroupTypeSortAscending(root.currentContextGroupType(), browserModel.groupBy, browserModel.sortAscending)
+        }
+        onSubtitleKeyChanged: {
+            if (!root._loadingSubtitleSettings)
+                Settings.setGroupTypeSubtitle(root.currentContextGroupType(), browserModel.groupBy, browserModel.subtitleKey)
         }
     }
 
-    // Reactive local mirror of the per-groupType open action so menu items update within the same session
     property string _currentOpenAction: Settings.groupTypeOpenAction(initialGroupBy)
 
-    // Shared context menu state (one Menu instance instead of one per delegate)
     property string _ctxEntryType: ""
     property string _ctxGroupType: ""
     property var _ctxGroupValue: null
@@ -110,6 +279,23 @@ Item {
                     AppViewModel.browseActivation.openCollectionEntryInNewPlaylist("t:" + root._ctxFilePath)
             }
         }
+        MenuSeparator {}
+        MenuItem {
+            text: qsTr("Rescan track(s)")
+            PointingCursor {}
+            onTriggered: AppViewModel.rescanCollectionEntry(browserModel.filter, root._ctxEntryType,
+                                                            root._ctxGroupType, root._ctxGroupValue,
+                                                            root._ctxFilePath)
+        }
+    }
+
+    Menu {
+        id: gridBackgroundContextMenu
+        MenuItem {
+            text: qsTr("Queue All")
+            PointingCursor {}
+            onTriggered: AppViewModel.browseActivation.appendFilePathsToViewed(browserModel.displayedFilePaths())
+        }
     }
 
     function _openContextMenu(entryType, groupType, groupValue, filePath) {
@@ -125,9 +311,20 @@ Item {
         gesturePolicy: TapHandler.ReleaseWithinBounds
         onTapped: function(eventPoint, button) {
             let searchFieldPosition = searchField.mapFromItem(root, eventPoint.position.x, eventPoint.position.y)
-            if (searchField.activeFocus && !searchField.contains(searchFieldPosition)) {
+            if (searchField.activeFocus && !searchField.contains(searchFieldPosition))
                 root.forceActiveFocus()
-            }
+        }
+    }
+
+    TapHandler {
+        acceptedButtons: Qt.BackButton | Qt.ForwardButton
+        acceptedDevices: PointerDevice.Mouse
+        gesturePolicy: TapHandler.ReleaseWithinBounds
+        onTapped: function(eventPoint, button) {
+            if (button === Qt.BackButton)
+                root.doGoBack()
+            else if (button === Qt.ForwardButton)
+                root.doGoForward()
         }
     }
 
@@ -135,12 +332,19 @@ Item {
         anchors.fill: parent
         spacing: 0
 
-        // Top strip (title, options, sort, search)
         Rectangle {
             id: topStrip
             Layout.fillWidth: true
             Layout.preferredHeight: 24
-            color: Theme.surfaceAlt
+            color: Theme.background
+
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                height: 1
+                color: Theme.border
+            }
 
             RowLayout {
                 anchors.fill: parent
@@ -148,252 +352,366 @@ Item {
                 anchors.rightMargin: 4
                 spacing: 4
 
-                // Back button
-                Button {
-                    visible: browserModel.canGoBack || browserModel.canGoForward
-                    enabled: browserModel.canGoBack
-                    Layout.preferredWidth: 20
-                    Layout.preferredHeight: 20
-                    flat: true
-                    opacity: enabled ? 1.0 : 0.3
-                    icon.source: Qt.resolvedUrl("../icons/arrow_back.svg")
-                    icon.color: Theme.textPrimary
-                    icon.width: 12; icon.height: 12
-                    onClicked: root.doGoBack()
-
-                    MouseArea {
-                        anchors.fill: parent
-                        acceptedButtons: Qt.NoButton
-                        cursorShape: parent.enabled ? Qt.PointingHandCursor : Qt.ForbiddenCursor
-                    }
-                }
-
-                // Forward button
-                Button {
-                    visible: browserModel.canGoBack || browserModel.canGoForward
-                    enabled: browserModel.canGoForward
-                    Layout.preferredWidth: 20
-                    Layout.preferredHeight: 20
-                    flat: true
-                    opacity: enabled ? 1.0 : 0.3
-                    icon.source: Qt.resolvedUrl("../icons/arrow_forward.svg")
-                    icon.color: Theme.textPrimary
-                    icon.width: 12; icon.height: 12
-                    onClicked: root.doGoForward()
-
-                    MouseArea {
-                        anchors.fill: parent
-                        acceptedButtons: Qt.NoButton
-                        cursorShape: parent.enabled ? Qt.PointingHandCursor : Qt.ForbiddenCursor
-                    }
-                }
-
-                // Title on the left
-                Label {
-                    id: titleLabel
+                Item {
+                    id: breadcrumbContainer
                     Layout.fillWidth: true
-                    text: {
-                        let groupLabel = browserModel.groupBy === "albumartist" ? "Artists" :
-                                        browserModel.groupBy === "artist" ? "Artists" :
-                                        browserModel.groupBy === "album" ? "Albums" :
-                                        browserModel.groupBy === "genre" ? "Genres" :
-                                        browserModel.groupBy === "year" ? "Years" :
-                                        browserModel.groupBy === "none" ? "Tracks" : browserModel.groupBy
-                        let prefix = root.windowTitle ? (root.windowTitle + " - ") : ""
-                        return prefix + groupLabel + " (" + browserModel.count + ")"
-                    }
-                    font.bold: true
-                    font.pixelSize: 11
-                    color: Theme.textPrimary
-                    elide: Text.ElideRight
-                }
+                    Layout.preferredHeight: 24
+                    clip: true
 
-                // Search filter
-                TextField {
-                    id: searchField
-                    Layout.preferredWidth: 120
-                    Layout.preferredHeight: 20
-                    placeholderText: "Filter..."
-                    font.pixelSize: 10
-                    leftPadding: 4
-                    rightPadding: 4
-                    topPadding: 2
-                    bottomPadding: 2
-                    hoverEnabled: true
-                    selectByMouse: true
-                    onTextChanged: browserModel.searchFilter = text
-
-                    MouseArea {
+                    Row {
                         anchors.fill: parent
-                        acceptedButtons: Qt.NoButton
-                        cursorShape: Qt.IBeamCursor
+                        spacing: 0
+
+                        TopStripIconButton {
+                            visible: root.showBreadcrumbHomeButton
+                            iconSource: Qt.resolvedUrl("../icons/home.svg")
+                            iconSize: 14
+                            horizontalInset: 2
+                            onClicked: root.jumpToBreadcrumb(0)
+                        }
+
+                        Repeater {
+                            model: root.showBreadcrumbHomeButton ? Math.max(0, browserModel.breadcrumbPath.length - 1) : browserModel.breadcrumbPath.length
+
+                            delegate: Item {
+                                required property int index
+
+                                property int breadcrumbIndex: root.showBreadcrumbHomeButton ? index + 1 : index
+                                property var crumb: browserModel.breadcrumbPath[breadcrumbIndex]
+                                property bool isFuture: breadcrumbIndex > browserModel.currentBreadcrumbIndex
+                                property bool showSeparator: breadcrumbIndex > 0
+                                width: crumbLabel.width + (showSeparator ? separatorIcon.width + 8 : 0)
+                                height: 24
+
+                                Image {
+                                    id: separatorIcon
+                                    visible: parent.showSeparator
+                                    anchors.left: parent.left
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 12
+                                    height: 12
+                                    source: Qt.resolvedUrl("../icons/chevron_right.svg")
+                                    sourceSize: Qt.size(24, 24)
+                                    opacity: parent.isFuture ? 0.45 : 0.75
+                                }
+
+                                Text {
+                                    id: crumbLabel
+                                    anchors.left: parent.showSeparator ? separatorIcon.right : parent.left
+                                    anchors.leftMargin: parent.showSeparator ? 2 : 0
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: parent.crumb.label || ""
+                                    color: parent.isFuture ? Theme.textDisabled : Theme.textPrimary
+                                    font.pixelSize: 11
+                                    font.underline: crumbMouseArea.containsMouse
+                                    elide: Text.ElideRight
+                                }
+
+                                HoverHandler {
+                                    cursorShape: Qt.PointingHandCursor
+                                }
+
+                                MouseArea {
+                                    id: crumbMouseArea
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.jumpToBreadcrumb(parent.breadcrumbIndex)
+                                }
+                            }
+                        }
                     }
                 }
 
-                // Sort button
-                Button {
+                Item {
+                    Layout.preferredWidth: searchField.width
+                    Layout.preferredHeight: 24
+
+                    TextField {
+                        id: searchField
+                        width: 108
+                        height: 24
+                        placeholderText: "Filter..."
+                        placeholderTextColor: Theme.textSecondary
+                        color: Theme.textPrimary
+                        font.pixelSize: 10
+                        leftPadding: 2
+                        rightPadding: 18
+                        topPadding: 1
+                        bottomPadding: 1
+                        hoverEnabled: true
+                        selectByMouse: true
+                        background: Item {
+                            implicitWidth: 108
+                            implicitHeight: 24
+
+                            Rectangle {
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.bottom: parent.bottom
+                                height: 1
+                                color: searchField.activeFocus ? "black" : "#aaaaaa"
+                            }
+                        }
+                        onTextChanged: browserModel.searchFilter = text
+
+                        TopStripIconButton {
+                            id: searchActionButton
+                            z: 1
+                            anchors.right: parent.right
+                            anchors.rightMargin: 0
+                            anchors.verticalCenter: parent.verticalCenter
+                            iconSource: searchField.text.length > 0
+                                ? Qt.resolvedUrl("../icons/close.svg")
+                                : Qt.resolvedUrl("../icons/search.svg")
+                            iconSize: searchField.text.length > 0 ? 11 : 14
+                            idleOpacity: searchField.activeFocus ? 0.9 : 0.5
+                            interactive: searchField.text.length > 0
+                            onClicked: searchField.clear()
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            acceptedButtons: Qt.NoButton
+                            hoverEnabled: true
+                            cursorShape: Qt.IBeamCursor
+                        }
+                    }
+                }
+
+                Rectangle {
+                    Layout.preferredWidth: 1
+                    Layout.preferredHeight: 14
+                    color: Theme.border
+                }
+
+                TopStripIconButton {
                     id: sortButton
-                    Layout.preferredWidth: 60
-                    Layout.preferredHeight: 20
-                    text: browserModel.sortBy === "name" ? "A-Z" :
-                          browserModel.sortBy === "year" ? "Year" :
-                          browserModel.sortBy === "count" ? "Count" : "Sort"
-                    font.pixelSize: 10
-                    flat: true
-                    PointingCursor {}
+                    iconSource: Qt.resolvedUrl("../icons/sort.svg")
+                    iconSize: 16
                     onClicked: sortMenu.popup()
 
                     Menu {
                         id: sortMenu
-                        MenuItem {
-                            text: "Name (A-Z)"
-                            checkable: true
-                            checked: browserModel.sortBy === "name" && browserModel.sortAscending
-                            PointingCursor {}
-                            onTriggered: { browserModel.sortBy = "name"; browserModel.sortAscending = true }
+
+                        Instantiator {
+                            model: root.sortOptions()
+
+                            delegate: MenuItem {
+                                required property var modelData
+
+                                text: modelData.text
+                                checkable: true
+                                checked: browserModel.sortBy === modelData.key
+                                PointingCursor {}
+                                onTriggered: root.setSortOption(modelData.key)
+                            }
+
+                            onObjectAdded: function(index, object) {
+                                sortMenu.insertItem(index, object)
+                            }
+
+                            onObjectRemoved: function(index, object) {
+                                sortMenu.removeItem(object)
+                            }
                         }
-                        MenuItem {
-                            text: "Name (Z-A)"
-                            checkable: true
-                            checked: browserModel.sortBy === "name" && !browserModel.sortAscending
-                            PointingCursor {}
-                            onTriggered: { browserModel.sortBy = "name"; browserModel.sortAscending = false }
-                        }
+
                         MenuSeparator {}
                         MenuItem {
-                            text: "Year (Oldest)"
+                            text: "Ascending"
                             checkable: true
-                            checked: browserModel.sortBy === "year" && browserModel.sortAscending
+                            checked: browserModel.sortAscending
                             PointingCursor {}
-                            onTriggered: { browserModel.sortBy = "year"; browserModel.sortAscending = true }
-                        }
-                        MenuItem {
-                            text: "Year (Newest)"
-                            checkable: true
-                            checked: browserModel.sortBy === "year" && !browserModel.sortAscending
-                            PointingCursor {}
-                            onTriggered: { browserModel.sortBy = "year"; browserModel.sortAscending = false }
-                        }
-                        MenuSeparator {}
-                        MenuItem {
-                            text: "Track Count"
-                            checkable: true
-                            checked: browserModel.sortBy === "count"
-                            PointingCursor {}
-                            onTriggered: { browserModel.sortBy = "count"; browserModel.sortAscending = false }
+                            onTriggered: root.setSortAscending(!browserModel.sortAscending)
                         }
                     }
                 }
 
-                // Options button
-                Button {
+                TopStripIconButton {
+                    id: groupByButton
+                    iconSource: Qt.resolvedUrl("../icons/filter_alt.svg")
+                    iconSize: 16
+                    onClicked: groupByMenu.popup()
+
+                    Menu {
+                        id: groupByMenu
+
+                        MenuItem {
+                            text: "Artist"
+                            checkable: true
+                            checked: browserModel.groupBy === "artist"
+                            PointingCursor {}
+                            onTriggered: browserModel.groupBy = "artist"
+                        }
+                        MenuItem {
+                            text: "Album Artist"
+                            checkable: true
+                            checked: browserModel.groupBy === "albumartist"
+                            PointingCursor {}
+                            onTriggered: browserModel.groupBy = "albumartist"
+                        }
+                        MenuItem {
+                            text: "Album"
+                            checkable: true
+                            checked: browserModel.groupBy === "album"
+                            PointingCursor {}
+                            onTriggered: browserModel.groupBy = "album"
+                        }
+                        MenuItem {
+                            text: "Genre"
+                            checkable: true
+                            checked: browserModel.groupBy === "genre"
+                            PointingCursor {}
+                            onTriggered: browserModel.groupBy = "genre"
+                        }
+                        MenuItem {
+                            text: "Year"
+                            checkable: true
+                            checked: browserModel.groupBy === "year"
+                            PointingCursor {}
+                            onTriggered: browserModel.groupBy = "year"
+                        }
+                        MenuItem {
+                            text: "None (Tracks)"
+                            checkable: true
+                            checked: browserModel.groupBy === "none"
+                            PointingCursor {}
+                            onTriggered: browserModel.groupBy = "none"
+                        }
+                        Menu {
+                            title: "Other"
+
+                            MenuItem {
+                                text: "Disc"
+                                checkable: true
+                                checked: browserModel.groupBy === "disc"
+                                PointingCursor {}
+                                onTriggered: browserModel.groupBy = "disc"
+                            }
+                            MenuItem {
+                                text: "Performer"
+                                checkable: true
+                                checked: browserModel.groupBy === "performer"
+                                PointingCursor {}
+                                onTriggered: browserModel.groupBy = "performer"
+                            }
+                            MenuItem {
+                                text: "Composer"
+                                checkable: true
+                                checked: browserModel.groupBy === "composer"
+                                PointingCursor {}
+                                onTriggered: browserModel.groupBy = "composer"
+                            }
+                            MenuItem {
+                                text: "Original Year"
+                                checkable: true
+                                checked: browserModel.groupBy === "originalyear"
+                                PointingCursor {}
+                                onTriggered: browserModel.groupBy = "originalyear"
+                            }
+                            MenuItem {
+                                text: "BPM"
+                                checkable: true
+                                checked: browserModel.groupBy === "bpm"
+                                PointingCursor {}
+                                onTriggered: browserModel.groupBy = "bpm"
+                            }
+                            MenuItem {
+                                text: "Initial Key"
+                                checkable: true
+                                checked: browserModel.groupBy === "initialkey"
+                                PointingCursor {}
+                                onTriggered: browserModel.groupBy = "initialkey"
+                            }
+                            MenuItem {
+                                text: "Bitrate"
+                                checkable: true
+                                checked: browserModel.groupBy === "bitrate"
+                                PointingCursor {}
+                                onTriggered: browserModel.groupBy = "bitrate"
+                            }
+                            MenuItem {
+                                text: "File Type"
+                                checkable: true
+                                checked: browserModel.groupBy === "filetype"
+                                PointingCursor {}
+                                onTriggered: browserModel.groupBy = "filetype"
+                            }
+                        }
+                        Menu {
+                            id: customTagGroupMenuStandalone
+                            title: "Custom Tag"
+
+                            MenuItem {
+                                text: "No custom tags found"
+                                enabled: false
+                                visible: root._customGroupKeys.length === 0
+                            }
+
+                            Instantiator {
+                                model: root._customGroupKeys
+
+                                delegate: MenuItem {
+                                    required property string modelData
+                                    text: modelData
+                                    checkable: true
+                                    checked: browserModel.groupBy === root.customGroupBy(modelData)
+                                    PointingCursor {}
+                                    onTriggered: browserModel.groupBy = root.customGroupBy(modelData)
+                                }
+
+                                onObjectAdded: function(index, object) {
+                                    customTagGroupMenuStandalone.insertItem(index, object)
+                                }
+
+                                onObjectRemoved: function(index, object) {
+                                    customTagGroupMenuStandalone.removeItem(object)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    Layout.preferredWidth: 1
+                    Layout.preferredHeight: 14
+                    color: Theme.border
+                }
+
+                TopStripIconButton {
                     id: optionsButton
-                    Layout.preferredWidth: 24
-                    Layout.preferredHeight: 20
-                    flat: true
-                    icon.source: Qt.resolvedUrl("../icons/more_vert.svg")
-                    icon.color: Theme.textPrimary
-                    icon.width: 12; icon.height: 12
-                    PointingCursor {}
+                    iconSource: Qt.resolvedUrl("../icons/more_vert.svg")
+                    iconSize: 16
                     onClicked: optionsMenu.popup()
 
                     Menu {
                         id: optionsMenu
                         title: "Options"
 
-                        MenuItem {
-                            text: "Show header"
-                            checkable: true
-                            checked: root.showHeader
-                            PointingCursor {}
-                            onTriggered: root.showHeader = !root.showHeader
-                        }
-
-                        MenuItem {
-                            visible: root.viewMode === "list"
-                            text: "Expandable groups"
-                            checkable: true
-                            checked: root.expandableGroups
-                            PointingCursor {}
-                            onTriggered: root.expandableGroups = !root.expandableGroups
-                        }
-
-                        MenuSeparator {}
-
                         Menu {
-                            title: "View"
+                            id: subtitleMenu
+                            title: "Subtitle"
 
-                            ButtonGroup { id: viewModeGroup }
+                            Instantiator {
+                                model: root.subtitleOptions()
 
-                            MenuItem {
-                                text: "Grid"
-                                ButtonGroup.group: viewModeGroup
-                                checkable: true
-                                checked: root.viewMode === "grid"
-                                PointingCursor {}
-                                onTriggered: root.viewMode = "grid"
-                            }
-                            MenuItem {
-                                text: "List"
-                                ButtonGroup.group: viewModeGroup
-                                checkable: true
-                                checked: root.viewMode === "list"
-                                PointingCursor {}
-                                onTriggered: root.viewMode = "list"
-                            }
-                            MenuItem {
-                                text: "Tracks"
-                                ButtonGroup.group: viewModeGroup
-                                checkable: true
-                                checked: root.viewMode === "tracks"
-                                PointingCursor {}
-                                onTriggered: root.viewMode = "tracks"
-                            }
-                        }
+                                delegate: MenuItem {
+                                    required property var modelData
 
-                        Menu {
-                            title: "Group by"
-                            MenuItem {
-                                text: "Album Artist"
-                                checkable: true
-                                checked: browserModel.groupBy === "albumartist"
-                                PointingCursor {}
-                                onTriggered: browserModel.groupBy = "albumartist"
-                            }
-                            MenuItem {
-                                text: "Artist"
-                                checkable: true
-                                checked: browserModel.groupBy === "artist"
-                                PointingCursor {}
-                                onTriggered: browserModel.groupBy = "artist"
-                            }
-                            MenuItem {
-                                text: "Album"
-                                checkable: true
-                                checked: browserModel.groupBy === "album"
-                                PointingCursor {}
-                                onTriggered: browserModel.groupBy = "album"
-                            }
-                            MenuItem {
-                                text: "Genre"
-                                checkable: true
-                                checked: browserModel.groupBy === "genre"
-                                PointingCursor {}
-                                onTriggered: browserModel.groupBy = "genre"
-                            }
-                            MenuItem {
-                                text: "Year"
-                                checkable: true
-                                checked: browserModel.groupBy === "year"
-                                PointingCursor {}
-                                onTriggered: browserModel.groupBy = "year"
-                            }
-                            MenuItem {
-                                text: "None (Tracks)"
-                                checkable: true
-                                checked: browserModel.groupBy === "none"
-                                PointingCursor {}
-                                onTriggered: browserModel.groupBy = "none"
+                                    text: modelData.text
+                                    checkable: true
+                                    checked: browserModel.subtitleKey === modelData.key
+                                    PointingCursor {}
+                                    onTriggered: root.setSubtitleOption(modelData.key)
+                                }
+
+                                onObjectAdded: function(index, object) {
+                                    subtitleMenu.insertItem(index, object)
+                                }
+
+                                onObjectRemoved: function(index, object) {
+                                    subtitleMenu.removeItem(object)
+                                }
                             }
                         }
 
@@ -403,31 +721,26 @@ Item {
                             ButtonGroup { id: openActionGroup }
 
                             MenuItem {
-                                text: "Explore"
-                                ButtonGroup.group: openActionGroup
-                                checkable: true
-                                checked: root._currentOpenAction !== "queueTracks"
-                                PointingCursor {}
-                                onTriggered: { Settings.setGroupTypeOpenAction(browserModel.groupBy, "openPanel"); root._currentOpenAction = "openPanel" }
-                            }
-                            MenuItem {
                                 text: "Queue tracks"
                                 ButtonGroup.group: openActionGroup
                                 checkable: true
                                 checked: root._currentOpenAction === "queueTracks"
                                 PointingCursor {}
-                                onTriggered: { Settings.setGroupTypeOpenAction(browserModel.groupBy, "queueTracks"); root._currentOpenAction = "queueTracks" }
+                                onTriggered: {
+                                    Settings.setGroupTypeOpenAction(browserModel.groupBy, "queueTracks")
+                                    root._currentOpenAction = "queueTracks"
+                                }
                             }
-
-                            MenuSeparator {}
-
                             MenuItem {
-                                text: "Explore in new window"
+                                text: "Explore"
+                                ButtonGroup.group: openActionGroup
                                 checkable: true
-                                enabled: root._currentOpenAction !== "queueTracks"
-                                checked: Settings.groupTypeExploreInWindow(browserModel.groupBy)
+                                checked: root._currentOpenAction !== "queueTracks"
                                 PointingCursor {}
-                                onTriggered: Settings.setGroupTypeExploreInWindow(browserModel.groupBy, !Settings.groupTypeExploreInWindow(browserModel.groupBy))
+                                onTriggered: {
+                                    Settings.setGroupTypeOpenAction(browserModel.groupBy, "openPanel")
+                                    root._currentOpenAction = "openPanel"
+                                }
                             }
                         }
                     }
@@ -435,64 +748,63 @@ Item {
             }
         }
 
-        // Header (optional, toggleable)
-        Rectangle {
-            visible: root.showHeader
-            Layout.fillWidth: true
-            Layout.preferredHeight: 24
-            color: Theme.surface
-
-            Label {
-                anchors.fill: parent
-                anchors.leftMargin: 8
-                verticalAlignment: Text.AlignVCenter
-                text: root.windowTitle || browserModel.title
-                font.bold: true
-                font.pixelSize: 12
-                color: Theme.textPrimary
-                elide: Text.ElideRight
-            }
-        }
-
-        // Collection grid view (album covers)
         GridView {
             id: gridView
-            visible: root.viewMode === "grid"
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.margins: 4
+            Layout.margins: 0
+            Layout.topMargin: 4
+            Layout.bottomMargin: 4
             clip: true
             interactive: false
             reuseItems: true
             cacheBuffer: 300
-            
-            // Debounced cell sizing - recalculates after resize stops to avoid per-frame re-layout
+            focus: true
+
             property int stableCellWidth: Settings.gridCellMinWidth
-            property int stableCellHeight: Math.round(stableCellWidth * 1.25)
-            
+            property int stableCellHeight: stableCellWidth + 33
+
             function recalculateCellSize() {
                 let cols = Math.max(1, Math.floor(width / Settings.gridCellMinWidth))
                 let optimal = Math.floor(width / cols)
                 stableCellWidth = Math.min(optimal, Settings.gridCellMaxWidth)
-                stableCellHeight = Math.round(stableCellWidth * 1.25)
+                stableCellHeight = stableCellWidth + 33
             }
-            
-            Timer { id: resizeDebounce; interval: 150; onTriggered: gridView.recalculateCellSize() }
+
+            Timer {
+                id: resizeDebounce
+                interval: 150
+                onTriggered: gridView.recalculateCellSize()
+            }
+
             onWidthChanged: resizeDebounce.restart()
             Component.onCompleted: recalculateCellSize()
+
             Connections {
                 target: Settings
                 function onGridCellMinWidthChanged() { gridView.recalculateCellSize() }
                 function onGridCellMaxWidthChanged() { gridView.recalculateCellSize() }
             }
-            
+
             cellWidth: stableCellWidth
             cellHeight: stableCellHeight
-
             model: browserModel
-
             ScrollBar.vertical: ScrollBar { active: true; policy: ScrollBar.AsNeeded }
             Behavior on contentY { enabled: !root._restoring; NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+            TapHandler {
+                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                acceptedDevices: PointerDevice.Mouse
+                gesturePolicy: TapHandler.ReleaseWithinBounds
+                onTapped: function(eventPoint, button) {
+                    const contentPosition = gridView.mapToItem(gridView.contentItem, eventPoint.position.x, eventPoint.position.y)
+                    if (gridView.indexAt(contentPosition.x, contentPosition.y) !== -1)
+                        return
+                    gridView.forceActiveFocus()
+                    gridView.clearSelection()
+                    if (button === Qt.RightButton)
+                        gridBackgroundContextMenu.popup()
+                }
+            }
             WheelHandler {
                 acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                 onWheel: (e) => {
@@ -501,15 +813,13 @@ Item {
                     gridView.contentY = Math.max(minY, Math.min(maxY, gridView.contentY - e.angleDelta.y))
                 }
             }
-            // Clamp contentY to valid bounds [originY, max(originY, originY + contentHeight - height)]
-            // When content fits in view (contentHeight <= height), maxY = originY (no scrolling needed)
             onContentHeightChanged: {
                 let maxY = Math.max(originY, originY + contentHeight - height)
-                if (contentY > maxY) contentY = maxY
-                if (contentY < originY) contentY = originY
+                if (contentY > maxY)
+                    contentY = maxY
+                if (contentY < originY)
+                    contentY = originY
             }
-            
-            // Reset scroll position to top when view becomes visible
             onVisibleChanged: if (visible) contentY = originY
 
             delegate: Item {
@@ -524,31 +834,48 @@ Item {
                 required property string displayText
                 required property string subtitle
                 required property string representativeFilePath
+                required property var coverFilePaths
                 required property string imagePath
                 required property string filePath
 
+                property bool selected: false
+
+                function select() {
+                    gridView.clearSelection()
+                    selected = true
+                }
+
+                function deselect() {
+                    selected = false
+                }
+
                 Rectangle {
                     anchors.fill: parent
-                    anchors.margins: 4
-                    color: gridMouseArea.containsMouse ? Theme.hover : "transparent"
+                    color: gridMouseArea.containsMouse ? "#ebebeb" : "transparent"
 
                     ColumnLayout {
                         anchors.fill: parent
+                        anchors.leftMargin: 4
+                        anchors.rightMargin: 4
+                        anchors.topMargin: 4
+                        anchors.bottomMargin: 12
                         spacing: 2
 
-                        // Cover art
                         Rectangle {
+                            id: coverContainer
                             Layout.fillWidth: true
                             Layout.preferredHeight: width
                             color: Theme.surfaceAlt
-                            border.color: Theme.border
+                            border.color: gridDel.selected ? "#505050" : Theme.border
                             border.width: 1
 
                             Image {
                                 id: coverImage
                                 anchors.fill: parent
                                 anchors.margins: 1
-                                source: gridDel.imagePath ? ("file://" + gridDel.imagePath) : ("image://cover/" + (gridDel.representativeFilePath || gridDel.filePath || ""))
+                                source: gridDel.imagePath
+                                    ? AppViewModel.localFileUrlForPath(gridDel.imagePath)
+                                    : AppViewModel.coverImageSourceForFiles(gridDel.coverFilePaths)
                                 fillMode: Image.PreserveAspectCrop
                                 asynchronous: true
                                 cache: true
@@ -560,7 +887,8 @@ Item {
 
                                 Image {
                                     anchors.centerIn: parent
-                                    width: 32; height: 32
+                                    width: 32
+                                    height: 32
                                     source: gridDel.entryType === "group"
                                         ? Qt.resolvedUrl("../icons/album.svg")
                                         : Qt.resolvedUrl("../icons/music_note.svg")
@@ -572,7 +900,6 @@ Item {
                             }
                         }
 
-                        // Primary label (album/artist name)
                         Label {
                             text: gridDel.displayText || ""
                             color: Theme.textPrimary
@@ -583,7 +910,6 @@ Item {
                             horizontalAlignment: Text.AlignLeft
                         }
 
-                        // Secondary label (artist or item count)
                         Label {
                             text: gridDel.subtitle || ""
                             color: Theme.textSecondary
@@ -602,7 +928,28 @@ Item {
                         cursorShape: Qt.PointingHandCursor
 
                         onClicked: (mouse) => {
-                            if (mouse.button === Qt.RightButton) {
+                            if (mouse.button === Qt.LeftButton) {
+                                gridView.forceActiveFocus()
+                                if (Settings.collectionSingleClickOpen && gridDel.entryType === "group") {
+                                    // Single click opens group directly
+                                    let openAction = Settings.groupTypeOpenAction(gridDel.groupType)
+                                    if (openAction === "queueTracks") {
+                                        AppViewModel.browseActivation.addFilteredTracksToViewed(
+                                            browserModel.filter, gridDel.groupType, gridDel.groupValue)
+                                    } else {
+                                        let newFilter = browserModel.filter.concat([{field: gridDel.groupType, op: "=", value: gridDel.groupValue}])
+                                        root.doNavigate(newFilter, Settings.groupTypeNextGroupBy(gridDel.groupType))
+                                    }
+                                } else {
+                                    // Normal selection behavior
+                                    if (gridDel.selected) {
+                                        gridDel.deselect()
+                                    } else {
+                                        gridDel.select()
+                                    }
+                                }
+                            } else if (mouse.button === Qt.RightButton) {
+                                gridDel.select()
                                 root._openContextMenu(gridDel.entryType, gridDel.groupType, gridDel.groupValue, gridDel.filePath)
                             } else if (mouse.button === Qt.MiddleButton) {
                                 if (gridDel.entryType === "group") {
@@ -620,9 +967,6 @@ Item {
                                 if (openAction === "queueTracks") {
                                     AppViewModel.browseActivation.addFilteredTracksToViewed(
                                         browserModel.filter, gridDel.groupType, gridDel.groupValue)
-                                } else if (Settings.groupTypeExploreInWindow(gridDel.groupType)) {
-                                    AppViewModel.browseActivation.openCollectionGroup(
-                                        {filter: browserModel.filter, groupBy: browserModel.groupBy}, gridDel.groupType, gridDel.groupValue)
                                 } else {
                                     let newFilter = browserModel.filter.concat([{field: gridDel.groupType, op: "=", value: gridDel.groupValue}])
                                     root.doNavigate(newFilter, Settings.groupTypeNextGroupBy(gridDel.groupType))
@@ -633,398 +977,55 @@ Item {
                         }
                     }
 
-                }
-            }
-            
-        }
+                    // Play button overlay - only for groups, when selected and enabled in settings
+                    // Positioned over cover container, outside MouseArea to capture clicks
+                    Rectangle {
+                        id: playButton
+                        visible: gridDel.selected && gridDel.entryType === "group" && Settings.collectionPlayButtonEnabled && !Settings.collectionSingleClickOpen
+                        x: parent.width - 24
+                        y: 4 + coverContainer.height - 20
+                        width: 20
+                        height: 20
+                        color: playButtonMouseArea.pressed ? "#d0d0d0" : (playButtonMouseArea.containsMouse ? "#f0f0f0" : "#ffffff")
+                        border.color: "#505050"
+                        border.width: 1
+                        z: 2
 
-        // List view (for list/tracks mode)
-        ListView {
-            id: listView
-            visible: root.viewMode === "list" || root.viewMode === "tracks"
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            clip: true
-            interactive: false
-            reuseItems: true
-            model: browserModel
-            boundsBehavior: Flickable.StopAtBounds
-            cacheBuffer: 300
-            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-            Behavior on contentY { enabled: !root._restoring; NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
-            WheelHandler {
-                acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-                onWheel: (e) => listView.contentY = Math.max(0, Math.min(listView.contentHeight - listView.height, listView.contentY - e.angleDelta.y))
-            }
-
-            delegate: Column {
-                id: listDel
-                width: listView.width
-
-                required property int index
-                required property string entryType
-                required property string groupType
-                required property var groupValue
-                required property string displayText
-                required property string subtitle
-                required property string representativeFilePath
-                required property string imagePath
-                required property string filePath
-                required property var durationMs
-                required property int trackNumber
-                required property int childCount
-                required property int year
-                required property var totalDurationMs
-
-                property bool isGroup: entryType === "group"
-                property string groupKey: String(listDel.groupValue)
-                property bool isExpanded: root.expandableGroups && root.expandedGroups[groupKey] === true
-
-                // Scriptable info strings — future: replace with user template engine (%year%, %tracks%, %duration%, etc.)
-                readonly property string groupInfoLeft: listDel.year > 0 ? String(listDel.year) : ""
-                readonly property string groupInfoRight: {
-                    let parts = []
-                    if (listDel.childCount > 0)
-                        parts.push(listDel.childCount + (listDel.childCount === 1 ? " track" : " tracks"))
-                    let ms = listDel.totalDurationMs
-                    if (ms > 0) {
-                        let s = Math.floor(ms / 1000)
-                        let m = Math.floor(s / 60)
-                        let h = Math.floor(m / 60)
-                        parts.push(h > 0 ? (h + ":" + String(m % 60).padStart(2,'0') + ":" + String(s % 60).padStart(2,'0'))
-                                         : (m + ":" + String(s % 60).padStart(2,'0')))
-                    }
-                    return parts.join("  ")
-                }
-
-                // --- Group row ---
-                Rectangle {
-                    id: groupRow
-                    visible: listDel.isGroup
-                    width: listDel.width
-                    height: listDel.isGroup ? Settings.listGroupRowHeight : 0
-                    
-                    // Alternating background for group rows
-                    property color baseColor: (listDel.index % 2 === 0) ? "transparent" : Theme.surfaceAlt
-                    color: groupMa.containsMouse ? Theme.hover : baseColor
-
-                    RowLayout {
-                        anchors.fill: parent
-                        spacing: 0
-
-                        // Cover art — fills full row height
-                        Rectangle {
-                            Layout.preferredWidth: groupRow.height
-                            Layout.fillHeight: true
-                            color: Theme.surfaceAlt
-                            border.color: Theme.border
-                            border.width: 1
-
-                            Image {
-                                id: listGroupCover
-                                anchors.fill: parent
-                                anchors.margins: 1
-                                source: listDel.imagePath
-                                    ? ("file://" + listDel.imagePath)
-                                    : ((listDel.representativeFilePath || listDel.filePath)
-                                        ? ("image://cover/" + (listDel.representativeFilePath || listDel.filePath))
-                                        : "")
-                                fillMode: Image.PreserveAspectCrop
-                                asynchronous: true
-                                cache: true
-                                sourceSize.width: 512
-                                sourceSize.height: 512
-                                layer.enabled: true
-                                layer.smooth: true
-                                layer.textureSize: Qt.size(width * 2, height * 2)
-
-                                Image {
-                                    anchors.centerIn: parent
-                                    width: 24; height: 24
-                                    source: Qt.resolvedUrl("../icons/album.svg")
-                                    sourceSize: Qt.size(48, 48)
-                                    fillMode: Image.PreserveAspectFit
-                                    opacity: 0.3
-                                    visible: listGroupCover.status !== Image.Ready
-                                }
-                            }
-                        }
-
-                        // Title + info block
-                        Item {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-
-                            Column {
-                                anchors {
-                                    left: parent.left; right: parent.right
-                                    top: parent.top; bottom: parent.bottom
-                                    leftMargin: 8; rightMargin: 8
-                                    topMargin: 4; bottomMargin: 4
-                                }
-                                spacing: 2
-
-                                Label {
-                                    width: parent.width
-                                    text: listDel.displayText
-                                    color: Theme.textPrimary
-                                    font.pixelSize: Math.max(12, Math.round(groupRow.height * 0.28))
-                                    font.bold: true
-                                    elide: Text.ElideRight
-                                }
-                                Label {
-                                    width: parent.width
-                                    text: {
-                                        let left = listDel.groupInfoLeft
-                                        let right = listDel.groupInfoRight
-                                        if (left && right) return left + "    " + right
-                                        return left || right
-                                    }
-                                    color: Theme.textSecondary
-                                    font.pixelSize: Math.max(10, Math.round(groupRow.height * 0.22))
-                                    elide: Text.ElideRight
-                                    visible: text.length > 0
-                                }
-                            }
-                        }
-
-                    }
-
-                    MouseArea {
-                        id: groupMa
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
-                        cursorShape: Qt.PointingHandCursor
-
-                        onClicked: (mouse) => {
-                            if (mouse.button === Qt.RightButton) {
-                                root._openContextMenu(listDel.entryType, listDel.groupType, listDel.groupValue, listDel.filePath)
-                            } else if (mouse.button === Qt.MiddleButton) {
-                                AppViewModel.browseActivation.appendFilteredTracksToViewed(
-                                    browserModel.filter, listDel.groupType, listDel.groupValue)
-                            } else if (root.expandableGroups) {
-                                let newExpanded = Object.assign({}, root.expandedGroups)
-                                newExpanded[listDel.groupKey] = !listDel.isExpanded
-                                root.expandedGroups = newExpanded
-                            }
-                        }
-                        onDoubleClicked: {
-                            // Group double-click always fires group action regardless of expand state
-                            let openAction = Settings.groupTypeOpenAction(listDel.groupType)
-                            if (openAction === "queueTracks") {
-                                AppViewModel.browseActivation.addFilteredTracksToViewed(
-                                    browserModel.filter, listDel.groupType, listDel.groupValue)
-                            } else if (Settings.groupTypeExploreInWindow(listDel.groupType)) {
-                                AppViewModel.browseActivation.openCollectionGroup(
-                                    {filter: browserModel.filter, groupBy: browserModel.groupBy}, listDel.groupType, listDel.groupValue)
-                            } else {
-                                let newFilter = browserModel.filter.concat([{field: listDel.groupType, op: "=", value: listDel.groupValue}])
-                                root.doNavigate(newFilter, Settings.groupTypeNextGroupBy(listDel.groupType))
-                            }
-                        }
-                    }
-                }
-
-                // --- Track row (non-group / tracks mode) ---
-                Rectangle {
-                    id: trackRow
-                    visible: !listDel.isGroup
-                    width: listDel.width
-                    height: !listDel.isGroup ? 28 : 0
-                    color: trackMa.containsMouse ? Theme.hover : "transparent"
-
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 12
-                        anchors.rightMargin: 8
-                        spacing: 6
-
-                        Label {
-                            visible: listDel.trackNumber > 0
-                            text: String(listDel.trackNumber)
-                            color: Theme.textSecondary
-                            font.pixelSize: 11
-                            Layout.preferredWidth: 20
-                        }
-
-                        Label {
-                            text: listDel.displayText
-                            color: Theme.textPrimary
-                            font.pixelSize: 11
-                            elide: Text.ElideRight
-                            Layout.fillWidth: true
-                        }
-
-                        Label {
-                            text: {
-                                let ms = listDel.durationMs
-                                if (!ms) return ""
-                                let s = Math.floor(ms / 1000), m = Math.floor(s / 60)
-                                return m + ":" + String(s % 60).padStart(2, '0')
-                            }
-                            color: Theme.textSecondary
-                            font.pixelSize: 11
-                            Layout.preferredWidth: 40
-                            horizontalAlignment: Text.AlignRight
-                        }
-                    }
-
-                    MouseArea {
-                        id: trackMa
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
-                        cursorShape: Qt.PointingHandCursor
-
-                        onClicked: (mouse) => {
-                            if (mouse.button === Qt.RightButton)
-                                root._openContextMenu(listDel.entryType, listDel.groupType, listDel.groupValue, listDel.filePath)
-                            else if (mouse.button === Qt.MiddleButton)
-                                AppViewModel.browseActivation.appendCollectionEntryToViewed("t:" + listDel.filePath)
-                        }
-                        onDoubleClicked: {
-                            // Track double-click always queues the track
-                            AppViewModel.browseActivation.appendCollectionEntryToViewed("t:" + listDel.filePath)
-                            // If we also want to play it immediately, we should use activateCollectionEntry but
-                            // the user asked "always work as queue track even if Explore is set".
-                            // I'll use addFilteredTracksToViewed with a single track filter to respect the play action
-                            // actually wait, queue track means just adding it to the end?
-                            // "always work as queue track" means it should append it.
-                            // Let's use appendCollectionEntryToViewed.
-                            // Wait, activateCollectionEntry does "Append to viewed" if openingTracksAction is OpeningAppendToViewed.
-                            // If they mean "Queue tracks" action from the group menu, that appends.
-                            // I will use appendCollectionEntryToViewed to be safe.
-                            AppViewModel.browseActivation.appendCollectionEntryToViewed("t:" + listDel.filePath)
-                        }
-                    }
-                }
-
-                // --- Expanded tracks (only for groups when expanded) ---
-                Repeater {
-                    model: listDel.isGroup && listDel.isExpanded
-                        ? browserModel.tracksForGroup(listDel.groupType, listDel.groupValue)
-                        : []
-
-                    delegate: Rectangle {
-                        id: expTrackRow
-                        width: listDel.width
-                        height: 28
-                        color: expTrackMa.containsMouse ? Theme.hover : groupRow.baseColor
-                        clip: true
-
-                        required property var modelData
-                        required property int index
-
-                        // Animation when expanding
-                        NumberAnimation on height {
-                            from: 0
-                            to: 28
-                            duration: 150
-                            easing.type: Easing.OutQuad
-                        }
-                        NumberAnimation on opacity {
-                            from: 0.0
-                            to: 1.0
-                            duration: 150
-                            easing.type: Easing.OutQuad
-                        }
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: 12
-                            anchors.rightMargin: 8
-                            spacing: 6
-
-                            Label {
-                                text: expTrackRow.modelData.trackNumber > 0
-                                    ? String(expTrackRow.modelData.trackNumber)
-                                    : ""
-                                color: Theme.textSecondary
-                                font.pixelSize: 11
-                                Layout.preferredWidth: 20
-                            }
-
-                            Label {
-                                text: expTrackRow.modelData.title || expTrackRow.modelData.filePath.split('/').pop()
-                                color: Theme.textPrimary
-                                font.pixelSize: 11
-                                elide: Text.ElideRight
-                                Layout.fillWidth: true
-                            }
-
-                            Label {
-                                text: {
-                                    let ms = expTrackRow.modelData.durationMs
-                                    if (!ms) return ""
-                                    let s = Math.floor(ms / 1000), m = Math.floor(s / 60)
-                                    return m + ":" + String(s % 60).padStart(2, '0')
-                                }
-                                color: Theme.textSecondary
-                                font.pixelSize: 11
-                                Layout.preferredWidth: 40
-                                horizontalAlignment: Text.AlignRight
-                            }
+                        Image {
+                            anchors.centerIn: parent
+                            width: 10
+                            height: 10
+                            source: Qt.resolvedUrl("../icons/play_arrow.svg")
+                            sourceSize: Qt.size(20, 20)
+                            fillMode: Image.PreserveAspectFit
                         }
 
                         MouseArea {
-                            id: expTrackMa
+                            id: playButtonMouseArea
                             anchors.fill: parent
                             hoverEnabled: true
-                            acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
                             cursorShape: Qt.PointingHandCursor
-
-                            onClicked: (mouse) => {
-                                if (mouse.button === Qt.RightButton) expTrackCtxMenu.popup()
-                                else if (mouse.button === Qt.MiddleButton)
-                                    AppViewModel.browseActivation.appendCollectionEntryToViewed("t:" + expTrackRow.modelData.filePath)
-                            }
-                            onDoubleClicked: {
-                                if (Settings.expandedTrackOpenMode === 0) {
-                                    // Add whole group, start from this track
-                                    AppViewModel.browseActivation.addFilteredTracksToViewedStartingAt(
-                                        browserModel.filter, listDel.groupType, listDel.groupValue,
-                                        expTrackRow.modelData.filePath)
-                                } else {
-                                    // Queue just this track
-                                    AppViewModel.browseActivation.appendCollectionEntryToViewed("t:" + expTrackRow.modelData.filePath)
-                                }
-                            }
-                        }
-
-                        Menu {
-                            id: expTrackCtxMenu
-                            MenuItem {
-                                text: "Append to viewed playlist"
-                                PointingCursor {}
-                                onTriggered: AppViewModel.browseActivation.appendCollectionEntryToViewed("t:" + expTrackRow.modelData.filePath)
-                            }
-                            MenuItem {
-                                text: "Append after currently playing"
-                                PointingCursor {}
-                                onTriggered: AppViewModel.browseActivation.appendCollectionEntryAfterPlaying("t:" + expTrackRow.modelData.filePath)
-                            }
-                            MenuItem {
-                                text: "Open in new playlist"
-                                PointingCursor {}
-                                onTriggered: AppViewModel.browseActivation.openCollectionEntryInNewPlaylist("t:" + expTrackRow.modelData.filePath)
+                            onClicked: {
+                                AppViewModel.browseActivation.openFilteredTracksInNewPlaylist(
+                                    browserModel.filter, gridDel.groupType, gridDel.groupValue)
+                                AppViewModel.play()
                             }
                         }
                     }
                 }
-
             }
 
-        }
-    }
+            function clearSelection() {
+                for (let i = 0; i < count; i++) {
+                    let item = itemAtIndex(i)
+                    if (item && item.selected)
+                        item.selected = false
+                }
+            }
 
-    // Mouse back/forward buttons overlay (on top of content, only catches Back/Forward)
-    MouseArea {
-        anchors.fill: parent
-        acceptedButtons: Qt.BackButton | Qt.ForwardButton
-        onClicked: (mouse) => {
-            if (mouse.button === Qt.BackButton) root.doGoBack()
-            else if (mouse.button === Qt.ForwardButton) root.doGoForward()
+            Keys.onEscapePressed: {
+                clearSelection()
+            }
         }
     }
 }

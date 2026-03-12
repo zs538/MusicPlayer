@@ -47,6 +47,7 @@ public:
     // High-level actions (QML never calls model.removeRows directly)
     Q_INVOKABLE void removeSelected();
     Q_INVOKABLE void moveSelectedTo(int targetRow);
+    Q_INVOKABLE void sortByColumn(const QString &key, bool ascending = true);
 
 signals:
     void modelChanged();

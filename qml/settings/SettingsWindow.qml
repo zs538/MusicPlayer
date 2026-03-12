@@ -181,24 +181,25 @@ Window {
                     }
 
                     Label {
-                        text: "Double-clicking a track in expanded list view"
+                        text: "Collection Browser"
                         font.bold: true
                     }
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 4
 
-                        RadioButton {
-                            text: "Add whole group and start playing from that track"
-                            checked: Settings.expandedTrackOpenMode === 0
+                        CheckBox {
+                            text: "Show play button on group items"
+                            checked: Settings.collectionPlayButtonEnabled
                             PointingCursor {}
-                            onClicked: Settings.expandedTrackOpenMode = 0
+                            onClicked: Settings.collectionPlayButtonEnabled = checked
                         }
-                        RadioButton {
-                            text: "Open just that one track"
-                            checked: Settings.expandedTrackOpenMode === 1
+
+                        CheckBox {
+                            text: "Open group on single click"
+                            checked: Settings.collectionSingleClickOpen
                             PointingCursor {}
-                            onClicked: Settings.expandedTrackOpenMode = 1
+                            onClicked: Settings.collectionSingleClickOpen = checked
                         }
                     }
 
@@ -250,27 +251,6 @@ Window {
                     font.pixelSize: 11
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true
-                }
-
-                Label { text: "List View"; font.bold: true }
-
-                GridLayout {
-                    columns: 2
-                    columnSpacing: 12
-                    rowSpacing: 8
-
-                    Label { text: "Group row height:" }
-                    RowLayout {
-                        SpinBox {
-                            from: 32
-                            to: 120
-                            stepSize: 4
-                            value: Settings.listGroupRowHeight
-                            PointingCursor {}
-                            onValueModified: Settings.listGroupRowHeight = value
-                        }
-                        Label { text: "px"; color: Theme.textSecondary }
-                    }
                 }
 
                 Item { Layout.fillHeight: true }

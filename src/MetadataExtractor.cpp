@@ -1,6 +1,7 @@
 #include "MetadataExtractor.h"
 #include <QFileInfo>
 #include <QDir>
+#include <QSet>
 #include <taglib/fileref.h>
 #include <taglib/tag.h>
 #include <taglib/tpropertymap.h>
@@ -8,6 +9,79 @@
 #include <taglib/wavfile.h>
 
 namespace MetadataExtractor {
+
+namespace {
+
+QString normalizedPropertyKey(const QString &key)
+{
+    return key.trimmed().toUpper();
+}
+
+QStringList variantToStringList(const QVariant &value)
+{
+    if (!value.isValid())
+        return {};
+    if (value.typeId() == QMetaType::QStringList)
+        return value.toStringList();
+    if (value.typeId() == QMetaType::QVariantList) {
+        QStringList values;
+        const QVariantList list = value.toList();
+        values.reserve(list.size());
+        for (const QVariant &item : list) {
+            const QString text = item.toString().trimmed();
+            if (!text.isEmpty())
+                values.append(text);
+        }
+        return values;
+    }
+    const QString single = value.toString().trimmed();
+    return single.isEmpty() ? QStringList{} : QStringList{single};
+}
+
+void insertCustomTagValue(QVariantMap &customTags, const QString &key, const QString &value)
+{
+    const QString normalizedKey = normalizedPropertyKey(key);
+    const QString normalizedValue = value.trimmed();
+    if (normalizedKey.isEmpty() || normalizedValue.isEmpty())
+        return;
+
+    QStringList values = variantToStringList(customTags.value(normalizedKey));
+    if (!values.contains(normalizedValue))
+        values.append(normalizedValue);
+    customTags.insert(normalizedKey, values);
+}
+
+bool isKnownPropertyKey(const QString &key)
+{
+    static const QSet<QString> knownKeys = {
+        "TITLE",
+        "ARTIST",
+        "ALBUM",
+        "TRACKNUMBER",
+        "TRACK NUMBER",
+        "YEAR",
+        "DATE",
+        "GENRE",
+        "COMMENT",
+        "ALBUMARTIST",
+        "ALBUM ARTIST",
+        "PERFORMER",
+        "COMPOSER",
+        "DISCNUMBER",
+        "DISC NUMBER",
+        "ORIGINALYEAR",
+        "ORIGINAL YEAR",
+        "ORIGINALDATE",
+        "ORIGINAL DATE",
+        "BPM",
+        "INITIALKEY",
+        "INITIAL KEY",
+        "URL"
+    };
+    return knownKeys.contains(normalizedPropertyKey(key));
+}
+
+}
 
 TrackInfo extractTrackInfo(const QString &filePath)
 {
@@ -87,6 +161,16 @@ TrackInfo extractTrackInfo(const QString &filePath)
         track.initialKey = initialKey;
 
         track.url = propString("URL");
+
+        for (auto it = props.begin(); it != props.end(); ++it) {
+            const QString key = normalizedPropertyKey(QString::fromStdString(it->first.to8Bit(true)));
+            if (key.isEmpty() || isKnownPropertyKey(key))
+                continue;
+
+            const TagLib::StringList &values = it->second;
+            for (const TagLib::String &value : values)
+                insertCustomTagValue(track.customTags, key, QString::fromStdString(value.to8Bit(true)));
+        }
     }
 
     if (file.audioProperties()) {
@@ -147,6 +231,7 @@ LibraryTrack toLibraryTrack(const TrackInfo &track, qint64 id)
     lib.comment = track.comment;
     lib.bpm = track.bpm;
     lib.initialKey = track.initialKey;
+    lib.customTags = track.customTags;
     // lib.channels not available in TrackInfo
     // lib.codec not available in TrackInfo
     return lib;
@@ -180,6 +265,7 @@ TrackInfo toTrackInfo(const LibraryTrack &lib)
     track.comment = lib.comment;
     track.bpm = lib.bpm;
     track.initialKey = lib.initialKey;
+    track.customTags = lib.customTags;
     return track;
 }
 

@@ -6,6 +6,8 @@
 #include <QString>
 #include <QStringList>
 #include <QSqlDatabase>
+#include <QSqlQuery>
+#include <QVariantMap>
 #include <QVector>
 #include <optional>
 #include "TrackFilter.h"
@@ -39,6 +41,7 @@ struct LibraryTrack {
     int bpm = 0;
     QString initialKey;
     QString codec;
+    QVariantMap customTags;
     
     bool isValid() const { return id >= 0 && !filePath.isEmpty(); }
 };
@@ -67,6 +70,7 @@ public:
     QVector<LibraryTrack> allTracks() const;
     QVector<LibraryTrack> searchTracks(const QString &query) const;
     QVector<LibraryTrack> tracksMatchingFilter(const TrackFilter &filter) const;
+    Q_INVOKABLE QStringList customTagKeys() const;
     
     int trackCount() const;
     
@@ -79,6 +83,7 @@ public:
     // SQL query for upsert - shared with LibraryScanner for thread-local connections
     static QString upsertTrackSql();
     static void bindTrackToQuery(QSqlQuery &query, const LibraryTrack &track);
+    static QVector<QPair<QString, QString>> sparseAttributesForTrack(const LibraryTrack &track);
 
     // Call this to notify listeners that the database content has changed externally
     // (e.g., after scanner finishes using its own connection)
@@ -89,7 +94,12 @@ signals:
 
 private:
     bool createTables();
+    bool ensureTrackSchema(QSqlQuery &query);
+    bool migrateLegacyTrackSchema(QSqlQuery &query, const QStringList &columns);
     LibraryTrack trackFromQuery(const QSqlQuery &query) const;
+    void applySparseAttribute(LibraryTrack &track, const QString &key, const QString &value) const;
+    void hydrateSparseAttributes(QVector<LibraryTrack> &tracks) const;
+    void hydrateSparseAttributes(LibraryTrack &track) const;
     
     QSqlDatabase m_db;
     QString m_connectionName;

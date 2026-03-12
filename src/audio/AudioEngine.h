@@ -112,6 +112,7 @@ private:
     AudioOutputWorker *m_audioWorker = nullptr;  // Owned by m_audioThread
     std::atomic<qint64> m_cachedProcessedUSecs{0};  // Pushed from audio thread
     std::atomic<bool> m_audioInitialized{false};
+    std::atomic<quint64> m_audioWorkerGeneration{0};
     
     std::unique_ptr<SPSCRingBuffer> m_ringBuffer;
     std::unique_ptr<QThread> m_decodeThread;

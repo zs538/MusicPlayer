@@ -4,8 +4,12 @@
 #include <QAbstractListModel>
 #include <QQmlEngine>
 #include <QVariantList>
+#include <QVariantMap>
 #include <QList>
+#include <QStringList>
 #include <QPair>
+#include <QSet>
+#include <QHash>
 #include "TrackFilter.h"
 
 class LibraryDatabase;
@@ -20,12 +24,15 @@ class CollectionBrowseModel : public QAbstractListModel
     Q_PROPERTY(QString groupBy READ groupBy WRITE setGroupBy NOTIFY groupByChanged)
     Q_PROPERTY(QString sortBy READ sortBy WRITE setSortBy NOTIFY sortByChanged)
     Q_PROPERTY(bool sortAscending READ sortAscending WRITE setSortAscending NOTIFY sortAscendingChanged)
+    Q_PROPERTY(QString subtitleKey READ subtitleKey WRITE setSubtitleKey NOTIFY subtitleKeyChanged)
     Q_PROPERTY(QString searchFilter READ searchFilter WRITE setSearchFilter NOTIFY searchFilterChanged)
     Q_PROPERTY(int count READ count NOTIFY countChanged)
     Q_PROPERTY(QString title READ title NOTIFY titleChanged)
     Q_PROPERTY(bool canGoBack READ canGoBack NOTIFY historyChanged)
     Q_PROPERTY(bool canGoForward READ canGoForward NOTIFY historyChanged)
     Q_PROPERTY(qreal pendingScrollY READ pendingScrollY NOTIFY pendingScrollYChanged)
+    Q_PROPERTY(QVariantList breadcrumbPath READ breadcrumbPath NOTIFY historyChanged)
+    Q_PROPERTY(int currentBreadcrumbIndex READ currentBreadcrumbIndex NOTIFY historyChanged)
 
 public:
     enum Roles {
@@ -36,6 +43,7 @@ public:
         SubtitleRole,
         ChildCountRole,
         RepresentativeFilePathRole,
+        CoverFilePathsRole,
         ImagePathRole,
         FilePathRole,
         TitleRole,
@@ -49,6 +57,7 @@ public:
         YearRole,
         BitrateRole,
         FileTypeRole,
+        TrackDataRole,
         TotalDurationMsRole
     };
 
@@ -73,21 +82,28 @@ public:
     bool sortAscending() const { return m_sortAscending; }
     void setSortAscending(bool ascending);
 
+    QString subtitleKey() const { return m_subtitleKey; }
+    void setSubtitleKey(const QString &subtitleKey);
+
     QString searchFilter() const { return m_searchFilter; }
     void setSearchFilter(const QString &filter);
 
     int count() const { return m_entries.size(); }
     QString title() const { return m_title; }
 
-    Q_INVOKABLE QVariantList tracksForGroup(const QString &groupType, const QVariant &groupValue) const;
+    Q_INVOKABLE void setTrackListSort(const QString &sortKey, bool ascending = true);
+    Q_INVOKABLE QStringList displayedFilePaths() const;
 
     // History navigation — atomic filter+groupBy change, single refresh
     Q_INVOKABLE void navigate(const QVariantList &filter, const QString &groupBy, qreal currentScrollY = 0);
     Q_INVOKABLE void goBack(qreal currentScrollY = 0);
     Q_INVOKABLE void goForward(qreal currentScrollY = 0);
+    Q_INVOKABLE void jumpToBreadcrumb(int index, qreal currentScrollY = 0);
     bool canGoBack() const;
     bool canGoForward() const;
     qreal pendingScrollY() const { return m_pendingScrollY; }
+    QVariantList breadcrumbPath() const;
+    int currentBreadcrumbIndex() const { return m_backStack.size(); }
 
 signals:
     void databaseChanged();
@@ -95,6 +111,7 @@ signals:
     void groupByChanged();
     void sortByChanged();
     void sortAscendingChanged();
+    void subtitleKeyChanged();
     void searchFilterChanged();
     void countChanged();
     void titleChanged();
@@ -113,6 +130,7 @@ private:
         QString subtitle;
         int childCount = 0;
         QString representativeFilePath;
+        QStringList coverFilePaths;
         QString imagePath;
         QString filePath;
         QString title;
@@ -126,18 +144,28 @@ private:
         int year = 0;
         int bitrate = 0;
         QString fileType;
+        QVariantMap trackData;
         qint64 totalDurationMs = 0;
+        qint64 modifiedTime = 0;
     };
 
-    void swapEntries(const QVector<Entry> &newEntries);
-    void applySearchAndSort(bool forceReset = false);
-    void applyIncrementalUpdate(const QVector<Entry> &newEntries);
-    static QString entryKey(const Entry &e);
-    static bool entriesEqual(const Entry &a, const Entry &b);
+    // Flat list building
+    QVector<Entry> filteredAndSortedEntries() const;
+    void applySearchAndSort();
+
+    // Find the row of a group entry in m_entries, and the range of its expanded children
+    int findGroupRow(const QString &groupType, const QVariant &groupValue) const;
+
     void buildGroups(const QVector<struct LibraryTrack> &tracks);
     void buildTracks(const QVector<struct LibraryTrack> &tracks);
     QString formatGroupDisplay(const QString &groupType, const QVariant &value) const;
+    QString formatSubtitle(const Entry &entry) const;
+    void applySubtitleToEntries(QVector<Entry> &entries) const;
+    QString breadcrumbLabelForFilter(const TrackFilter &filter) const;
     QVariant getGroupValue(const struct LibraryTrack &track, const QString &groupType) const;
+    static int compareTrackMapsByKey(const QVariantMap &left, const QVariantMap &right, const QString &key);
+    static QStringList defaultTrackSortKeys(const QString &groupType);
+    QString normalizedGroupKey(const QString &groupType, const QVariant &groupValue) const;
 
     // LRU result cache — keyed by filter+groupBy, stores pre-search/sort entries
     struct CacheKey {
@@ -161,6 +189,7 @@ private:
     void invalidateCache();
 
     struct HistoryEntry { TrackFilter filter; QString groupBy; qreal scrollY = 0; };
+    QVector<HistoryEntry> historyTrail(qreal currentScrollY) const;
     QVector<HistoryEntry> m_backStack;
     QVector<HistoryEntry> m_forwardStack;
     qreal m_pendingScrollY = 0;
@@ -169,12 +198,15 @@ private:
     LibraryDatabase *m_database = nullptr;
     TrackFilter m_filter;
     QString m_groupBy = "albumartist";
-    QString m_sortBy = "name";  // "name", "year", "count", "artist", "album"
+    QString m_sortBy = "name";  // "name", "year", "duration", "count", "dateUpdated"
     bool m_sortAscending = true;
+    QString m_subtitleKey = "count";
+    QString m_trackListSortKey;
+    bool m_trackListSortAscending = true;
     QString m_searchFilter;
     QString m_title;
-    QVector<Entry> m_entries;
-    QVector<Entry> m_allEntries;  // Pre-search-filter entries for filtering
+    QVector<Entry> m_entries;     // The flat displayed list
+    QVector<Entry> m_allEntries;  // Pre-search-filter entries (groups or tracks, no expanded children)
 };
 
 #endif // COLLECTIONBROWSEMODEL_H

@@ -1,5 +1,186 @@
 #include "TrackListModel.h"
 #include <QFileInfo>
+#include <algorithm>
+
+namespace {
+QVariantMap trackToVariantMap(const TrackInfo &track)
+{
+    QVariantMap map;
+    map.insert(QStringLiteral("filePath"), track.filePath);
+    map.insert(QStringLiteral("title"), track.title);
+    map.insert(QStringLiteral("artist"), track.artist);
+    map.insert(QStringLiteral("album"), track.album);
+    map.insert(QStringLiteral("albumArtist"), track.albumArtist);
+    map.insert(QStringLiteral("performer"), track.performer);
+    map.insert(QStringLiteral("composer"), track.composer);
+    map.insert(QStringLiteral("year"), track.year);
+    map.insert(QStringLiteral("originalYear"), track.originalYear);
+    map.insert(QStringLiteral("trackNumber"), track.trackNumber);
+    map.insert(QStringLiteral("discNumber"), track.discNumber);
+    map.insert(QStringLiteral("durationMs"), track.durationMs);
+    map.insert(QStringLiteral("genre"), track.genre);
+    map.insert(QStringLiteral("sampleRate"), track.sampleRate);
+    map.insert(QStringLiteral("bitDepth"), track.bitDepth);
+    map.insert(QStringLiteral("bitrate"), track.bitrate);
+    map.insert(QStringLiteral("url"), track.url);
+    map.insert(QStringLiteral("fileName"), track.fileName);
+    map.insert(QStringLiteral("fileSize"), track.fileSize);
+    map.insert(QStringLiteral("fileType"), track.fileType);
+    map.insert(QStringLiteral("dateCreated"), track.dateCreated);
+    map.insert(QStringLiteral("dateModified"), track.dateModified);
+    map.insert(QStringLiteral("comment"), track.comment);
+    map.insert(QStringLiteral("bpm"), track.bpm);
+    map.insert(QStringLiteral("initialKey"), track.initialKey);
+    map.insert(QStringLiteral("customTags"), track.customTags);
+    map.insert(QStringLiteral("display"), track.title.isEmpty() ? QFileInfo(track.filePath).fileName() : track.title);
+    return map;
+}
+
+QString displayText(const TrackInfo &track)
+{
+    if (!track.title.trimmed().isEmpty())
+        return track.title;
+    if (!track.fileName.trimmed().isEmpty())
+        return track.fileName;
+    return QFileInfo(track.filePath).fileName();
+}
+
+QString variantToSortText(const QVariant &value)
+{
+    if (!value.isValid() || value.isNull())
+        return {};
+    if (value.metaType().id() == QMetaType::QStringList)
+        return value.toStringList().join(QStringLiteral("; "));
+    if (value.metaType().id() == QMetaType::QVariantList) {
+        QStringList parts;
+        const QVariantList values = value.toList();
+        parts.reserve(values.size());
+        for (const QVariant &entry : values)
+            parts.append(entry.toString());
+        return parts.join(QStringLiteral("; "));
+    }
+    return value.toString();
+}
+
+QString customTagSortText(const QVariantMap &customTags, const QString &tagKey)
+{
+    if (tagKey.isEmpty())
+        return {};
+    if (customTags.contains(tagKey))
+        return variantToSortText(customTags.value(tagKey));
+    for (auto it = customTags.constBegin(); it != customTags.constEnd(); ++it) {
+        if (it.key().compare(tagKey, Qt::CaseInsensitive) == 0)
+            return variantToSortText(it.value());
+    }
+    return {};
+}
+
+int compareTextValue(const QString &left, const QString &right)
+{
+    const QString a = left.trimmed();
+    const QString b = right.trimmed();
+    const bool hasA = !a.isEmpty();
+    const bool hasB = !b.isEmpty();
+    if (hasA != hasB)
+        return hasA ? -1 : 1;
+    return QString::compare(a, b, Qt::CaseInsensitive);
+}
+
+int compareOptionalInt(int left, int right)
+{
+    const bool hasLeft = left > 0;
+    const bool hasRight = right > 0;
+    if (hasLeft != hasRight)
+        return hasLeft ? -1 : 1;
+    if (!hasLeft)
+        return 0;
+    return (left > right) - (left < right);
+}
+
+int compareOptionalLongLong(qint64 left, qint64 right)
+{
+    const bool hasLeft = left > 0;
+    const bool hasRight = right > 0;
+    if (hasLeft != hasRight)
+        return hasLeft ? -1 : 1;
+    if (!hasLeft)
+        return 0;
+    return (left > right) - (left < right);
+}
+
+int compareDateTimeValue(const QDateTime &left, const QDateTime &right)
+{
+    const bool hasLeft = left.isValid();
+    const bool hasRight = right.isValid();
+    if (hasLeft != hasRight)
+        return hasLeft ? -1 : 1;
+    if (!hasLeft)
+        return 0;
+    const qint64 a = left.toMSecsSinceEpoch();
+    const qint64 b = right.toMSecsSinceEpoch();
+    return (a > b) - (a < b);
+}
+
+int compareTrackByKey(const TrackInfo &left, const TrackInfo &right, const QString &key)
+{
+    const QString normalizedKey = key.trimmed().toLower();
+    if (normalizedKey == QStringLiteral("title") || normalizedKey == QStringLiteral("display"))
+        return compareTextValue(displayText(left), displayText(right));
+    if (normalizedKey == QStringLiteral("artist"))
+        return compareTextValue(left.artist, right.artist);
+    if (normalizedKey == QStringLiteral("album"))
+        return compareTextValue(left.album, right.album);
+    if (normalizedKey == QStringLiteral("albumartist"))
+        return compareTextValue(left.albumArtist, right.albumArtist);
+    if (normalizedKey == QStringLiteral("performer"))
+        return compareTextValue(left.performer, right.performer);
+    if (normalizedKey == QStringLiteral("composer"))
+        return compareTextValue(left.composer, right.composer);
+    if (normalizedKey == QStringLiteral("genre"))
+        return compareTextValue(left.genre, right.genre);
+    if (normalizedKey == QStringLiteral("filepath"))
+        return compareTextValue(left.filePath, right.filePath);
+    if (normalizedKey == QStringLiteral("filename"))
+        return compareTextValue(left.fileName.isEmpty() ? QFileInfo(left.filePath).fileName() : left.fileName,
+                                right.fileName.isEmpty() ? QFileInfo(right.filePath).fileName() : right.fileName);
+    if (normalizedKey == QStringLiteral("filetype"))
+        return compareTextValue(left.fileType, right.fileType);
+    if (normalizedKey == QStringLiteral("comment"))
+        return compareTextValue(left.comment, right.comment);
+    if (normalizedKey == QStringLiteral("initialkey"))
+        return compareTextValue(left.initialKey, right.initialKey);
+    if (normalizedKey == QStringLiteral("url"))
+        return compareTextValue(left.url, right.url);
+    if (normalizedKey == QStringLiteral("tracknumber"))
+        return compareOptionalInt(left.trackNumber, right.trackNumber);
+    if (normalizedKey == QStringLiteral("discnumber"))
+        return compareOptionalInt(left.discNumber, right.discNumber);
+    if (normalizedKey == QStringLiteral("year"))
+        return compareOptionalInt(left.year, right.year);
+    if (normalizedKey == QStringLiteral("originalyear"))
+        return compareOptionalInt(left.originalYear, right.originalYear);
+    if (normalizedKey == QStringLiteral("samplerate"))
+        return compareOptionalInt(left.sampleRate, right.sampleRate);
+    if (normalizedKey == QStringLiteral("bitdepth"))
+        return compareOptionalInt(left.bitDepth, right.bitDepth);
+    if (normalizedKey == QStringLiteral("bitrate"))
+        return compareOptionalInt(left.bitrate, right.bitrate);
+    if (normalizedKey == QStringLiteral("bpm"))
+        return compareOptionalInt(left.bpm, right.bpm);
+    if (normalizedKey == QStringLiteral("durationms"))
+        return compareOptionalLongLong(left.durationMs, right.durationMs);
+    if (normalizedKey == QStringLiteral("filesize"))
+        return compareOptionalLongLong(left.fileSize, right.fileSize);
+    if (normalizedKey == QStringLiteral("datecreated"))
+        return compareDateTimeValue(left.dateCreated, right.dateCreated);
+    if (normalizedKey == QStringLiteral("datemodified"))
+        return compareDateTimeValue(left.dateModified, right.dateModified);
+    if (normalizedKey.startsWith(QStringLiteral("custom:")))
+        return compareTextValue(customTagSortText(left.customTags, normalizedKey.mid(7)),
+                                customTagSortText(right.customTags, normalizedKey.mid(7)));
+    return compareTextValue(displayText(left), displayText(right));
+}
+}
 
 TrackListModel::TrackListModel(QObject *parent)
     : QAbstractListModel(parent)
@@ -71,6 +252,8 @@ QVariant TrackListModel::data(const QModelIndex &index, int role) const
         return track.bpm;
     case InitialKeyRole:
         return track.initialKey;
+    case TrackDataRole:
+        return trackToVariantMap(track);
     case DisplayRole:
     case Qt::DisplayRole:
         return track.title.isEmpty() ? QFileInfo(track.filePath).fileName() : track.title;
@@ -107,6 +290,7 @@ QHash<int, QByteArray> TrackListModel::roleNames() const
         {CommentRole, "comment"},
         {BpmRole, "bpm"},
         {InitialKeyRole, "initialKey"},
+        {TrackDataRole, "trackData"},
         {DisplayRole, "display"}
     };
 }
@@ -204,6 +388,7 @@ void TrackListModel::insertTrackFromMap(int index, const QVariantMap &trackData)
     track.comment = trackData.value("comment").toString();
     track.bpm = trackData.value("bpm").toInt();
     track.initialKey = trackData.value("initialKey").toString();
+    track.customTags = trackData.value("customTags").toMap();
     insertTrack(index, track);
 }
 
@@ -246,6 +431,20 @@ void TrackListModel::moveRow(int from, int to)
     
     m_tracks.move(from, to);
     endMoveRows();
+}
+
+void TrackListModel::sortByColumn(const QString &key, bool ascending)
+{
+    const QString normalizedKey = key.trimmed();
+    if (normalizedKey.isEmpty() || m_tracks.size() < 2)
+        return;
+
+    beginResetModel();
+    std::stable_sort(m_tracks.begin(), m_tracks.end(), [normalizedKey, ascending](const TrackInfo &left, const TrackInfo &right) {
+        const int cmp = compareTrackByKey(left, right, normalizedKey);
+        return ascending ? (cmp < 0) : (cmp > 0);
+    });
+    endResetModel();
 }
 
 void TrackListModel::clear()

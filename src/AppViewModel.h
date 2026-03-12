@@ -100,6 +100,13 @@ public slots:
     QStringList libraryFolders() const;
     void addWatchFolder(const QString &path);
     void removeWatchFolder(const QString &path);
+    Q_INVOKABLE void rescanCollectionEntry(const QVariantList &filter, const QString &entryType,
+                                           const QString &groupType, const QVariant &groupValue,
+                                           const QString &filePath);
+    Q_INVOKABLE void rescanPlaylistSelection(const QString &playlistId, const QVariantList &rows);
+    Q_INVOKABLE QString coverImageSourceForFile(const QString &filePath) const;
+    Q_INVOKABLE QString coverImageSourceForFiles(const QStringList &filePaths) const;
+    Q_INVOKABLE QString localFileUrlForPath(const QString &filePath) const;
 
 signals:
     void playbackStateChanged();
@@ -123,6 +130,8 @@ private:
     void setError(const QString &text);
     void clearError();
     void updateNowPlaying(const TrackInfo &track);
+    void rescanFiles(const QStringList &filePaths);
+    void refreshPlaylistMetadataFromLibrary();
     
     PlaybackState m_playbackState = Stopped;
     qint64 m_positionMs = 0;
