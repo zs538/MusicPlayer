@@ -6,6 +6,7 @@
 #include <QUrl>
 #include <QVector>
 #include <QFuture>
+#include <QSet>
 
 class TrackListModel;
 
@@ -68,6 +69,7 @@ public:
     Q_INVOKABLE QString getOrCreateGeneratedPlaylist(const QString &name = QString());
     Q_INVOKABLE int generatedPlaylistCount() const;
     Q_INVOKABLE bool setPlaylistUserCreated(const QString &uuid, bool isUserCreated);
+    void setGeneratedPlaylistDirtyTrackingSuppressed(const QString &uuid, bool suppressed);
     
 public slots:
     void enforceGeneratedPlaylistCount();
@@ -102,11 +104,13 @@ private:
     bool importM3U(TrackListModel *model, const QString &filePath, bool utf8);
     bool exportM3U(TrackListModel *model, const QString &filePath, bool utf8);
     void importM3UAsync(const QString &uuid, const QString &filePath, bool utf8);
+    void markGeneratedPlaylistDirty(const QUuid &uuid);
 
     QVector<Tab> m_tabs;
     QFuture<void> m_importFuture;
     QUuid m_activeId;
     QUuid m_displayedId;
+    QSet<QUuid> m_dirtyTrackingSuppressed;
 };
 
 #endif // PLAYLISTSTORE_H

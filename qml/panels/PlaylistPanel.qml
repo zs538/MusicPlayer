@@ -98,22 +98,89 @@ Rectangle {
             id: playlistHeader
             Layout.fillWidth: true
             Layout.preferredHeight: 18
+            z: 2
             color: Theme.surfaceAlt
+
+            property bool renaming: false
+            property string renameOriginalText: ""
 
             function updateHeaderTitle() {
                 let idx = AppViewModel.playlistStore.indexOfUuid(root.playlistId)
                 headerLabel.text = idx >= 0 ? AppViewModel.playlistStore.tabName(idx) : "Playlist"
             }
+            function startRename() {
+                updateHeaderTitle()
+                renameOriginalText = headerLabel.text
+                renameField.text = headerLabel.text
+                renaming = true
+                renameField.forceActiveFocus()
+                renameField.selectAll()
+            }
+            function cancelRename() {
+                renaming = false
+                renameField.text = renameOriginalText
+                forceActiveFocus()
+            }
+            function commitRename() {
+                let trimmed = renameField.text.trim()
+                renaming = false
+                forceActiveFocus()
+                if (trimmed.length > 0 && trimmed !== renameOriginalText)
+                    AppViewModel.playlistStore.renameTab(root.playlistId, trimmed)
+                updateHeaderTitle()
+            }
 
             Label {
                 id: headerLabel
                 anchors.centerIn: parent
+                visible: !playlistHeader.renaming
                 text: "Playlist"
                 font.bold: true
                 font.pixelSize: 11
                 color: Theme.textPrimary
                 elide: Text.ElideMiddle
                 width: Math.min(implicitWidth, parent.width - 16)
+            }
+
+            TextField {
+                id: renameField
+                anchors.centerIn: parent
+                visible: playlistHeader.renaming
+                width: parent.width - 16
+                height: headerLabel.implicitHeight
+                text: ""
+                color: Theme.textPrimary
+                font.bold: true
+                font.pixelSize: 11
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                selectByMouse: true
+                leftPadding: 0
+                rightPadding: 0
+                topPadding: 0
+                bottomPadding: 0
+                background: Item {}
+                TextCursor {}
+                Keys.onEscapePressed: (event) => {
+                    playlistHeader.cancelRename()
+                    event.accepted = true
+                }
+                Keys.onReturnPressed: (event) => {
+                    playlistHeader.commitRename()
+                    event.accepted = true
+                }
+                Keys.onEnterPressed: (event) => {
+                    playlistHeader.commitRename()
+                    event.accepted = true
+                }
+                onActiveFocusChanged: {
+                    if (!activeFocus && playlistHeader.renaming)
+                        playlistHeader.cancelRename()
+                }
+                onEditingFinished: {
+                    if (playlistHeader.renaming)
+                        playlistHeader.cancelRename()
+                }
             }
 
             Component.onCompleted: playlistHeader.updateHeaderTitle()
@@ -144,6 +211,8 @@ Rectangle {
             MouseArea {
                 id: headerMouseArea
                 anchors.fill: parent
+                visible: !playlistHeader.renaming
+                enabled: visible
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                 cursorShape: Qt.PointingHandCursor
                 hoverEnabled: true
@@ -198,7 +267,9 @@ Rectangle {
                 onAboutToShow: {
                     // Clear existing dynamic items
                     while (playlistSwitchMenu.count > 2) {
-                        playlistSwitchMenu.removeItem(playlistSwitchMenu.itemAt(2))
+                        let item = playlistSwitchMenu.itemAt(2)
+                        playlistSwitchMenu.removeItem(item)
+                        item.destroy()
                     }
                     
                     let userPlaylists = []
@@ -210,6 +281,7 @@ Rectangle {
                         let item = {
                             uuid: AppViewModel.playlistTabsModel.data(idx, 257),
                             name: AppViewModel.playlistTabsModel.data(idx, 258),
+                            isActive: AppViewModel.playlistTabsModel.data(idx, 259),
                             isUserCreated: AppViewModel.playlistTabsModel.data(idx, 262)
                         }
                         if (item.isUserCreated) userPlaylists.push(item)
@@ -218,21 +290,22 @@ Rectangle {
                     
                     // Add user playlists
                     for (let pl of userPlaylists) {
-                        let menuItem = playlistItemComponent.createObject(playlistSwitchMenu, {
-                            plUuid: pl.uuid, plName: pl.name
+                        let menuItem = playlistItemComponent.createObject(playlistSwitchMenu.contentItem, {
+                            plUuid: pl.uuid, plName: pl.name, isActive: pl.isActive
                         })
                         playlistSwitchMenu.addItem(menuItem)
                     }
                     
                     // Add separator if both types exist
                     if (userPlaylists.length > 0 && genPlaylists.length > 0) {
-                        playlistSwitchMenu.addItem(separatorComponent.createObject(playlistSwitchMenu))
+                        let separator = separatorComponent.createObject(playlistSwitchMenu.contentItem)
+                        playlistSwitchMenu.addItem(separator)
                     }
                     
                     // Add generated playlists
                     for (let pl of genPlaylists) {
-                        let menuItem = playlistItemComponent.createObject(playlistSwitchMenu, {
-                            plUuid: pl.uuid, plName: pl.name
+                        let menuItem = playlistItemComponent.createObject(playlistSwitchMenu.contentItem, {
+                            plUuid: pl.uuid, plName: pl.name, isActive: pl.isActive
                         })
                         playlistSwitchMenu.addItem(menuItem)
                     }
@@ -254,8 +327,15 @@ Rectangle {
                 MenuItem {
                     property string plUuid
                     property string plName
+                    property bool isActive: false
                     
-                    text: plName
+                    text: String(plName).replace(/&/g, "&&")
+                    icon.source: isActive && AppViewModel.playbackState === AppViewModel.Playing
+                        ? Qt.resolvedUrl("../icons/play_arrow.svg")
+                        : ""
+                    icon.color: Theme.textPrimary
+                    icon.width: 12
+                    icon.height: 12
                     PointingCursor {}
                     onTriggered: ViewedPlaylistRouter.viewedPlaylistId = plUuid
                 }
@@ -270,17 +350,23 @@ Rectangle {
             Menu {
                 id: playlistActionsMenu
                 MenuItem {
-                    text: "Rename"
+                    text: "New playlist"
                     PointingCursor {}
                     onTriggered: {
-                        let dialog = renameDialog.createObject(root, {playlistId: root.playlistId})
-                        dialog.open()
+                        let newId = AppViewModel.playlistStore.createNewTab()
+                        ViewedPlaylistRouter.viewedPlaylistId = newId
                     }
                 }
+                MenuSeparator {}
                 MenuItem {
                     text: "Clear"
                     PointingCursor {}
                     onTriggered: controller.model?.clear()
+                }
+                MenuItem {
+                    text: "Rename"
+                    PointingCursor {}
+                    onTriggered: playlistHeader.startRename()
                 }
                 MenuItem {
                     text: "Make permanent"
@@ -288,6 +374,13 @@ Rectangle {
                     height: visible ? implicitHeight : 0
                     PointingCursor {}
                     onTriggered: AppViewModel.playlistStore.setPlaylistUserCreated(root.playlistId, true)
+                }
+                MenuSeparator {}
+                MenuItem {
+                    text: "Close playlist"
+                    enabled: AppViewModel.playlistTabsModel.rowCount() > 1
+                    PointingCursor {}
+                    onTriggered: AppViewModel.playlistStore.closeTab(root.playlistId)
                 }
                 MenuSeparator {}
                 MenuItem {
@@ -305,13 +398,6 @@ Rectangle {
                         let dialog = exportDialog.createObject(root, {playlistId: root.playlistId})
                         dialog.open()
                     }
-                }
-                MenuSeparator {}
-                MenuItem {
-                    text: "Close"
-                    enabled: AppViewModel.playlistTabsModel.rowCount() > 1
-                    PointingCursor {}
-                    onTriggered: AppViewModel.playlistStore.closeTab(root.playlistId)
                 }
             }
         }
@@ -349,10 +435,13 @@ Rectangle {
             MouseArea {
                 anchors.fill: parent
                 z: -1
+                acceptedButtons: Qt.LeftButton | Qt.RightButton
                 property bool isDragSelecting: false
                 property bool didDragSelect: false
                 
                 onPressed: {
+                    if (mouse.button !== Qt.LeftButton)
+                        return
                     let clickY = mouseY + listView.contentY
                     let lastEntryBottom = listView.count * root.playlistRowHeight
                     if (clickY >= lastEntryBottom) {
@@ -384,6 +473,16 @@ Rectangle {
                 }
                 
                 onClicked: {
+                    let clickY = mouseY + listView.contentY
+                    let lastEntryBottom = listView.count * root.playlistRowHeight
+                    if (mouse.button === Qt.RightButton) {
+                        if (clickY >= lastEntryBottom) {
+                            controller.clearSelection()
+                            contextMenu.hasTrackContext = false
+                            contextMenu.popup()
+                        }
+                        return
+                    }
                     if (!didDragSelect) controller.clearSelection()
                     didDragSelect = false
                 }
@@ -447,6 +546,7 @@ Rectangle {
                     onClicked: function(mouse) {
                         if (mouse.button === Qt.RightButton) {
                             if (!del.selected) controller.clickRow(del.index, false, false)
+                            contextMenu.hasTrackContext = true
                             contextMenu.popup()
                         } else if (!DragManager.isDragging) {
                             controller.clickRow(del.index, mouse.modifiers & Qt.ControlModifier, mouse.modifiers & Qt.ShiftModifier)
@@ -503,43 +603,70 @@ Rectangle {
 
     } // end ColumnLayout
 
+    MouseArea {
+        anchors.fill: parent
+        anchors.topMargin: playlistHeader.height
+        visible: playlistHeader.renaming
+        enabled: visible
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
+        z: 1
+        onClicked: playlistHeader.cancelRename()
+    }
+
     // Background right-click
     MouseArea {
         anchors.fill: parent
         acceptedButtons: Qt.RightButton
         z: -1
-        onClicked: contextMenu.popup()
+        onClicked: {
+            controller.clearSelection()
+            contextMenu.hasTrackContext = false
+            contextMenu.popup()
+        }
     }
 
     // Simple context menu
     Menu {
         id: contextMenu
+        property bool hasTrackContext: false
 
-        MenuItem {
-            text: root.playlistTrackListLayout.headerVisible ? "Hide column header" : "Show column header"
+        MenuItem { 
+            text: "New playlist"
             PointingCursor {}
-            onTriggered: root.setPlaylistTrackListLayout(TrackListColumnsSupport.setHeaderVisible(root.playlistTrackListLayout, !root.playlistTrackListLayout.headerVisible))
+            onTriggered: {
+                let newId = AppViewModel.playlistStore.createNewTab()
+                ViewedPlaylistRouter.viewedPlaylistId = newId
+            }
         }
         MenuSeparator {}
         MenuItem {
             text: "Play"
+            visible: contextMenu.hasTrackContext
+            height: visible ? implicitHeight : 0
             enabled: controller.selectedCount > 0
             PointingCursor {}
             onTriggered: AppViewModel.browseActivation.activatePlaylistRow(controller.selectedRows()[0])
         }
         MenuItem {
             text: "Remove"
+            visible: contextMenu.hasTrackContext
+            height: visible ? implicitHeight : 0
             enabled: controller.selectedCount > 0
             PointingCursor {}
             onTriggered: controller.removeSelected()
         }
         MenuItem {
             text: "Rescan track(s)"
+            visible: contextMenu.hasTrackContext
+            height: visible ? implicitHeight : 0
             enabled: controller.selectedCount > 0
             PointingCursor {}
             onTriggered: AppViewModel.rescanPlaylistSelection(root.playlistId, controller.selectedRows())
         }
-        MenuSeparator {}
+        MenuSeparator {
+            visible: contextMenu.hasTrackContext
+            height: visible ? implicitHeight : 0
+        }
         MenuItem {
             text: "Select all"
             PointingCursor {}
@@ -550,15 +677,12 @@ Rectangle {
             PointingCursor {}
             onTriggered: controller.model?.clear()
         }
-        MenuSeparator {}
         MenuItem { 
             text: "Rename playlist"
             PointingCursor {}
-            onTriggered: {
-                let dialog = renameDialog.createObject(root, {playlistId: root.playlistId})
-                dialog.open()
-            }
+            onTriggered: playlistHeader.startRename()
         }
+        MenuSeparator {}
         MenuItem { 
             text: "Close playlist"
             enabled: AppViewModel.playlistTabsModel.rowCount() > 1
@@ -583,53 +707,12 @@ Rectangle {
             }
         }
         MenuSeparator {}
-        MenuItem { 
-            text: "New playlist"
+        MenuItem {
+            text: root.playlistTrackListLayout.headerVisible ? "Hide column header" : "Show column header"
             PointingCursor {}
-            onTriggered: {
-                let newId = AppViewModel.playlistStore.createNewTab()
-                ViewedPlaylistRouter.viewedPlaylistId = newId
-            }
+            onTriggered: root.setPlaylistTrackListLayout(TrackListColumnsSupport.setHeaderVisible(root.playlistTrackListLayout, !root.playlistTrackListLayout.headerVisible))
         }
 
-    }
-
-    // Rename dialog
-    Component {
-        id: renameDialog
-        Dialog {
-            property string playlistId
-            title: "Rename Playlist"
-            modal: true
-            anchors.centerIn: parent
-            standardButtons: Dialog.Ok | Dialog.Cancel
-
-            ColumnLayout {
-                anchors.fill: parent
-                Label { text: "New name:" }
-                TextField {
-                    id: nameField
-                    Layout.fillWidth: true
-                    selectByMouse: true
-                    TextCursor {}
-                    Component.onCompleted: {
-                        let idx = AppViewModel.playlistStore.indexOfUuid(playlistId)
-                        if (idx >= 0) {
-                            text = AppViewModel.playlistStore.tabName(idx)
-                            selectAll()
-                            forceActiveFocus()
-                        }
-                    }
-                }
-            }
-
-            onAccepted: {
-                if (nameField.text.trim().length > 0) {
-                    AppViewModel.playlistStore.renameTab(playlistId, nameField.text.trim())
-                    playlistHeader.updateHeaderTitle()
-                }
-            }
-        }
     }
 
     // Import dialog

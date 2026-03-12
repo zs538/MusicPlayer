@@ -234,11 +234,17 @@ void BrowseActivationService::addFilteredTracksToViewed(const QVariantList &filt
         return;
     
     int startRow = model->count();
-    
+    const bool suppressDirtyTracking = startRow == 0;
+    if (suppressDirtyTracking)
+        m_store->setGeneratedPlaylistDirtyTrackingSuppressed(targetId, true);
+
     for (const LibraryTrack &track : tracks) {
         model->addTrack(MetadataExtractor::toTrackInfo(track));
     }
-    
+
+    if (suppressDirtyTracking)
+        m_store->setGeneratedPlaylistDirtyTrackingSuppressed(targetId, false);
+
     // Apply autoplay policy
     if (shouldAutoplay() && m_app) {
         router()->setActiveToViewed();
@@ -514,16 +520,77 @@ void BrowseActivationService::openFilteredTracksInNewPlaylist(const QVariantList
         return;
     
     int startRow = model->count();
-    
+    const bool suppressDirtyTracking = startRow == 0;
+    if (suppressDirtyTracking)
+        m_store->setGeneratedPlaylistDirtyTrackingSuppressed(targetId, true);
+
     for (const LibraryTrack &track : tracks) {
         model->addTrack(MetadataExtractor::toTrackInfo(track));
     }
+
+    if (suppressDirtyTracking)
+        m_store->setGeneratedPlaylistDirtyTrackingSuppressed(targetId, false);
     
     // Apply autoplay policy
     if (shouldAutoplay() && m_app) {
         router()->setActiveToViewed();
         m_app->playIndex(startRow);
     }
+}
+
+void BrowseActivationService::playFilteredTracksInNewPlaylist(const QVariantList &filter,
+                                                               const QString &groupType,
+                                                               const QVariant &groupValue)
+{
+    if (!m_libraryDb || !m_store || !router() || !m_app)
+        return;
+
+    TrackFilter trackFilter = trackFilterFromVariant(filter);
+    FilterCondition cond;
+    cond.field = groupType;
+    cond.op = "=";
+    cond.value = groupValue;
+    trackFilter.append(cond);
+
+    QVector<LibraryTrack> tracks = m_libraryDb->tracksMatchingFilter(trackFilter);
+    if (tracks.isEmpty())
+        return;
+
+    QString playlistName = groupValue.toString();
+    if (groupType == "album" && !tracks.isEmpty()) {
+        QString artist = tracks.first().albumArtist;
+        if (artist.isEmpty())
+            artist = tracks.first().artist;
+        if (!artist.isEmpty())
+            playlistName = artist + " - " + groupValue.toString();
+    }
+
+    const QString existingId = m_store->findGeneratedPlaylistByName(playlistName);
+    if (!existingId.isEmpty()) {
+        router()->setViewedPlaylistId(existingId);
+        router()->setActiveToViewed();
+        m_app->playIndex(0);
+        return;
+    }
+
+    const QString targetId = m_store->createNewTab(playlistName, false);
+    if (targetId.isEmpty())
+        return;
+
+    m_store->enforceGeneratedPlaylistCount();
+    router()->setViewedPlaylistId(targetId);
+
+    TrackListModel *model = m_store->displayedPlaylist();
+    if (!model)
+        return;
+
+    m_store->setGeneratedPlaylistDirtyTrackingSuppressed(targetId, true);
+    for (const LibraryTrack &track : tracks)
+        model->addTrack(MetadataExtractor::toTrackInfo(track));
+    m_store->setGeneratedPlaylistDirtyTrackingSuppressed(targetId, false);
+
+    router()->setActiveToViewed();
+    m_app->playIndex(0);
 }
 
 void BrowseActivationService::openCollectionEntryInNewPlaylist(const QString &entryId)
@@ -551,6 +618,7 @@ void BrowseActivationService::openCollectionEntryInNewPlaylist(const QString &en
     if (playlistName.isEmpty())
         playlistName = QFileInfo(filePath).baseName();
     
+    const bool hadExistingPlaylist = !m_store->findGeneratedPlaylistByName(playlistName).isEmpty();
     QString targetId = m_store->getOrCreateGeneratedPlaylist(playlistName);
     if (targetId.isEmpty())
         return;
@@ -561,7 +629,11 @@ void BrowseActivationService::openCollectionEntryInNewPlaylist(const QString &en
         return;
     
     int startRow = model->count();
+    if (!hadExistingPlaylist && startRow == 0)
+        m_store->setGeneratedPlaylistDirtyTrackingSuppressed(targetId, true);
     model->addTrack(track);
+    if (!hadExistingPlaylist && startRow == 0)
+        m_store->setGeneratedPlaylistDirtyTrackingSuppressed(targetId, false);
     
     // Apply autoplay policy
     if (shouldAutoplay() && m_app) {

@@ -1006,9 +1006,8 @@ Item {
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
-                                AppViewModel.browseActivation.openFilteredTracksInNewPlaylist(
+                                AppViewModel.browseActivation.playFilteredTracksInNewPlaylist(
                                     browserModel.filter, gridDel.groupType, gridDel.groupValue)
-                                AppViewModel.play()
                             }
                         }
                     }

@@ -68,6 +68,9 @@ public:
     Q_INVOKABLE void openFilteredTracksInNewPlaylist(const QVariantList &filter,
                                                       const QString &groupType,
                                                       const QVariant &groupValue);
+    Q_INVOKABLE void playFilteredTracksInNewPlaylist(const QVariantList &filter,
+                                                      const QString &groupType,
+                                                      const QVariant &groupValue);
     Q_INVOKABLE void openCollectionEntryInNewPlaylist(const QString &entryId);
 
 private:

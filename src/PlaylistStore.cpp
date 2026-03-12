@@ -80,11 +80,15 @@ QString PlaylistStore::createNewTab(const QString &name, bool isUserCreated)
         if (idx >= 0)
             emit tabDataChanged(idx);
     };
+    auto emitStructuralChanges = [this, tabUuid, emitChanges]() {
+        markGeneratedPlaylistDirty(tabUuid);
+        emitChanges();
+    };
     
-    connect(model, &TrackListModel::rowsInserted, this, emitChanges);
-    connect(model, &TrackListModel::rowsRemoved, this, emitChanges);
-    connect(model, &TrackListModel::rowsMoved, this, emitChanges);
-    connect(model, &TrackListModel::modelReset, this, emitChanges);
+    connect(model, &TrackListModel::rowsInserted, this, emitStructuralChanges);
+    connect(model, &TrackListModel::rowsRemoved, this, emitStructuralChanges);
+    connect(model, &TrackListModel::rowsMoved, this, emitStructuralChanges);
+    connect(model, &TrackListModel::modelReset, this, emitStructuralChanges);
     connect(model, &TrackListModel::dataChanged, this, emitChanges);
     
     int idx = m_tabs.size();
@@ -269,6 +273,18 @@ bool PlaylistStore::setPlaylistUserCreated(const QString &uuid, bool isUserCreat
     return true;
 }
 
+void PlaylistStore::setGeneratedPlaylistDirtyTrackingSuppressed(const QString &uuid, bool suppressed)
+{
+    const QUuid id(uuid);
+    if (id.isNull())
+        return;
+
+    if (suppressed)
+        m_dirtyTrackingSuppressed.insert(id);
+    else
+        m_dirtyTrackingSuppressed.remove(id);
+}
+
 QString PlaylistStore::getOrCreateGeneratedPlaylist(const QString &name)
 {
     QString tabName = name.isEmpty() ? QStringLiteral("Generated") : name;
@@ -301,6 +317,19 @@ QString PlaylistStore::getOrCreateGeneratedPlaylist(const QString &name)
     
     // Create new generated playlist
     return createNewTab(tabName, false);
+}
+
+void PlaylistStore::markGeneratedPlaylistDirty(const QUuid &uuid)
+{
+    if (uuid.isNull() || m_dirtyTrackingSuppressed.contains(uuid))
+        return;
+
+    const int idx = indexOfUuid(uuid);
+    if (idx < 0 || m_tabs[idx].isUserCreated)
+        return;
+
+    if (!m_tabs[idx].name.endsWith(QLatin1Char('*')))
+        m_tabs[idx].name.append(QLatin1Char('*'));
 }
 
 int PlaylistStore::indexOfUuid(const QUuid &uuid) const
