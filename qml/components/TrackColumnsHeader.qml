@@ -285,6 +285,7 @@ Rectangle {
             onTriggered: root.emitEdited(TrackListColumnsSupport.splitColumn(root.layout, root._columnContextIndex))
         }
         Menu {
+            id: setColumnMenu
             title: "Set Column"
 
             MenuItem {
@@ -293,31 +294,23 @@ Rectangle {
                 onTriggered: root.setColumn("")
             }
             MenuSeparator {}
-            MenuItem {
-                text: TrackListColumnsSupport.titleForKey("trackNumber")
-                PointingCursor {}
-                onTriggered: root.setColumn("trackNumber")
+
+            Instantiator {
+                id: mainColumnsInstantiator
+                model: TrackListColumnsSupport.mainBuiltinKeys
+
+                delegate: MenuItem {
+                    required property string modelData
+
+                    text: TrackListColumnsSupport.titleForKey(modelData)
+                    PointingCursor {}
+                    onTriggered: root.setColumn(modelData)
+                }
+
+                onObjectAdded: (index, object) => setColumnMenu.insertItem(index + 2, object)
+                onObjectRemoved: (index, object) => setColumnMenu.removeItem(object)
             }
-            MenuItem {
-                text: TrackListColumnsSupport.titleForKey("title")
-                PointingCursor {}
-                onTriggered: root.setColumn("title")
-            }
-            MenuItem {
-                text: TrackListColumnsSupport.titleForKey("artist")
-                PointingCursor {}
-                onTriggered: root.setColumn("artist")
-            }
-            MenuItem {
-                text: TrackListColumnsSupport.titleForKey("album")
-                PointingCursor {}
-                onTriggered: root.setColumn("album")
-            }
-            MenuItem {
-                text: TrackListColumnsSupport.titleForKey("durationMs")
-                PointingCursor {}
-                onTriggered: root.setColumn("durationMs")
-            }
+
             MenuSeparator {}
             Menu {
                 id: otherColumnsMenu
