@@ -1,4 +1,6 @@
 #include "LibraryDatabase.h"
+#include "LibraryMigration.h"
+#include "LibrarySparseAttributes.h"
 #include <QSqlQuery>
 #include <QSqlError>
 #include <QStandardPaths>
@@ -6,75 +8,10 @@
 #include <QUuid>
 #include <QDebug>
 #include <QUrl>
-#include <algorithm>
-#include <QHash>
-#include <QSet>
+
+namespace LSA = LibrarySparseAttributes;
 
 namespace {
-
-constexpr int TrackSchemaVersion = 2;
-
-const char *kCreateTracksSql = R"(
-    CREATE TABLE IF NOT EXISTS tracks (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        file_path TEXT UNIQUE NOT NULL,
-        title TEXT,
-        artist TEXT,
-        album TEXT,
-        album_artist TEXT,
-        track_number INTEGER DEFAULT 0,
-        disc_number INTEGER DEFAULT 0,
-        year INTEGER DEFAULT 0,
-        duration_ms INTEGER DEFAULT 0,
-        genre TEXT,
-        bitrate INTEGER DEFAULT 0,
-        file_name TEXT,
-        file_type TEXT,
-        file_size INTEGER DEFAULT 0,
-        modified_time INTEGER DEFAULT 0
-    )
-)";
-
-const char *kCreateTrackAttributesSql = R"(
-    CREATE TABLE IF NOT EXISTS track_attributes (
-        track_id INTEGER NOT NULL,
-        key TEXT NOT NULL,
-        value TEXT NOT NULL,
-        PRIMARY KEY (track_id, key, value),
-        FOREIGN KEY (track_id) REFERENCES tracks(id) ON DELETE CASCADE
-    ) WITHOUT ROWID
-)";
-
-const char *kCreateTracksNewSql = R"(
-    CREATE TABLE tracks_new (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        file_path TEXT UNIQUE NOT NULL,
-        title TEXT,
-        artist TEXT,
-        album TEXT,
-        album_artist TEXT,
-        track_number INTEGER DEFAULT 0,
-        disc_number INTEGER DEFAULT 0,
-        year INTEGER DEFAULT 0,
-        duration_ms INTEGER DEFAULT 0,
-        genre TEXT,
-        bitrate INTEGER DEFAULT 0,
-        file_name TEXT,
-        file_type TEXT,
-        file_size INTEGER DEFAULT 0,
-        modified_time INTEGER DEFAULT 0
-    )
-)";
-
-const char *kCreateTrackAttributesNewSql = R"(
-    CREATE TABLE track_attributes_new (
-        track_id INTEGER NOT NULL,
-        key TEXT NOT NULL,
-        value TEXT NOT NULL,
-        PRIMARY KEY (track_id, key, value),
-        FOREIGN KEY (track_id) REFERENCES tracks_new(id) ON DELETE CASCADE
-    ) WITHOUT ROWID
-)";
 
 QString baseTrackSelectSql()
 {
@@ -82,90 +19,6 @@ QString baseTrackSelectSql()
         "SELECT id, file_path, title, artist, album, album_artist, "
         "track_number, disc_number, year, duration_ms, genre, bitrate, "
         "file_name, file_type, file_size, modified_time FROM tracks");
-}
-
-QString normalizedSparseKey(const QString &key)
-{
-    return key.trimmed().toUpper();
-}
-
-QStringList variantToStringList(const QVariant &value)
-{
-    if (!value.isValid())
-        return {};
-    if (value.typeId() == QMetaType::QStringList)
-        return value.toStringList();
-    if (value.typeId() == QMetaType::QVariantList) {
-        QStringList values;
-        const QVariantList list = value.toList();
-        values.reserve(list.size());
-        for (const QVariant &item : list) {
-            const QString text = item.toString().trimmed();
-            if (!text.isEmpty())
-                values.append(text);
-        }
-        return values;
-    }
-    const QString single = value.toString().trimmed();
-    return single.isEmpty() ? QStringList{} : QStringList{single};
-}
-
-void appendSparseAttribute(QVector<QPair<QString, QString>> &attributes,
-                           const QString &key,
-                           const QString &value)
-{
-    const QString normalizedValue = value.trimmed();
-    if (normalizedValue.isEmpty())
-        return;
-    attributes.append({key, normalizedValue});
-}
-
-void appendSparseAttribute(QVector<QPair<QString, QString>> &attributes,
-                           const QString &key,
-                           qint64 value)
-{
-    if (value <= 0)
-        return;
-    attributes.append({key, QString::number(value)});
-}
-
-bool execChecked(QSqlQuery &query, const QString &sql, const char *context)
-{
-    if (query.exec(sql))
-        return true;
-    qWarning() << context << query.lastError().text();
-    return false;
-}
-
-bool replaceTrackAttributes(QSqlDatabase &db,
-                           qint64 trackId,
-                           const QVector<QPair<QString, QString>> &attributes,
-                           const char *context)
-{
-    QSqlQuery deleteQuery(db);
-    deleteQuery.prepare("DELETE FROM track_attributes WHERE track_id = :track_id");
-    deleteQuery.bindValue(":track_id", trackId);
-    if (!deleteQuery.exec()) {
-        qWarning() << context << deleteQuery.lastError().text();
-        return false;
-    }
-
-    if (attributes.isEmpty())
-        return true;
-
-    QSqlQuery insertQuery(db);
-    insertQuery.prepare("INSERT INTO track_attributes (track_id, key, value) VALUES (:track_id, :key, :value)");
-    for (const auto &attribute : attributes) {
-        insertQuery.bindValue(":track_id", trackId);
-        insertQuery.bindValue(":key", attribute.first);
-        insertQuery.bindValue(":value", attribute.second);
-        if (!insertQuery.exec()) {
-            qWarning() << context << insertQuery.lastError().text();
-            return false;
-        }
-    }
-
-    return true;
 }
 
 }
@@ -224,7 +77,7 @@ bool LibraryDatabase::createTables()
 {
     QSqlQuery query(m_db);
 
-    if (!ensureTrackSchema(query))
+    if (!LibraryMigration::ensureTrackSchema(m_db, query))
         return false;
 
     // Indexes for common queries (file_path already has implicit index from UNIQUE)
@@ -249,26 +102,6 @@ bool LibraryDatabase::createTables()
         qWarning() << "Failed to create watch_folders table:" << query.lastError().text();
         return false;
     }
-    
-    // Playlists tables
-    query.exec(R"(
-        CREATE TABLE IF NOT EXISTS playlists (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            uuid TEXT UNIQUE NOT NULL,
-            name TEXT NOT NULL,
-            created_time INTEGER DEFAULT 0
-        )
-    )");
-    
-    query.exec(R"(
-        CREATE TABLE IF NOT EXISTS playlist_tracks (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            playlist_id INTEGER NOT NULL,
-            position INTEGER NOT NULL,
-            file_path TEXT NOT NULL,
-            FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE
-        )
-    )");
     
     return true;
 }
@@ -319,34 +152,6 @@ void LibraryDatabase::bindTrackToQuery(QSqlQuery &query, const LibraryTrack &tra
     query.bindValue(":modified_time", track.modifiedTime);
 }
 
-QVector<QPair<QString, QString>> LibraryDatabase::sparseAttributesForTrack(const LibraryTrack &track)
-{
-    QVector<QPair<QString, QString>> attributes;
-    appendSparseAttribute(attributes, QStringLiteral("_performer"), track.performer);
-    appendSparseAttribute(attributes, QStringLiteral("_composer"), track.composer);
-    appendSparseAttribute(attributes, QStringLiteral("_original_year"), track.originalYear);
-    appendSparseAttribute(attributes, QStringLiteral("_sample_rate"), track.sampleRate);
-    appendSparseAttribute(attributes, QStringLiteral("_bit_depth"), track.bitDepth);
-    appendSparseAttribute(attributes, QStringLiteral("_channels"), track.channels);
-    appendSparseAttribute(attributes, QStringLiteral("_url"), track.url);
-    appendSparseAttribute(attributes, QStringLiteral("_created_time"), track.createdTime);
-    appendSparseAttribute(attributes, QStringLiteral("_comment"), track.comment);
-    appendSparseAttribute(attributes, QStringLiteral("_bpm"), track.bpm);
-    appendSparseAttribute(attributes, QStringLiteral("_initial_key"), track.initialKey);
-    appendSparseAttribute(attributes, QStringLiteral("_codec"), track.codec);
-
-    for (auto it = track.customTags.constBegin(); it != track.customTags.constEnd(); ++it) {
-        const QString normalizedKey = normalizedSparseKey(it.key());
-        if (normalizedKey.isEmpty() || normalizedKey.startsWith('_'))
-            continue;
-        const QStringList values = variantToStringList(it.value());
-        for (const QString &value : values)
-            appendSparseAttribute(attributes, normalizedKey, value);
-    }
-
-    return attributes;
-}
-
 bool LibraryDatabase::upsertTrack(const LibraryTrack &track)
 {
     if (!m_db.isOpen())
@@ -368,7 +173,7 @@ bool LibraryDatabase::upsertTrack(const LibraryTrack &track)
         return false;
     }
 
-    if (!replaceTrackAttributes(m_db, idQuery.value(0).toLongLong(), sparseAttributesForTrack(track), "Failed to replace track attributes:"))
+    if (!LSA::replaceTrackAttributes(m_db, idQuery.value(0).toLongLong(), LSA::sparseAttributesForTrack(track), "Failed to replace track attributes:"))
         return false;
 
     emit databaseChanged();
@@ -447,121 +252,6 @@ bool LibraryDatabase::removeTracksInFolder(const QString &folderPath)
     return true;
 }
 
-bool LibraryDatabase::ensureTrackSchema(QSqlQuery &query)
-{
-    QStringList columns;
-    if (!query.exec("PRAGMA table_info(tracks)")) {
-        qWarning() << "Failed to inspect tracks schema:" << query.lastError().text();
-        return false;
-    }
-
-    while (query.next())
-        columns.append(query.value(1).toString());
-
-    if (columns.isEmpty()) {
-        if (!execChecked(query, QString::fromUtf8(kCreateTracksSql), "Failed to create tracks table:"))
-            return false;
-        if (!execChecked(query, QString::fromUtf8(kCreateTrackAttributesSql), "Failed to create track_attributes table:"))
-            return false;
-        query.exec(QString("PRAGMA user_version = %1").arg(TrackSchemaVersion));
-        return true;
-    }
-
-    static const QSet<QString> legacyColumns = {
-        "performer", "composer", "original_year", "sample_rate", "bit_depth",
-        "channels", "url", "created_time", "comment", "bpm", "initial_key", "codec"
-    };
-
-    for (const QString &column : columns) {
-        if (legacyColumns.contains(column))
-            return migrateLegacyTrackSchema(query, columns);
-    }
-
-    if (!execChecked(query, QString::fromUtf8(kCreateTracksSql), "Failed to ensure tracks table:"))
-        return false;
-    if (!execChecked(query, QString::fromUtf8(kCreateTrackAttributesSql), "Failed to ensure track_attributes table:"))
-        return false;
-    query.exec(QString("PRAGMA user_version = %1").arg(TrackSchemaVersion));
-    return true;
-}
-
-bool LibraryDatabase::migrateLegacyTrackSchema(QSqlQuery &query, const QStringList &columns)
-{
-    Q_UNUSED(columns)
-
-    if (!m_db.transaction()) {
-        qWarning() << "Failed to start track schema migration transaction:" << m_db.lastError().text();
-        return false;
-    }
-
-    const auto fail = [this]() {
-        m_db.rollback();
-        return false;
-    };
-
-    if (!execChecked(query, "DROP TABLE IF EXISTS track_attributes_new", "Failed to reset track_attributes_new table:"))
-        return fail();
-    if (!execChecked(query, "DROP TABLE IF EXISTS tracks_new", "Failed to reset tracks_new table:"))
-        return fail();
-    if (!execChecked(query, QString::fromUtf8(kCreateTracksNewSql), "Failed to create tracks_new table:"))
-        return fail();
-    if (!execChecked(query, QString::fromUtf8(kCreateTrackAttributesNewSql), "Failed to create track_attributes_new table:"))
-        return fail();
-
-    if (!execChecked(query, R"(
-        INSERT INTO tracks_new (
-            id, file_path, title, artist, album, album_artist,
-            track_number, disc_number, year, duration_ms, genre,
-            bitrate, file_name, file_type, file_size, modified_time
-        )
-        SELECT
-            id, file_path, title, artist, album, album_artist,
-            track_number, disc_number, year, duration_ms, genre,
-            bitrate, file_name, file_type, file_size, modified_time
-        FROM tracks
-    )", "Failed to copy tracks into new schema:"))
-        return fail();
-
-    const QStringList migrationSql = {
-        QStringLiteral("INSERT INTO track_attributes_new (track_id, key, value) SELECT id, '_performer', performer FROM tracks WHERE performer IS NOT NULL AND trim(performer) != ''"),
-        QStringLiteral("INSERT INTO track_attributes_new (track_id, key, value) SELECT id, '_composer', composer FROM tracks WHERE composer IS NOT NULL AND trim(composer) != ''"),
-        QStringLiteral("INSERT INTO track_attributes_new (track_id, key, value) SELECT id, '_original_year', CAST(original_year AS TEXT) FROM tracks WHERE original_year > 0"),
-        QStringLiteral("INSERT INTO track_attributes_new (track_id, key, value) SELECT id, '_sample_rate', CAST(sample_rate AS TEXT) FROM tracks WHERE sample_rate > 0"),
-        QStringLiteral("INSERT INTO track_attributes_new (track_id, key, value) SELECT id, '_bit_depth', CAST(bit_depth AS TEXT) FROM tracks WHERE bit_depth > 0"),
-        QStringLiteral("INSERT INTO track_attributes_new (track_id, key, value) SELECT id, '_channels', CAST(channels AS TEXT) FROM tracks WHERE channels > 0"),
-        QStringLiteral("INSERT INTO track_attributes_new (track_id, key, value) SELECT id, '_url', url FROM tracks WHERE url IS NOT NULL AND trim(url) != ''"),
-        QStringLiteral("INSERT INTO track_attributes_new (track_id, key, value) SELECT id, '_created_time', CAST(created_time AS TEXT) FROM tracks WHERE created_time > 0"),
-        QStringLiteral("INSERT INTO track_attributes_new (track_id, key, value) SELECT id, '_comment', comment FROM tracks WHERE comment IS NOT NULL AND trim(comment) != ''"),
-        QStringLiteral("INSERT INTO track_attributes_new (track_id, key, value) SELECT id, '_bpm', CAST(bpm AS TEXT) FROM tracks WHERE bpm > 0"),
-        QStringLiteral("INSERT INTO track_attributes_new (track_id, key, value) SELECT id, '_initial_key', initial_key FROM tracks WHERE initial_key IS NOT NULL AND trim(initial_key) != ''"),
-        QStringLiteral("INSERT INTO track_attributes_new (track_id, key, value) SELECT id, '_codec', codec FROM tracks WHERE codec IS NOT NULL AND trim(codec) != ''")
-    };
-
-    for (const QString &sql : migrationSql) {
-        if (!execChecked(query, sql, "Failed during sparse attribute migration:"))
-            return fail();
-    }
-
-    if (!execChecked(query, "DROP TABLE IF EXISTS track_attributes", "Failed to drop old track_attributes table:"))
-        return fail();
-    if (!execChecked(query, "DROP TABLE tracks", "Failed to drop legacy tracks table:"))
-        return fail();
-    if (!execChecked(query, "ALTER TABLE tracks_new RENAME TO tracks", "Failed to rename tracks_new table:"))
-        return fail();
-    if (!execChecked(query, "ALTER TABLE track_attributes_new RENAME TO track_attributes", "Failed to rename track_attributes_new table:"))
-        return fail();
-    if (!execChecked(query, QString("PRAGMA user_version = %1").arg(TrackSchemaVersion), "Failed to bump schema version:"))
-        return fail();
-
-    if (!m_db.commit()) {
-        qWarning() << "Failed to commit track schema migration:" << m_db.lastError().text();
-        m_db.rollback();
-        return false;
-    }
-
-    return true;
-}
-
 std::optional<LibraryTrack> LibraryDatabase::trackByPath(const QString &filePath) const
 {
     const QString normalizedPath = normalizeFileSystemPath(filePath);
@@ -571,7 +261,7 @@ std::optional<LibraryTrack> LibraryDatabase::trackByPath(const QString &filePath
     
     if (query.exec() && query.next()) {
         LibraryTrack track = trackFromQuery(query);
-        hydrateSparseAttributes(track);
+        LSA::hydrateSparseAttributes(m_db, track);
         return track;
     }
     return std::nullopt;
@@ -608,7 +298,7 @@ QVector<LibraryTrack> LibraryDatabase::allTracks() const
     while (query.next()) {
         tracks.append(trackFromQuery(query));
     }
-    hydrateSparseAttributes(tracks);
+    LSA::hydrateSparseAttributes(m_db, tracks);
     return tracks;
 }
 
@@ -630,7 +320,7 @@ QVector<LibraryTrack> LibraryDatabase::searchTracks(const QString &searchQuery) 
             tracks.append(trackFromQuery(query));
         }
     }
-    hydrateSparseAttributes(tracks);
+    LSA::hydrateSparseAttributes(m_db, tracks);
     return tracks;
 }
 
@@ -717,110 +407,8 @@ QVector<LibraryTrack> LibraryDatabase::tracksMatchingFilter(const TrackFilter &f
         }
     }
 
-    hydrateSparseAttributes(tracks);
+    LSA::hydrateSparseAttributes(m_db, tracks);
     return tracks;
-}
-
-void LibraryDatabase::applySparseAttribute(LibraryTrack &track, const QString &key, const QString &value) const
-{
-    bool ok = false;
-    if (key == "_performer") {
-        track.performer = value;
-    } else if (key == "_composer") {
-        track.composer = value;
-    } else if (key == "_original_year") {
-        track.originalYear = value.toInt(&ok);
-        if (!ok)
-            track.originalYear = 0;
-    } else if (key == "_sample_rate") {
-        track.sampleRate = value.toInt(&ok);
-        if (!ok)
-            track.sampleRate = 0;
-    } else if (key == "_bit_depth") {
-        track.bitDepth = value.toInt(&ok);
-        if (!ok)
-            track.bitDepth = 0;
-    } else if (key == "_channels") {
-        track.channels = value.toInt(&ok);
-        if (!ok)
-            track.channels = 0;
-    } else if (key == "_url") {
-        track.url = value;
-    } else if (key == "_created_time") {
-        track.createdTime = value.toLongLong(&ok);
-        if (!ok)
-            track.createdTime = 0;
-    } else if (key == "_comment") {
-        track.comment = value;
-    } else if (key == "_bpm") {
-        track.bpm = value.toInt(&ok);
-        if (!ok)
-            track.bpm = 0;
-    } else if (key == "_initial_key") {
-        track.initialKey = value;
-    } else if (key == "_codec") {
-        track.codec = value;
-    } else {
-        const QString normalizedKey = normalizedSparseKey(key);
-        QStringList values = variantToStringList(track.customTags.value(normalizedKey));
-        if (!values.contains(value))
-            values.append(value);
-        track.customTags.insert(normalizedKey, values);
-    }
-}
-
-void LibraryDatabase::hydrateSparseAttributes(QVector<LibraryTrack> &tracks) const
-{
-    if (tracks.isEmpty())
-        return;
-
-    QHash<qint64, int> rowById;
-    rowById.reserve(tracks.size());
-    for (int i = 0; i < tracks.size(); ++i)
-        rowById.insert(tracks[i].id, i);
-
-    constexpr int chunkSize = 500;
-    for (int offset = 0; offset < tracks.size(); offset += chunkSize) {
-        const int end = std::min(offset + chunkSize, static_cast<int>(tracks.size()));
-        QStringList placeholders;
-        placeholders.reserve(end - offset);
-
-        QSqlQuery query(m_db);
-        for (int i = offset; i < end; ++i)
-            placeholders.append(QString(":id%1").arg(i - offset));
-
-        query.prepare(QString("SELECT track_id, key, value FROM track_attributes WHERE track_id IN (%1) ORDER BY track_id")
-                          .arg(placeholders.join(", ")));
-
-        for (int i = offset; i < end; ++i)
-            query.bindValue(QString(":id%1").arg(i - offset), tracks[i].id);
-
-        if (!query.exec())
-            continue;
-
-        while (query.next()) {
-            const qint64 trackId = query.value(0).toLongLong();
-            auto it = rowById.constFind(trackId);
-            if (it == rowById.constEnd())
-                continue;
-            applySparseAttribute(tracks[it.value()], query.value(1).toString(), query.value(2).toString());
-        }
-    }
-}
-
-void LibraryDatabase::hydrateSparseAttributes(LibraryTrack &track) const
-{
-    if (track.id < 0)
-        return;
-
-    QSqlQuery query(m_db);
-    query.prepare("SELECT key, value FROM track_attributes WHERE track_id = :track_id ORDER BY key, value");
-    query.bindValue(":track_id", track.id);
-    if (!query.exec())
-        return;
-
-    while (query.next())
-        applySparseAttribute(track, query.value(0).toString(), query.value(1).toString());
 }
 
 bool LibraryDatabase::addWatchFolder(const QString &path)

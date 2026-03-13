@@ -9,9 +9,8 @@
 #include "CoverImageProvider.h"
 #include "TrackFilter.h"
 #include "audio/AudioEngine.h"
+#include "library/LibraryController.h"
 #include "library/LibraryDatabase.h"
-#include "library/LibraryScanner.h"
-#include "library/LibraryWatcher.h"
 #include "ViewedPlaylistRouter.h"
 #include "BrowseActivationService.h"
 #include <QFileInfo>
@@ -24,52 +23,17 @@ AppViewModel::AppViewModel(QObject *parent)
     , m_playlistTabsModel(new PlaylistTabsModel(m_playlistStore, this))
     , m_queueManager(new QueueManager(this))
     , m_audioEngine(new AudioEngine(this))
-    , m_libraryDb(new LibraryDatabase(this))
-    , m_libraryScanner(nullptr)
+    , m_libraryController(new LibraryController(this))
 {
     s_instance = this;
     
-    m_libraryDb->open();
-    m_libraryScanner = new LibraryScanner(m_libraryDb, this);
-    m_libraryWatcher = new LibraryWatcher(m_libraryScanner, this);
-    // Initialize watcher with current folders (settings will be applied when Settings singleton is created)
-    m_libraryWatcher->setWatchFolders(m_libraryDb->watchFolders());
+    m_libraryController->initialize();
     
-    connect(m_libraryScanner, &LibraryScanner::scanningChanged, this, &AppViewModel::libraryScanningChanged);
-    connect(m_libraryScanner, &LibraryScanner::progressChanged, this, &AppViewModel::libraryScanProgressChanged);
-    
-    // Defer Settings connection until Settings singleton exists
-    QTimer::singleShot(0, this, [this]() {
-        Settings *settings = Settings::instance();
-        if (!settings) {
-            qWarning() << "AppViewModel: Settings not available for watcher initialization";
-            return;
-        }
-        
-        // Apply initial settings to watcher
-        m_libraryWatcher->setEnabled(settings->watcherEnabled());
-        m_libraryWatcher->setPeriodicRescanMinutes(settings->periodicRescanMinutes());
-        
-        // Connect Settings changes to watcher
-        connect(settings, &Settings::watcherEnabledChanged, this, [this]() {
-            if (m_libraryWatcher && Settings::instance()) {
-                m_libraryWatcher->setEnabled(Settings::instance()->watcherEnabled());
-            }
-        });
-        connect(settings, &Settings::periodicRescanMinutesChanged, this, [this]() {
-            if (m_libraryWatcher && Settings::instance()) {
-                m_libraryWatcher->setPeriodicRescanMinutes(Settings::instance()->periodicRescanMinutes());
-            }
-        });
-        
-        qDebug() << "LibraryWatcher: Settings applied - enabled:" << settings->watcherEnabled()
-                 << ", periodic:" << settings->periodicRescanMinutes() << "min";
-    });
-    connect(m_libraryScanner, &LibraryScanner::scanFinished, this, [this]() {
-        if (m_libraryDb) {
-            m_libraryDb->notifyDatabaseChanged();
-        }
-        emit libraryTrackCountChanged();
+    connect(m_libraryController, &LibraryController::scanningChanged, this, &AppViewModel::libraryScanningChanged);
+    connect(m_libraryController, &LibraryController::scanProgressChanged, this, &AppViewModel::libraryScanProgressChanged);
+    connect(m_libraryController, &LibraryController::libraryFoldersChanged, this, &AppViewModel::libraryFoldersChanged);
+    connect(m_libraryController, &LibraryController::trackCountChanged, this, &AppViewModel::libraryTrackCountChanged);
+    connect(m_libraryController, &LibraryController::scanFinished, this, [this]() {
         refreshPlaylistMetadataFromLibrary();
     });
     
@@ -135,7 +99,7 @@ AppViewModel::AppViewModel(QObject *parent)
     
     // Initialize BrowseActivationService
     m_browseActivation = new BrowseActivationService(this);
-    m_browseActivation->initialize(this, m_playlistStore, nullptr, m_libraryDb);
+    m_browseActivation->initialize(this, m_playlistStore, nullptr, m_libraryController->database());
     
     // Load session if restore is enabled
     if (settings->restoreSession()) {
@@ -454,190 +418,99 @@ void AppViewModel::clearPlaylist()
 
 bool AppViewModel::libraryScanning() const
 {
-    return m_libraryScanner ? m_libraryScanner->isScanning() : false;
+    return m_libraryController ? m_libraryController->isScanning() : false;
 }
 
 int AppViewModel::libraryScanProgress() const
 {
-    return m_libraryScanner ? m_libraryScanner->progress() : 0;
+    return m_libraryController ? m_libraryController->scanProgress() : 0;
 }
 
 void AppViewModel::addLibraryFolder(const QString &path)
 {
-    const QString normalizedPath = LibraryDatabase::normalizeWatchFolderPath(path);
-    qDebug() << "AppViewModel::addLibraryFolder:" << normalizedPath;
-    m_libraryDb->addWatchFolder(normalizedPath);
-    m_libraryWatcher->setWatchFolders(m_libraryDb->watchFolders());
-    m_libraryScanner->scanFolder(normalizedPath);
-    emit libraryFoldersChanged();
+    m_libraryController->addLibraryFolder(path);
 }
 
 void AppViewModel::removeLibraryFolder(const QString &path)
 {
-    const QString normalizedPath = LibraryDatabase::normalizeWatchFolderPath(path);
-    m_libraryDb->removeWatchFolder(normalizedPath);
-    m_libraryDb->removeTracksInFolder(normalizedPath);
-    m_libraryWatcher->setWatchFolders(m_libraryDb->watchFolders());
-    m_libraryDb->notifyDatabaseChanged();
-    emit libraryFoldersChanged();
-    emit libraryTrackCountChanged();
+    m_libraryController->removeLibraryFolder(path);
 }
 
 void AppViewModel::rescanLibrary()
 {
-    m_libraryScanner->rescanAll();
+    m_libraryController->rescanLibrary();
 }
 
 void AppViewModel::rescanCollectionEntry(const QVariantList &filter, const QString &entryType,
                                          const QString &groupType, const QVariant &groupValue,
                                          const QString &filePath)
 {
-    QStringList filePaths;
-
-    if (entryType == QStringLiteral("group")) {
-        if (!m_libraryDb) {
-            return;
-        }
-
-        TrackFilter trackFilter = trackFilterFromVariant(filter);
-        if (!groupType.isEmpty()) {
-            FilterCondition condition;
-            condition.field = groupType;
-            condition.op = QStringLiteral("=");
-            condition.value = groupValue;
-            trackFilter.append(condition);
-        }
-
-        const QVector<LibraryTrack> tracks = m_libraryDb->tracksMatchingFilter(trackFilter);
-        for (const LibraryTrack &track : tracks) {
-            if (!track.filePath.isEmpty()) {
-                filePaths.append(track.filePath);
-            }
-        }
-    } else if (!filePath.isEmpty()) {
-        filePaths.append(filePath);
-    }
-
-    rescanFiles(filePaths);
+    m_libraryController->rescanCollectionEntry(filter, entryType, groupType, groupValue, filePath);
 }
 
 void AppViewModel::rescanPlaylistSelection(const QString &playlistId, const QVariantList &rows)
 {
-    if (!m_playlistStore) {
+    if (!m_playlistStore)
         return;
-    }
 
     TrackListModel *playlist = m_playlistStore->getPlaylistModel(playlistId);
-    if (!playlist) {
+    if (!playlist)
         return;
-    }
 
     QStringList filePaths;
     for (const QVariant &rowValue : rows) {
         const int row = rowValue.toInt();
         const TrackInfo track = playlist->trackAt(row);
-        if (!track.filePath.isEmpty()) {
+        if (!track.filePath.isEmpty())
             filePaths.append(track.filePath);
-        }
     }
 
-    rescanFiles(filePaths);
-}
-
-QStringList AppViewModel::libraryFolders() const
-{
-    return m_libraryDb->watchFolders();
+    m_libraryController->rescanFiles(filePaths);
 }
 
 QStringList AppViewModel::watchFolders() const
 {
-    return m_libraryDb->watchFolders();
-}
-
-void AppViewModel::addWatchFolder(const QString &path)
-{
-    const QString normalizedPath = LibraryDatabase::normalizeWatchFolderPath(path);
-    m_libraryDb->addWatchFolder(normalizedPath);
-    m_libraryWatcher->setWatchFolders(m_libraryDb->watchFolders());
-    m_libraryScanner->scanFolder(normalizedPath);
-    emit libraryFoldersChanged();
-}
-
-void AppViewModel::removeWatchFolder(const QString &path)
-{
-    const QString normalizedPath = LibraryDatabase::normalizeWatchFolderPath(path);
-    m_libraryDb->removeWatchFolder(normalizedPath);
-    m_libraryDb->removeTracksInFolder(normalizedPath);
-    m_libraryWatcher->setWatchFolders(m_libraryDb->watchFolders());
-    m_libraryDb->notifyDatabaseChanged();
-    emit libraryFoldersChanged();
-    emit libraryTrackCountChanged();
-}
-
-void AppViewModel::rescanFiles(const QStringList &filePaths)
-{
-    if (!m_libraryScanner) {
-        return;
-    }
-
-    QStringList normalizedPaths;
-    for (const QString &filePath : filePaths) {
-        const QString normalizedPath = LibraryDatabase::normalizeFileSystemPath(filePath);
-        if (!normalizedPath.isEmpty() && !normalizedPaths.contains(normalizedPath)) {
-            normalizedPaths.append(normalizedPath);
-        }
-    }
-
-    if (normalizedPaths.isEmpty()) {
-        return;
-    }
-
-    m_libraryScanner->rescanFiles(normalizedPaths);
+    return m_libraryController->libraryFolders();
 }
 
 void AppViewModel::refreshPlaylistMetadataFromLibrary()
 {
-    if (!m_playlistStore || !m_libraryDb) {
+    LibraryDatabase *db = m_libraryController ? m_libraryController->database() : nullptr;
+    if (!m_playlistStore || !db)
         return;
-    }
 
     const QString currentTrackPath = m_queueManager ? m_queueManager->currentTrack().filePath : QString();
     TrackInfo refreshedCurrentTrack;
 
     for (const PlaylistStore::Tab &tab : m_playlistStore->tabs()) {
         TrackListModel *playlist = tab.model;
-        if (!playlist) {
+        if (!playlist)
             continue;
-        }
 
         for (int i = 0; i < playlist->count(); ++i) {
             const TrackInfo existingTrack = playlist->trackAt(i);
-            if (existingTrack.filePath.isEmpty()) {
+            if (existingTrack.filePath.isEmpty())
                 continue;
-            }
 
-            auto libraryTrack = m_libraryDb->trackByPath(existingTrack.filePath);
-            if (!libraryTrack.has_value()) {
+            auto libraryTrack = db->trackByPath(existingTrack.filePath);
+            if (!libraryTrack.has_value())
                 continue;
-            }
 
             const TrackInfo refreshedTrack = MetadataExtractor::toTrackInfo(*libraryTrack);
             playlist->updateTrackMetadata(i, refreshedTrack);
 
-            if (!currentTrackPath.isEmpty() && refreshedTrack.filePath == currentTrackPath) {
+            if (!currentTrackPath.isEmpty() && refreshedTrack.filePath == currentTrackPath)
                 refreshedCurrentTrack = refreshedTrack;
-            }
         }
     }
 
-    if (refreshedCurrentTrack.isValid()) {
+    if (refreshedCurrentTrack.isValid())
         updateNowPlaying(refreshedCurrentTrack);
-    }
 }
 
 int AppViewModel::libraryTrackCount() const
 {
-    return m_libraryDb ? m_libraryDb->trackCount() : 0;
+    return m_libraryController ? m_libraryController->trackCount() : 0;
 }
 
 qint64 AppViewModel::lastScanTime() const
@@ -652,30 +525,9 @@ BrowseActivationService *AppViewModel::browseActivation() const
     return m_browseActivation;
 }
 
-// NOTE: ALL THIS IS GONNA HAVE TO BE REMADE, SEE THE UI V2 DOCUMENTATION
-void AppViewModel::addLibraryTracksToPlaylist(const QVariantList &tracks)
+LibraryDatabase *AppViewModel::libraryDatabase() const
 {
-    for (const QVariant &v : tracks) {
-        QVariantMap map = v.toMap();
-        QString filePath = map.value("filePath").toString();
-        if (filePath.isEmpty())
-            continue;
-        
-        // Try to get from library database first (has all metadata)
-        if (m_libraryDb) {
-            auto libOpt = m_libraryDb->trackByPath(filePath);
-            if (libOpt.has_value()) {
-                m_playlistStore->displayedPlaylist()->addTrack(MetadataExtractor::toTrackInfo(*libOpt));
-                continue;
-            }
-        }
-        
-        // Fallback: extract metadata from file
-        TrackInfo track = MetadataExtractor::extractTrackInfo(filePath);
-        if (track.isValid()) {
-            m_playlistStore->displayedPlaylist()->addTrack(track);
-        }
-    }
+    return m_libraryController->database();
 }
 
 void AppViewModel::setPlaybackState(PlaybackState state)

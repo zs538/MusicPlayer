@@ -1,4 +1,5 @@
 #include "LibraryScanner.h"
+#include "LibrarySparseAttributes.h"
 #include "MetadataExtractor.h"
 #include <QDir>
 #include <QDirIterator>
@@ -185,7 +186,7 @@ void LibraryScanner::doScan(const QStringList &paths, bool detectDeletions, bool
                         if (!deleteAttributesQuery.exec()) {
                             qWarning() << "Scanner: Failed to clear track attributes:" << deleteAttributesQuery.lastError().text();
                         } else {
-                            const QVector<QPair<QString, QString>> attributes = LibraryDatabase::sparseAttributesForTrack(track);
+                            const QVector<QPair<QString, QString>> attributes = LibrarySparseAttributes::sparseAttributesForTrack(track);
                             for (const auto &attribute : attributes) {
                                 insertAttributeQuery.bindValue(":track_id", trackId);
                                 insertAttributeQuery.bindValue(":key", attribute.first);

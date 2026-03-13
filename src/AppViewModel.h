@@ -13,8 +13,7 @@
 class QueueManager;
 class AudioEngine;
 class LibraryDatabase;
-class LibraryScanner;
-class LibraryWatcher;
+class LibraryController;
 
 class AppViewModel : public QObject
 {
@@ -76,7 +75,7 @@ public:
     int libraryTrackCount() const;
     qint64 lastScanTime() const;
     BrowseActivationService *browseActivation() const;
-    LibraryDatabase *libraryDatabase() const { return m_libraryDb; }
+    LibraryDatabase *libraryDatabase() const;
     
     static AppViewModel *instance();
 
@@ -96,10 +95,6 @@ public slots:
     void addLibraryFolder(const QString &path);
     void removeLibraryFolder(const QString &path);
     void rescanLibrary();
-    void addLibraryTracksToPlaylist(const QVariantList &tracks);
-    QStringList libraryFolders() const;
-    void addWatchFolder(const QString &path);
-    void removeWatchFolder(const QString &path);
     Q_INVOKABLE void rescanCollectionEntry(const QVariantList &filter, const QString &entryType,
                                            const QString &groupType, const QVariant &groupValue,
                                            const QString &filePath);
@@ -130,7 +125,6 @@ private:
     void setError(const QString &text);
     void clearError();
     void updateNowPlaying(const TrackInfo &track);
-    void rescanFiles(const QStringList &filePaths);
     void refreshPlaylistMetadataFromLibrary();
     
     PlaybackState m_playbackState = Stopped;
@@ -147,9 +141,7 @@ private:
     PlaylistTabsModel *m_playlistTabsModel = nullptr;
     QueueManager *m_queueManager = nullptr;
     AudioEngine *m_audioEngine = nullptr;
-    LibraryDatabase *m_libraryDb = nullptr;
-    LibraryScanner *m_libraryScanner = nullptr;
-    LibraryWatcher *m_libraryWatcher = nullptr;
+    LibraryController *m_libraryController = nullptr;
     BrowseActivationService *m_browseActivation = nullptr;
 };
 

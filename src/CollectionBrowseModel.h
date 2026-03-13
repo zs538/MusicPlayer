@@ -11,8 +11,11 @@
 #include <QSet>
 #include <QHash>
 #include "TrackFilter.h"
+#include "CollectionBrowseHelper.h"
 
 class LibraryDatabase;
+
+using BrowseEntry = CollectionBrowseHelper::Entry;
 
 class CollectionBrowseModel : public QAbstractListModel
 {
@@ -97,6 +100,11 @@ public:
     Q_INVOKABLE QString entryIdAt(int row) const;
     Q_INVOKABLE int indexOfEntryId(const QString &entryId) const;
 
+    // Vocabulary option lists for toolbar menus
+    Q_INVOKABLE QVariantList sortOptions() const;
+    Q_INVOKABLE QVariantList subtitleOptions() const;
+    Q_INVOKABLE QVariantList groupByOptions(const QStringList &customTagKeys) const;
+
     // History navigation — atomic filter+groupBy change, single refresh
     Q_INVOKABLE void navigate(const QVariantList &filter, const QString &groupBy, qreal currentScrollY = 0, const QString &currentSelectedEntryId = QString());
     Q_INVOKABLE void goBack(qreal currentScrollY = 0, const QString &currentSelectedEntryId = QString());
@@ -127,50 +135,13 @@ private slots:
     void refresh();
 
 private:
-    struct Entry {
-        QString entryType;
-        QString groupType;
-        QVariant groupValue;
-        QString displayText;
-        QString subtitle;
-        int childCount = 0;
-        QString representativeFilePath;
-        QStringList coverFilePaths;
-        QString imagePath;
-        QString filePath;
-        QString title;
-        QString artist;
-        QString album;
-        QString albumArtist;
-        int trackNumber = 0;
-        int discNumber = 0;
-        qint64 durationMs = 0;
-        QString genre;
-        int year = 0;
-        int bitrate = 0;
-        QString fileType;
-        QVariantMap trackData;
-        qint64 totalDurationMs = 0;
-        qint64 modifiedTime = 0;
-    };
+    using Entry = BrowseEntry;
 
     // Flat list building
-    QVector<Entry> filteredAndSortedEntries() const;
     void applySearchAndSort();
 
     // Find the row of a group entry in m_entries, and the range of its expanded children
     int findGroupRow(const QString &groupType, const QVariant &groupValue) const;
-
-    void buildGroups(const QVector<struct LibraryTrack> &tracks);
-    void buildTracks(const QVector<struct LibraryTrack> &tracks);
-    QString formatGroupDisplay(const QString &groupType, const QVariant &value) const;
-    QString formatSubtitle(const Entry &entry) const;
-    void applySubtitleToEntries(QVector<Entry> &entries) const;
-    QString breadcrumbLabelForFilter(const TrackFilter &filter) const;
-    QVariant getGroupValue(const struct LibraryTrack &track, const QString &groupType) const;
-    static int compareTrackMapsByKey(const QVariantMap &left, const QVariantMap &right, const QString &key);
-    static QStringList defaultTrackSortKeys(const QString &groupType);
-    QString normalizedGroupKey(const QString &groupType, const QVariant &groupValue) const;
 
     // LRU result cache — keyed by filter+groupBy, stores pre-search/sort entries
     struct CacheKey {
@@ -186,6 +157,7 @@ private:
         bool sortAscending = true;
         QString title;
     };
+    QString entryIdForEntry(const Entry &entry) const;
     static constexpr int MaxCacheEntries = 16;
     QList<CacheEntry> m_cache;
     CacheKey currentCacheKey() const;
@@ -200,7 +172,6 @@ private:
     qreal m_pendingScrollY = 0;
     QString m_pendingSelectedEntryId;
     void applyState(const TrackFilter &filter, const QString &groupBy);
-    QString entryIdForEntry(const Entry &entry) const;
 
     LibraryDatabase *m_database = nullptr;
     TrackFilter m_filter;

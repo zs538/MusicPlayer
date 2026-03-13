@@ -14,6 +14,10 @@ class ViewedPlaylistRouter;
 struct LibraryTrack;
 
 #include "library/LibraryDatabase.h"
+#include "TrackFilter.h"
+
+class TrackListModel;
+struct TrackInfo;
 
 /**
  * @brief BrowseActivationService implements the global "double click play/queue" policy.
@@ -74,6 +78,15 @@ public:
     Q_INVOKABLE void openCollectionEntryInNewPlaylist(const QString &entryId);
 
 private:
+    // Consolidated helpers
+    TrackFilter buildGroupFilter(const QVariantList &filter, const QString &groupType, const QVariant &groupValue) const;
+    TrackInfo resolveTrack(const QString &filePath) const;
+    QString generatePlaylistName(const QString &groupType, const QVariant &groupValue,
+                                 const QVector<LibraryTrack> &tracks) const;
+    void populateModel(TrackListModel *model, const QVector<LibraryTrack> &tracks,
+                       const QString &playlistId = QString());
+    static QString entryIdToFilePath(const QString &entryId);
+
     void applyTracksToPlaylist(const QStringList &filePaths, int startRow = 0);
     QString resolveTargetPlaylistId(const QString &generatedName = QString());
     bool shouldAutoplay() const;

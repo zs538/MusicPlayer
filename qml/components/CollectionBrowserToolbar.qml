@@ -22,64 +22,11 @@ Rectangle {
     readonly property alias searchField: searchField
 
     function sortOptions() {
-        if (!root.browserModel)
-            return []
-        if (root.browserModel.groupBy === "none") {
-            return [
-                { text: "Name", key: "name" },
-                { text: "Track Number", key: "trackNumber" },
-                { text: "Year", key: "year" },
-                { text: "Duration", key: "duration" },
-                { text: "Date Updated", key: "dateUpdated" }
-            ]
-        }
-
-        return [
-            { text: "Name", key: "name" },
-            { text: "Year", key: "year" },
-            { text: "Duration", key: "duration" },
-            { text: "Track Count", key: "count" },
-            { text: "Date Updated", key: "dateUpdated" }
-        ]
+        return root.browserModel ? root.browserModel.sortOptions() : []
     }
 
     function subtitleOptions() {
-        if (!root.browserModel)
-            return []
-        if (root.browserModel.groupBy === "none") {
-            return [
-                { text: "Track", key: "trackNumber" },
-                { text: "Duration", key: "duration" },
-                { text: "Track - Duration", key: "trackNumberDuration" },
-                { text: "Year", key: "year" },
-                { text: "Date Updated", key: "dateUpdated" },
-                { text: "Artist", key: "artist" },
-                { text: "Album Artist", key: "albumArtist" },
-                { text: "Album", key: "album" },
-                { text: "Track - Album", key: "trackNumberAlbum" },
-                { text: "Artist - Album", key: "artistAlbum" },
-                { text: "Album Artist - Album", key: "albumArtistAlbum" },
-                { text: "File Type", key: "fileType" },
-                { text: "Bitrate", key: "bitrate" }
-            ]
-        }
-
-        return [
-            { text: "Track Count", key: "count" },
-            { text: "Duration", key: "duration" },
-            { text: "Tracks - Duration", key: "countDuration" },
-            { text: "Album Artist", key: "albumArtist" },
-            { text: "Album Artist - Year", key: "albumArtistYear" },
-            { text: "Album Artist - Tracks", key: "albumArtistCount" },
-            { text: "Year - Album Artist", key: "yearAlbumArtist" },
-            { text: "Year", key: "year" },
-            { text: "Year - Tracks", key: "yearCount" },
-            { text: "Date Updated", key: "dateUpdated" }
-        ]
-    }
-
-    function customGroupBy(key) {
-        return "custom:" + key
+        return root.browserModel ? root.browserModel.subtitleOptions() : []
     }
 
     component TopStripIconButton: Item {
@@ -334,136 +281,86 @@ Rectangle {
             Menu {
                 id: groupByMenu
 
-                MenuItem {
-                    text: "Artist"
-                    checkable: true
-                    checked: root.browserModel ? root.browserModel.groupBy === "artist" : false
-                    PointingCursor {}
-                    onTriggered: root.browserModel.groupBy = "artist"
+                property var allOptions: root.browserModel ? root.browserModel.groupByOptions(root.customGroupKeys) : []
+                property var mainOptions: allOptions.filter(function(o) { return o.category === "main" })
+                property var otherOptions: allOptions.filter(function(o) { return o.category === "other" })
+                property var customOptions: allOptions.filter(function(o) { return o.category === "custom" })
+
+                Instantiator {
+                    model: groupByMenu.mainOptions
+
+                    delegate: MenuItem {
+                        required property var modelData
+                        text: modelData.text
+                        checkable: true
+                        checked: root.browserModel ? root.browserModel.groupBy === modelData.key : false
+                        PointingCursor {}
+                        onTriggered: root.browserModel.groupBy = modelData.key
+                    }
+
+                    onObjectAdded: function(index, object) {
+                        groupByMenu.insertItem(index, object)
+                    }
+
+                    onObjectRemoved: function(index, object) {
+                        groupByMenu.removeItem(object)
+                    }
                 }
-                MenuItem {
-                    text: "Album Artist"
-                    checkable: true
-                    checked: root.browserModel ? root.browserModel.groupBy === "albumartist" : false
-                    PointingCursor {}
-                    onTriggered: root.browserModel.groupBy = "albumartist"
-                }
-                MenuItem {
-                    text: "Album"
-                    checkable: true
-                    checked: root.browserModel ? root.browserModel.groupBy === "album" : false
-                    PointingCursor {}
-                    onTriggered: root.browserModel.groupBy = "album"
-                }
-                MenuItem {
-                    text: "Genre"
-                    checkable: true
-                    checked: root.browserModel ? root.browserModel.groupBy === "genre" : false
-                    PointingCursor {}
-                    onTriggered: root.browserModel.groupBy = "genre"
-                }
-                MenuItem {
-                    text: "Year"
-                    checkable: true
-                    checked: root.browserModel ? root.browserModel.groupBy === "year" : false
-                    PointingCursor {}
-                    onTriggered: root.browserModel.groupBy = "year"
-                }
-                MenuItem {
-                    text: "None (Tracks)"
-                    checkable: true
-                    checked: root.browserModel ? root.browserModel.groupBy === "none" : false
-                    PointingCursor {}
-                    onTriggered: root.browserModel.groupBy = "none"
-                }
+
                 Menu {
+                    id: otherGroupMenu
                     title: "Other"
 
-                    MenuItem {
-                        text: "Disc"
-                        checkable: true
-                        checked: root.browserModel ? root.browserModel.groupBy === "disc" : false
-                        PointingCursor {}
-                        onTriggered: root.browserModel.groupBy = "disc"
-                    }
-                    MenuItem {
-                        text: "Performer"
-                        checkable: true
-                        checked: root.browserModel ? root.browserModel.groupBy === "performer" : false
-                        PointingCursor {}
-                        onTriggered: root.browserModel.groupBy = "performer"
-                    }
-                    MenuItem {
-                        text: "Composer"
-                        checkable: true
-                        checked: root.browserModel ? root.browserModel.groupBy === "composer" : false
-                        PointingCursor {}
-                        onTriggered: root.browserModel.groupBy = "composer"
-                    }
-                    MenuItem {
-                        text: "Original Year"
-                        checkable: true
-                        checked: root.browserModel ? root.browserModel.groupBy === "originalyear" : false
-                        PointingCursor {}
-                        onTriggered: root.browserModel.groupBy = "originalyear"
-                    }
-                    MenuItem {
-                        text: "BPM"
-                        checkable: true
-                        checked: root.browserModel ? root.browserModel.groupBy === "bpm" : false
-                        PointingCursor {}
-                        onTriggered: root.browserModel.groupBy = "bpm"
-                    }
-                    MenuItem {
-                        text: "Initial Key"
-                        checkable: true
-                        checked: root.browserModel ? root.browserModel.groupBy === "initialkey" : false
-                        PointingCursor {}
-                        onTriggered: root.browserModel.groupBy = "initialkey"
-                    }
-                    MenuItem {
-                        text: "Bitrate"
-                        checkable: true
-                        checked: root.browserModel ? root.browserModel.groupBy === "bitrate" : false
-                        PointingCursor {}
-                        onTriggered: root.browserModel.groupBy = "bitrate"
-                    }
-                    MenuItem {
-                        text: "File Type"
-                        checkable: true
-                        checked: root.browserModel ? root.browserModel.groupBy === "filetype" : false
-                        PointingCursor {}
-                        onTriggered: root.browserModel.groupBy = "filetype"
+                    Instantiator {
+                        model: groupByMenu.otherOptions
+
+                        delegate: MenuItem {
+                            required property var modelData
+                            text: modelData.text
+                            checkable: true
+                            checked: root.browserModel ? root.browserModel.groupBy === modelData.key : false
+                            PointingCursor {}
+                            onTriggered: root.browserModel.groupBy = modelData.key
+                        }
+
+                        onObjectAdded: function(index, object) {
+                            otherGroupMenu.insertItem(index, object)
+                        }
+
+                        onObjectRemoved: function(index, object) {
+                            otherGroupMenu.removeItem(object)
+                        }
                     }
                 }
+
                 Menu {
-                    id: customTagGroupMenuStandalone
+                    id: customTagGroupMenu
                     title: "Custom Tag"
 
                     MenuItem {
                         text: "No custom tags found"
                         enabled: false
-                        visible: root.customGroupKeys.length === 0
+                        visible: groupByMenu.customOptions.length === 0
                     }
 
                     Instantiator {
-                        model: root.customGroupKeys
+                        model: groupByMenu.customOptions
 
                         delegate: MenuItem {
-                            required property string modelData
-                            text: modelData
+                            required property var modelData
+                            text: modelData.text
                             checkable: true
-                            checked: root.browserModel ? root.browserModel.groupBy === root.customGroupBy(modelData) : false
+                            checked: root.browserModel ? root.browserModel.groupBy === modelData.key : false
                             PointingCursor {}
-                            onTriggered: root.browserModel.groupBy = root.customGroupBy(modelData)
+                            onTriggered: root.browserModel.groupBy = modelData.key
                         }
 
                         onObjectAdded: function(index, object) {
-                            customTagGroupMenuStandalone.insertItem(index, object)
+                            customTagGroupMenu.insertItem(index, object)
                         }
 
                         onObjectRemoved: function(index, object) {
-                            customTagGroupMenuStandalone.removeItem(object)
+                            customTagGroupMenu.removeItem(object)
                         }
                     }
                 }

@@ -151,10 +151,16 @@ qt_add_executable(appmusicplayer
     src/audio/BufferIODevice.cpp
     src/library/LibraryDatabase.h
     src/library/LibraryDatabase.cpp
+    src/library/LibraryMigration.h
+    src/library/LibraryMigration.cpp
+    src/library/LibrarySparseAttributes.h
+    src/library/LibrarySparseAttributes.cpp
     src/library/LibraryScanner.h
     src/library/LibraryScanner.cpp
     src/library/LibraryWatcher.h
     src/library/LibraryWatcher.cpp
+    src/library/LibraryController.h
+    src/library/LibraryController.cpp
     src/Settings.h
     src/Settings.cpp
     src/SessionManager.h
@@ -170,6 +176,8 @@ qt_add_executable(appmusicplayer
     src/CoverImageProvider.h
     src/CoverImageProvider.cpp
     src/TrackFilter.h
+    src/CollectionBrowseHelper.h
+    src/CollectionBrowseHelper.cpp
     src/CollectionBrowseModel.h
     src/CollectionBrowseModel.cpp
 )
