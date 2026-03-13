@@ -13,14 +13,12 @@ public:
     explicit QueueManager(QObject *parent = nullptr);
     
     void setPlaylistModel(TrackListModel *model);
-    TrackListModel *playlistModel() const { return m_model; }
     
     int currentIndex() const { return m_currentIndex; }
     void setCurrentIndex(int index);
     
     TrackInfo currentTrack() const;
     TrackInfo peekNextTrack() const;
-    TrackInfo peekPreviousTrack() const;
     
     bool canAdvance() const;
     bool canRetreat() const;
@@ -31,7 +29,6 @@ public:
 
 signals:
     void currentIndexChanged(int index);
-    void currentTrackChanged(const TrackInfo &track);
 
 private slots:
     void onRowsInserted(const QModelIndex &parent, int first, int last);

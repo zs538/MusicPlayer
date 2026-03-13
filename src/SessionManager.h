@@ -8,10 +8,8 @@
 #include <QVariantList>
 #include <QVariantMap>
 #include <QTimer>
-#include <QRect>
 
 class PlaylistStore;
-class Settings;
 
 /**
  * @brief Manages session persistence - playlists, UI state, window geometry.
@@ -46,11 +44,6 @@ public:
     Q_INVOKABLE bool loadSession();
     Q_INVOKABLE void scheduleAutoSave();
     
-    // Window geometry
-    Q_INVOKABLE QRect windowGeometry() const;
-    Q_INVOKABLE void setWindowGeometry(const QRect &rect);
-    Q_INVOKABLE void setWindowGeometry(int x, int y, int width, int height);
-    
     // UI state
     int currentPanel() const;
     void setCurrentPanel(int panel);
@@ -65,8 +58,6 @@ public:
     void setLibraryGroupingLevels(const QStringList &levels);
     
     // Playback state (for optional restore)
-    Q_INVOKABLE int lastPlaylistIndex() const;
-    Q_INVOKABLE qint64 lastPosition() const;
     Q_INVOKABLE void setPlaybackState(int playlistIndex, qint64 positionMs);
 
 signals:
@@ -97,7 +88,6 @@ private:
     QTimer m_autoSaveTimer;
     
     // Cached UI state
-    QRect m_windowGeometry;
     int m_currentPanel = 0;
     QVariantList m_playlistColumns;
     QVariantMap m_playlistTrackListLayout;

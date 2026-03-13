@@ -360,38 +360,6 @@ void TrackListModel::insertTrackData(int index, const QString &filePath, const Q
     insertTrack(index, track);
 }
 
-void TrackListModel::insertTrackFromMap(int index, const QVariantMap &trackData)
-{
-    TrackInfo track;
-    track.filePath = trackData.value("filePath").toString();
-    track.title = trackData.value("title").toString();
-    track.artist = trackData.value("artist").toString();
-    track.album = trackData.value("album").toString();
-    track.albumArtist = trackData.value("albumArtist").toString();
-    track.performer = trackData.value("performer").toString();
-    track.composer = trackData.value("composer").toString();
-    track.year = trackData.value("year").toInt();
-    track.originalYear = trackData.value("originalYear").toInt();
-    track.trackNumber = trackData.value("trackNumber").toInt();
-    track.discNumber = trackData.value("discNumber").toInt();
-    track.durationMs = trackData.value("durationMs").toLongLong();
-    track.genre = trackData.value("genre").toString();
-    track.sampleRate = trackData.value("sampleRate").toInt();
-    track.bitDepth = trackData.value("bitDepth").toInt();
-    track.bitrate = trackData.value("bitrate").toInt();
-    track.url = trackData.value("url").toString();
-    track.fileName = trackData.value("fileName").toString();
-    track.fileSize = trackData.value("fileSize").toLongLong();
-    track.fileType = trackData.value("fileType").toString();
-    track.dateCreated = trackData.value("dateCreated").toDateTime();
-    track.dateModified = trackData.value("dateModified").toDateTime();
-    track.comment = trackData.value("comment").toString();
-    track.bpm = trackData.value("bpm").toInt();
-    track.initialKey = trackData.value("initialKey").toString();
-    track.customTags = trackData.value("customTags").toMap();
-    insertTrack(index, track);
-}
-
 void TrackListModel::removeTrack(int index)
 {
     if (index < 0 || index >= m_tracks.count())
@@ -473,26 +441,4 @@ void TrackListModel::updateTrackMetadata(int index, const TrackInfo &track)
     }
     QModelIndex modelIndex = createIndex(index, 0);
     emit dataChanged(modelIndex, modelIndex);
-}
-
-void TrackListModel::updateTrackMetadata(int row, const QString &title, const QString &artist, const QString &album)
-{
-    if (row < 0 || row >= m_tracks.count())
-        return;
-    
-    m_tracks[row].title = title;
-    m_tracks[row].artist = artist;
-    m_tracks[row].album = album;
-    
-    QModelIndex modelIndex = createIndex(row, 0);
-    emit dataChanged(modelIndex, modelIndex);
-}
-
-void TrackListModel::recalculateTotals()
-{
-    m_totalDurationMs = 0;
-    for (const TrackInfo &t : m_tracks) {
-        m_totalDurationMs += t.durationMs;
-    }
-    emit totalsChanged();
 }

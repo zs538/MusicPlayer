@@ -66,14 +66,6 @@ TrackInfo QueueManager::peekNextTrack() const
     return m_model->trackAt(nextIndex);
 }
 
-TrackInfo QueueManager::peekPreviousTrack() const
-{
-    if (!m_model || m_currentIndex <= 0)
-        return TrackInfo();
-    
-    return m_model->trackAt(m_currentIndex - 1);
-}
-
 bool QueueManager::canAdvance() const
 {
     if (!m_model || m_currentIndex < 0)
@@ -210,7 +202,6 @@ void QueueManager::updateCurrentIndex(int newIndex)
         m_currentTrackPath = track.isValid() ? track.filePath : QString();
         
         emit currentIndexChanged(m_currentIndex);
-        emit currentTrackChanged(track);
     }
 }
 

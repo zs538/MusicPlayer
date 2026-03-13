@@ -22,9 +22,7 @@ class PlaylistPanelController : public QObject
     QML_ELEMENT
 
     Q_PROPERTY(QAbstractItemModel* model READ model WRITE setModel NOTIFY modelChanged)
-    Q_PROPERTY(int selectionGeneration READ selectionGeneration NOTIFY selectionChanged)
     Q_PROPERTY(int selectedCount READ selectedCount NOTIFY selectionChanged)
-    Q_PROPERTY(qint64 selectedDurationMs READ selectedDurationMs NOTIFY selectionChanged)
 
 public:
     explicit PlaylistPanelController(QObject *parent = nullptr);
@@ -32,9 +30,7 @@ public:
     QAbstractItemModel *model() const;
     void setModel(QAbstractItemModel *m);
 
-    int selectionGeneration() const;
     int selectedCount() const;
-    qint64 selectedDurationMs() const;
 
     // QML calls these; C++ implements all policy
     Q_INVOKABLE void clickRow(int row, bool ctrl, bool shift);
@@ -59,13 +55,11 @@ private:
     
     TrackListModel *m_model = nullptr;
     QItemSelectionModel *m_selectionModel = nullptr;
-    int m_selectionGeneration = 0;
     int m_lastClickedRow = -1;
     int m_selectionAnchorRow = -1;
     
     // Cached selection data
     QList<int> m_selectedRowsCache;
-    qint64 m_selectedDurationMs = 0;
 };
 
 #endif // PLAYLISTPANELCONTROLLER_H

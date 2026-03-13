@@ -48,7 +48,6 @@ public:
         ChildCountRole,
         RepresentativeFilePathRole,
         CoverFilePathsRole,
-        ImagePathRole,
         FilePathRole,
         TrackDataRole
     };
@@ -126,9 +125,6 @@ private:
 
     // Flat list building
     void applySearchAndSort();
-
-    // Find the row of a group entry in m_entries, and the range of its expanded children
-    int findGroupRow(const QString &groupType, const QVariant &groupValue) const;
 
     // LRU result cache — keyed by filter+groupBy, stores pre-search/sort entries
     struct CacheKey {

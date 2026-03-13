@@ -2,7 +2,6 @@
 #define TRACKLISTMODEL_H
 
 #include <QAbstractListModel>
-#include <QUrl>
 #include <QString>
 #include <QVariantMap>
 #include <QVector>
@@ -94,9 +93,6 @@ public:
     void insertTrack(int index, const TrackInfo &track);
     Q_INVOKABLE void insertTrackData(int index, const QString &filePath, const QString &title, 
                                       const QString &artist, const QString &album, qint64 durationMs, int trackNumber = 0);
-    Q_INVOKABLE void insertTrackFromMap(int index, const QVariantMap &trackData);
-    Q_INVOKABLE void updateTrackMetadata(int row, const QString &title, const QString &artist, 
-                                         const QString &album);
     Q_INVOKABLE void removeTrack(int index);
     Q_INVOKABLE void removeRows(int index, int count);
     Q_INVOKABLE void moveRow(int from, int to);
@@ -110,8 +106,6 @@ signals:
     void totalsChanged();
 
 private:
-    void recalculateTotals();
-    
     QVector<TrackInfo> m_tracks;
     qint64 m_totalDurationMs = 0;
 };

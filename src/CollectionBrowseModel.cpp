@@ -201,7 +201,6 @@ QVariant CollectionBrowseModel::data(const QModelIndex &index, int role) const
     case ChildCountRole: return e.childCount;
     case RepresentativeFilePathRole: return e.representativeFilePath;
     case CoverFilePathsRole: return e.coverFilePaths;
-    case ImagePathRole: return e.imagePath;
     case FilePathRole: return e.filePath;
     case TrackDataRole: return e.trackData;
     }
@@ -219,22 +218,9 @@ QHash<int, QByteArray> CollectionBrowseModel::roleNames() const
         { ChildCountRole, "childCount" },
         { RepresentativeFilePathRole, "representativeFilePath" },
         { CoverFilePathsRole, "coverFilePaths" },
-        { ImagePathRole, "imagePath" },
         { FilePathRole, "filePath" },
         { TrackDataRole, "trackData" }
     };
-}
-
-int CollectionBrowseModel::findGroupRow(const QString &groupType, const QVariant &groupValue) const
-{
-    const QString key = CBH::normalizedGroupKey(groupType, groupValue);
-    for (int i = 0; i < m_entries.size(); ++i) {
-        const Entry &e = m_entries[i];
-        if (e.entryType == QStringLiteral("group") &&
-            CBH::normalizedGroupKey(e.groupType, e.groupValue) == key)
-            return i;
-    }
-    return -1;
 }
 
 QString CollectionBrowseModel::entryIdForEntry(const Entry &entry) const

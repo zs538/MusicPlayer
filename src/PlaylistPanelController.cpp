@@ -8,7 +8,6 @@ PlaylistPanelController::PlaylistPanelController(QObject *parent)
 {
     connect(m_selectionModel, &QItemSelectionModel::selectionChanged, this, [this]() {
         updateSelectionCache();
-        m_selectionGeneration++;
         emit selectionChanged();
     });
 }
@@ -29,25 +28,14 @@ void PlaylistPanelController::setModel(QAbstractItemModel *m)
     m_lastClickedRow = -1;
     m_selectionAnchorRow = -1;
     updateSelectionCache();
-    m_selectionGeneration++;
     
     emit modelChanged();
     emit selectionChanged();
 }
 
-int PlaylistPanelController::selectionGeneration() const
-{
-    return m_selectionGeneration;
-}
-
 int PlaylistPanelController::selectedCount() const
 {
     return m_selectedRowsCache.size();
-}
-
-qint64 PlaylistPanelController::selectedDurationMs() const
-{
-    return m_selectedDurationMs;
 }
 
 void PlaylistPanelController::clickRow(int row, bool ctrl, bool shift)
@@ -247,18 +235,13 @@ void PlaylistPanelController::sortByColumn(const QString &key, bool ascending)
 void PlaylistPanelController::updateSelectionCache()
 {
     m_selectedRowsCache.clear();
-    m_selectedDurationMs = 0;
     
     if (!m_model)
         return;
     
     QModelIndexList selected = m_selectionModel->selectedIndexes();
-    for (const QModelIndex &idx : selected) {
-        int row = idx.row();
-        m_selectedRowsCache.append(row);
-        TrackInfo track = m_model->trackAt(row);
-        m_selectedDurationMs += track.durationMs;
-    }
+    for (const QModelIndex &idx : selected)
+        m_selectedRowsCache.append(idx.row());
     
     std::sort(m_selectedRowsCache.begin(), m_selectedRowsCache.end());
 }

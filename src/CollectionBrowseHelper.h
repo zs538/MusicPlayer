@@ -23,7 +23,6 @@ struct Entry {
     int childCount = 0;
     QString representativeFilePath;
     QStringList coverFilePaths;
-    QString imagePath;
     QString filePath;
     QString title;
     QString artist;

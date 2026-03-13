@@ -23,9 +23,6 @@ SessionManager::SessionManager(ConstructionTag, QObject *parent)
             saveSession();
         }
     });
-    
-    // Default window geometry
-    m_windowGeometry = QRect(100, 100, 1000, 700);
 }
 
 SessionManager::~SessionManager()
@@ -152,24 +149,6 @@ void SessionManager::scheduleAutoSave()
     m_autoSaveTimer.start();
 }
 
-QRect SessionManager::windowGeometry() const
-{
-    return m_windowGeometry;
-}
-
-void SessionManager::setWindowGeometry(const QRect &rect)
-{
-    if (m_windowGeometry != rect) {
-        m_windowGeometry = rect;
-        // Note: geometry persistence disabled - no auto-save
-    }
-}
-
-void SessionManager::setWindowGeometry(int x, int y, int width, int height)
-{
-    setWindowGeometry(QRect(x, y, width, height));
-}
-
 int SessionManager::currentPanel() const
 {
     return m_currentPanel;
@@ -224,16 +203,6 @@ void SessionManager::setLibraryGroupingLevels(const QStringList &levels)
         emit libraryGroupingLevelsChanged();
         scheduleAutoSave();
     }
-}
-
-int SessionManager::lastPlaylistIndex() const
-{
-    return m_lastPlaylistIndex;
-}
-
-qint64 SessionManager::lastPosition() const
-{
-    return m_lastPosition;
 }
 
 void SessionManager::setPlaybackState(int playlistIndex, qint64 positionMs)

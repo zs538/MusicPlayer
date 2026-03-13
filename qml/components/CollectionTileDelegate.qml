@@ -14,7 +14,6 @@ Item {
     required property string subtitle
     required property string representativeFilePath
     required property var coverFilePaths
-    required property string imagePath
     required property string filePath
 
     property bool selected: false
@@ -49,9 +48,7 @@ Item {
                     id: coverImage
                     anchors.fill: parent
                     anchors.margins: 1
-                    source: gridDel.imagePath
-                        ? AppViewModel.localFileUrlForPath(gridDel.imagePath)
-                        : AppViewModel.coverImageSourceForFiles(gridDel.coverFilePaths)
+                    source: AppViewModel.coverImageSourceForFiles(gridDel.coverFilePaths)
                     fillMode: Image.PreserveAspectCrop
                     asynchronous: true
                     cache: true
