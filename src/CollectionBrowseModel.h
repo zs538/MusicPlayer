@@ -31,6 +31,7 @@ class CollectionBrowseModel : public QAbstractListModel
     Q_PROPERTY(bool canGoBack READ canGoBack NOTIFY historyChanged)
     Q_PROPERTY(bool canGoForward READ canGoForward NOTIFY historyChanged)
     Q_PROPERTY(qreal pendingScrollY READ pendingScrollY NOTIFY pendingScrollYChanged)
+    Q_PROPERTY(QString pendingSelectedEntryId READ pendingSelectedEntryId NOTIFY pendingSelectedEntryIdChanged)
     Q_PROPERTY(QVariantList breadcrumbPath READ breadcrumbPath NOTIFY historyChanged)
     Q_PROPERTY(int currentBreadcrumbIndex READ currentBreadcrumbIndex NOTIFY historyChanged)
 
@@ -93,15 +94,18 @@ public:
 
     Q_INVOKABLE void setTrackListSort(const QString &sortKey, bool ascending = true);
     Q_INVOKABLE QStringList displayedFilePaths() const;
+    Q_INVOKABLE QString entryIdAt(int row) const;
+    Q_INVOKABLE int indexOfEntryId(const QString &entryId) const;
 
     // History navigation — atomic filter+groupBy change, single refresh
-    Q_INVOKABLE void navigate(const QVariantList &filter, const QString &groupBy, qreal currentScrollY = 0);
-    Q_INVOKABLE void goBack(qreal currentScrollY = 0);
-    Q_INVOKABLE void goForward(qreal currentScrollY = 0);
-    Q_INVOKABLE void jumpToBreadcrumb(int index, qreal currentScrollY = 0);
+    Q_INVOKABLE void navigate(const QVariantList &filter, const QString &groupBy, qreal currentScrollY = 0, const QString &currentSelectedEntryId = QString());
+    Q_INVOKABLE void goBack(qreal currentScrollY = 0, const QString &currentSelectedEntryId = QString());
+    Q_INVOKABLE void goForward(qreal currentScrollY = 0, const QString &currentSelectedEntryId = QString());
+    Q_INVOKABLE void jumpToBreadcrumb(int index, qreal currentScrollY = 0, const QString &currentSelectedEntryId = QString());
     bool canGoBack() const;
     bool canGoForward() const;
     qreal pendingScrollY() const { return m_pendingScrollY; }
+    QString pendingSelectedEntryId() const { return m_pendingSelectedEntryId; }
     QVariantList breadcrumbPath() const;
     int currentBreadcrumbIndex() const { return m_backStack.size(); }
 
@@ -117,6 +121,7 @@ signals:
     void titleChanged();
     void historyChanged();
     void pendingScrollYChanged();
+    void pendingSelectedEntryIdChanged();
 
 private slots:
     void refresh();
@@ -188,12 +193,14 @@ private:
     void storeCache(const CacheKey &key, const QVector<Entry> &entries, const QString &title);
     void invalidateCache();
 
-    struct HistoryEntry { TrackFilter filter; QString groupBy; qreal scrollY = 0; };
-    QVector<HistoryEntry> historyTrail(qreal currentScrollY) const;
+    struct HistoryEntry { TrackFilter filter; QString groupBy; qreal scrollY = 0; QString selectedEntryId; };
+    QVector<HistoryEntry> historyTrail(qreal currentScrollY, const QString &currentSelectedEntryId) const;
     QVector<HistoryEntry> m_backStack;
     QVector<HistoryEntry> m_forwardStack;
     qreal m_pendingScrollY = 0;
+    QString m_pendingSelectedEntryId;
     void applyState(const TrackFilter &filter, const QString &groupBy);
+    QString entryIdForEntry(const Entry &entry) const;
 
     LibraryDatabase *m_database = nullptr;
     TrackFilter m_filter;

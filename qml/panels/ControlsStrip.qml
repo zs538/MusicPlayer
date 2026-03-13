@@ -321,16 +321,29 @@ Rectangle {
 
         SectionSeparator {}
 
-        // Settings button
         Button {
             id: settingsButton
             flat: true
-            implicitWidth: 28
+            implicitWidth: 24
             implicitHeight: 24
             hoverEnabled: true
-            icon.source: Qt.resolvedUrl("../icons/settings.svg")
-            icon.color: Theme.textPrimary
-            icon.width: 16; icon.height: 16
+            Layout.leftMargin: -4
+
+            contentItem: Image {
+                anchors.centerIn: parent
+                width: 16
+                height: 16
+                source: Qt.resolvedUrl("../icons/settings.svg")
+                sourceSize: Qt.size(32, 32)
+                fillMode: Image.PreserveAspectFit
+                opacity: settingsButton.pressed ? 0.75 : (settingsButton.hovered ? 0.9 : 1.0)
+            }
+
+            background: Rectangle {
+                color: "transparent"
+                border.width: 0
+            }
+
             StyledHoverToolTip {
                 parent: settingsButton
                 visible: settingsButton.hovered

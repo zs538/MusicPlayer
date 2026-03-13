@@ -100,11 +100,18 @@ AppViewModel::AppViewModel(QObject *parent)
     // Connect Settings to AudioEngine
     if (settings && m_audioEngine) {
         m_audioEngine->setSinkBufferMs(settings->bufferSizeMs());
+        m_audioEngine->setGaplessLeadInMs(settings->gaplessLeadInMs());
         
         connect(settings, &Settings::bufferSizeMsChanged, this, [this]() {
             Settings *s = Settings::instance();
             if (s && m_audioEngine) {
                 m_audioEngine->setSinkBufferMs(s->bufferSizeMs());
+            }
+        });
+        connect(settings, &Settings::gaplessLeadInMsChanged, this, [this]() {
+            Settings *s = Settings::instance();
+            if (s && m_audioEngine) {
+                m_audioEngine->setGaplessLeadInMs(s->gaplessLeadInMs());
             }
         });
         connect(settings, &Settings::volumeChanged, this, [this]() {

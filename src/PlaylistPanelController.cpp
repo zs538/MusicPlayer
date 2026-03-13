@@ -27,6 +27,7 @@ void PlaylistPanelController::setModel(QAbstractItemModel *m)
     m_model = trackModel;
     m_selectionModel->setModel(m_model);
     m_lastClickedRow = -1;
+    m_selectionAnchorRow = -1;
     updateSelectionCache();
     m_selectionGeneration++;
     
@@ -56,29 +57,27 @@ void PlaylistPanelController::clickRow(int row, bool ctrl, bool shift)
     
     QModelIndex idx = m_model->index(row, 0);
     
-    if (shift && m_lastClickedRow >= 0) {
-        // Range selection from last clicked to current
-        int start = qMin(m_lastClickedRow, row);
-        int end = qMax(m_lastClickedRow, row);
+    if (shift && m_selectionAnchorRow >= 0) {
+        int start = qMin(m_selectionAnchorRow, row);
+        int end = qMax(m_selectionAnchorRow, row);
         
         QItemSelection selection;
         selection.select(m_model->index(start, 0), m_model->index(end, 0));
         
         if (ctrl) {
-            // Add to existing selection
             m_selectionModel->select(selection, QItemSelectionModel::Select);
         } else {
-            // Replace selection with range
             m_selectionModel->select(selection, QItemSelectionModel::ClearAndSelect);
         }
+        m_lastClickedRow = row;
     } else if (ctrl) {
-        // Toggle single item
         m_selectionModel->select(idx, QItemSelectionModel::Toggle);
         m_lastClickedRow = row;
+        m_selectionAnchorRow = row;
     } else {
-        // Single select (clear others)
         m_selectionModel->select(idx, QItemSelectionModel::ClearAndSelect);
         m_lastClickedRow = row;
+        m_selectionAnchorRow = row;
     }
 }
 
@@ -86,6 +85,7 @@ void PlaylistPanelController::clearSelection()
 {
     m_selectionModel->clearSelection();
     m_lastClickedRow = -1;
+    m_selectionAnchorRow = -1;
 }
 
 void PlaylistPanelController::selectAll()
@@ -96,6 +96,8 @@ void PlaylistPanelController::selectAll()
     QItemSelection selection;
     selection.select(m_model->index(0, 0), m_model->index(m_model->rowCount() - 1, 0));
     m_selectionModel->select(selection, QItemSelectionModel::ClearAndSelect);
+    m_lastClickedRow = 0;
+    m_selectionAnchorRow = 0;
 }
 
 void PlaylistPanelController::selectRange(int fromRow, int toRow)
@@ -109,6 +111,8 @@ void PlaylistPanelController::selectRange(int fromRow, int toRow)
     QItemSelection selection;
     selection.select(m_model->index(start, 0), m_model->index(end, 0));
     m_selectionModel->select(selection, QItemSelectionModel::ClearAndSelect);
+    m_lastClickedRow = end;
+    m_selectionAnchorRow = start;
 }
 
 bool PlaylistPanelController::isRowSelected(int row) const
@@ -128,20 +132,65 @@ QVariantList PlaylistPanelController::selectedRows() const
     return result;
 }
 
+int PlaylistPanelController::keyboardMoveSelection(int delta, bool extendSelection)
+{
+    if (!m_model || m_model->rowCount() == 0 || delta == 0)
+        return -1;
+
+    const int rowCount = m_model->rowCount();
+    int baseRow = m_lastClickedRow;
+    if (baseRow < 0) {
+        if (!m_selectedRowsCache.isEmpty())
+            baseRow = delta > 0 ? m_selectedRowsCache.constLast() : m_selectedRowsCache.constFirst();
+        else
+            baseRow = delta > 0 ? -1 : rowCount;
+    }
+
+    const int targetRow = qBound(0, baseRow + delta, rowCount - 1);
+    const QModelIndex targetIndex = m_model->index(targetRow, 0);
+
+    if (extendSelection) {
+        const int anchorRow = m_selectionAnchorRow >= 0 ? m_selectionAnchorRow : targetRow;
+        QItemSelection selection;
+        selection.select(m_model->index(qMin(anchorRow, targetRow), 0),
+                         m_model->index(qMax(anchorRow, targetRow), 0));
+        m_selectionModel->select(selection, QItemSelectionModel::ClearAndSelect);
+        m_lastClickedRow = targetRow;
+        if (m_selectionAnchorRow < 0)
+            m_selectionAnchorRow = anchorRow;
+    } else {
+        m_selectionModel->select(targetIndex, QItemSelectionModel::ClearAndSelect);
+        m_lastClickedRow = targetRow;
+        m_selectionAnchorRow = targetRow;
+    }
+
+    return targetRow;
+}
+
 void PlaylistPanelController::removeSelected()
 {
     if (!m_model || m_selectedRowsCache.isEmpty())
         return;
+
+    const int focusRow = m_lastClickedRow >= 0 ? m_lastClickedRow : m_selectedRowsCache.constFirst();
     
-    // Remove from highest index to lowest to preserve indices
     QList<int> rows = m_selectedRowsCache;
     std::sort(rows.begin(), rows.end(), std::greater<int>());
     
     for (int row : rows) {
         m_model->removeTrack(row);
     }
-    
-    clearSelection();
+
+    if (m_model->rowCount() <= 0) {
+        clearSelection();
+        return;
+    }
+
+    const int targetRow = qMin(focusRow, m_model->rowCount() - 1);
+    const QModelIndex targetIndex = m_model->index(targetRow, 0);
+    m_selectionModel->select(targetIndex, QItemSelectionModel::ClearAndSelect);
+    m_lastClickedRow = targetRow;
+    m_selectionAnchorRow = targetRow;
 }
 
 void PlaylistPanelController::moveSelectedTo(int targetRow)
@@ -182,6 +231,8 @@ void PlaylistPanelController::moveSelectedTo(int targetRow)
     selection.select(m_model->index(insertPos, 0), 
                      m_model->index(insertPos + tracksToMove.size() - 1, 0));
     m_selectionModel->select(selection, QItemSelectionModel::Select);
+    m_lastClickedRow = insertPos;
+    m_selectionAnchorRow = insertPos;
 }
 
 void PlaylistPanelController::sortByColumn(const QString &key, bool ascending)

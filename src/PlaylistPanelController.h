@@ -43,6 +43,7 @@ public:
     Q_INVOKABLE void selectRange(int fromRow, int toRow);
     Q_INVOKABLE bool isRowSelected(int row) const;
     Q_INVOKABLE QVariantList selectedRows() const; // sorted
+    Q_INVOKABLE int keyboardMoveSelection(int delta, bool extendSelection);
 
     // High-level actions (QML never calls model.removeRows directly)
     Q_INVOKABLE void removeSelected();
@@ -60,6 +61,7 @@ private:
     QItemSelectionModel *m_selectionModel = nullptr;
     int m_selectionGeneration = 0;
     int m_lastClickedRow = -1;
+    int m_selectionAnchorRow = -1;
     
     // Cached selection data
     QList<int> m_selectedRowsCache;

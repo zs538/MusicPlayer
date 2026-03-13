@@ -455,8 +455,14 @@ Rectangle {
             Layout.fillHeight: true
             clip: true
             interactive: false
+            activeFocusOnTab: true
             model: controller.model
             boundsBehavior: Flickable.StopAtBounds
+
+            function ensureRowVisible(row) {
+                if (row >= 0 && row < count)
+                    positionViewAtIndex(row, ListView.Contain)
+            }
             
             footer: Item { width: 1; height: 20 }
 
@@ -465,6 +471,44 @@ Rectangle {
             WheelHandler {
                 acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                 onWheel: (e) => listView.contentY = Math.max(0, Math.min(listView.contentHeight - listView.height, listView.contentY - e.angleDelta.y))
+            }
+            Keys.onDeletePressed: (event) => {
+                if (controller.selectedCount <= 0)
+                    return
+                controller.removeSelected()
+                event.accepted = true
+            }
+            Keys.onEscapePressed: (event) => {
+                if (controller.selectedCount <= 0)
+                    return
+                controller.clearSelection()
+                event.accepted = true
+            }
+            Keys.onReturnPressed: (event) => {
+                if (controller.selectedCount <= 0)
+                    return
+                AppViewModel.browseActivation.activatePlaylistRow(controller.selectedRows()[0])
+                event.accepted = true
+            }
+            Keys.onEnterPressed: (event) => {
+                if (controller.selectedCount <= 0)
+                    return
+                AppViewModel.browseActivation.activatePlaylistRow(controller.selectedRows()[0])
+                event.accepted = true
+            }
+            Keys.onUpPressed: (event) => {
+                const row = controller.keyboardMoveSelection(-1, (event.modifiers & Qt.ShiftModifier) !== 0)
+                if (row < 0)
+                    return
+                listView.ensureRowVisible(row)
+                event.accepted = true
+            }
+            Keys.onDownPressed: (event) => {
+                const row = controller.keyboardMoveSelection(1, (event.modifiers & Qt.ShiftModifier) !== 0)
+                if (row < 0)
+                    return
+                listView.ensureRowVisible(row)
+                event.accepted = true
             }
             
             MouseArea {
@@ -510,6 +554,7 @@ Rectangle {
                 onClicked: {
                     let clickY = mouseY + listView.contentY
                     let lastEntryBottom = listView.count * root.playlistRowHeight
+                    listView.forceActiveFocus()
                     if (mouse.button === Qt.RightButton) {
                         if (clickY >= lastEntryBottom) {
                             controller.clearSelection()
@@ -621,6 +666,7 @@ Rectangle {
                     }
 
                     onClicked: function(mouse) {
+                        listView.forceActiveFocus()
                         if (mouse.button === Qt.RightButton) {
                             if (!del.selected) controller.clickRow(del.index, false, false)
                             contextMenu.hasTrackContext = true

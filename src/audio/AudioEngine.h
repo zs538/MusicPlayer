@@ -50,6 +50,8 @@ public:
     QString currentFilePath() const;
     int sinkBufferMs() const { return m_sinkBufferMs; }
     void setSinkBufferMs(int ms);
+    int gaplessLeadInMs() const { return m_gaplessLeadInMs; }
+    void setGaplessLeadInMs(int ms);
 
 signals:
     void sinkBufferMsChanged(int ms);
@@ -134,8 +136,7 @@ private:
     bool m_nextLocked = false;      // True when next track is locked for gapless transition
     bool m_hasNextPrepared = false; // True when next track path is set
     qint64 m_nextTrackDurationMs = 0;
-    static constexpr qint64 GAPLESS_LEAD_IN_MS = 2000;
-    
+    int m_gaplessLeadInMs = 2000;
     int m_sinkBufferMs = 100;  // Default: 100ms (low latency)
 };
 

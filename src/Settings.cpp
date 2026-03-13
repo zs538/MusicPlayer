@@ -87,6 +87,22 @@ void Settings::setBufferSizeMs(int ms)
     }
 }
 
+int Settings::gaplessLeadInMs() const
+{
+    return m_gaplessLeadInMs;
+}
+
+void Settings::setGaplessLeadInMs(int ms)
+{
+    ms = qBound(100, ms, 10000);
+    if (m_gaplessLeadInMs != ms) {
+        m_gaplessLeadInMs = ms;
+        m_settings.setValue("audio/gaplessLeadInMs", ms);
+        emit gaplessLeadInMsChanged();
+        emit settingsChanged();
+    }
+}
+
 bool Settings::restoreSession() const
 {
     return m_restoreSession;
@@ -126,11 +142,13 @@ void Settings::save()
     m_settings.setValue("playback/volume", m_volume);
     m_settings.setValue("audio/outputDevice", m_outputDevice);
     m_settings.setValue("audio/bufferSizeMs", m_bufferSizeMs);
+    m_settings.setValue("audio/gaplessLeadInMs", m_gaplessLeadInMs);
     m_settings.setValue("session/restore", m_restoreSession);
     m_settings.setValue("coverArt/patterns", m_coverArtPatterns);
     m_settings.setValue("behavior/addTracksPolicy", m_addTracksPolicy);
     m_settings.setValue("behavior/previousButtonAction", m_previousButtonAction);
     m_settings.setValue("behavior/openingTracksAction", m_openingTracksAction);
+    m_settings.setValue("behavior/generatedPlaylistsEnabled", m_generatedPlaylistsEnabled);
     m_settings.setValue("behavior/generatedPlaylistCount", m_generatedPlaylistCount);
     m_settings.setValue("appearance/gridCellMinWidth", m_gridCellMinWidth);
     m_settings.setValue("appearance/gridCellMaxWidth", m_gridCellMaxWidth);
@@ -146,13 +164,17 @@ void Settings::load()
     m_volume = m_settings.value("playback/volume", 1.0).toDouble();
     m_outputDevice = m_settings.value("audio/outputDevice", "").toString();
     m_bufferSizeMs = m_settings.value("audio/bufferSizeMs", 100).toInt();
+    m_gaplessLeadInMs = qBound(100, m_settings.value("audio/gaplessLeadInMs", 2000).toInt(), 10000);
     m_restoreSession = m_settings.value("session/restore", true).toBool();
     m_addTracksPolicy = m_settings.value("behavior/addTracksPolicy", AddNeverStart).toInt();
     m_previousButtonAction = m_settings.value("behavior/previousButtonAction", RestartThenJump).toInt();
     m_openingTracksAction = m_settings.value("behavior/openingTracksAction", OpeningAppendToViewed).toInt();
+    m_generatedPlaylistsEnabled = m_settings.value("behavior/generatedPlaylistsEnabled", true).toBool();
     m_generatedPlaylistCount = m_settings.value("behavior/generatedPlaylistCount", 5).toInt();
-    m_gridCellMinWidth = m_settings.value("appearance/gridCellMinWidth", 100).toInt();
-    m_gridCellMaxWidth = m_settings.value("appearance/gridCellMaxWidth", 200).toInt();
+    m_gridCellMinWidth = qBound(60, m_settings.value("appearance/gridCellMinWidth", 100).toInt(), 300);
+    m_gridCellMaxWidth = qBound(80, m_settings.value("appearance/gridCellMaxWidth", 200).toInt(), 400);
+    if (m_gridCellMaxWidth < m_gridCellMinWidth)
+        m_gridCellMaxWidth = m_gridCellMinWidth;
     m_watcherEnabled = m_settings.value("library/watcherEnabled", true).toBool();
     m_periodicRescanMinutes = m_settings.value("library/periodicRescanMinutes", 10).toInt();
     m_collectionPlayButtonEnabled = m_settings.value("collection/playButtonEnabled", true).toBool();
@@ -218,6 +240,21 @@ void Settings::setOpeningTracksAction(int action)
     }
 }
 
+bool Settings::generatedPlaylistsEnabled() const
+{
+    return m_generatedPlaylistsEnabled;
+}
+
+void Settings::setGeneratedPlaylistsEnabled(bool enabled)
+{
+    if (m_generatedPlaylistsEnabled != enabled) {
+        m_generatedPlaylistsEnabled = enabled;
+        m_settings.setValue("behavior/generatedPlaylistsEnabled", enabled);
+        emit generatedPlaylistsEnabledChanged();
+        emit settingsChanged();
+    }
+}
+
 int Settings::generatedPlaylistCount() const
 {
     return m_generatedPlaylistCount;
@@ -242,12 +279,20 @@ int Settings::gridCellMinWidth() const
 void Settings::setGridCellMinWidth(int width)
 {
     width = qBound(60, width, 300);
-    if (m_gridCellMinWidth != width) {
-        m_gridCellMinWidth = width;
-        m_settings.setValue("appearance/gridCellMinWidth", width);
+    const int maxWidth = qMax(m_gridCellMaxWidth, width);
+    const bool minChanged = (m_gridCellMinWidth != width);
+    const bool maxChanged = (m_gridCellMaxWidth != maxWidth);
+    if (!minChanged && !maxChanged)
+        return;
+    m_gridCellMinWidth = width;
+    m_gridCellMaxWidth = maxWidth;
+    m_settings.setValue("appearance/gridCellMinWidth", m_gridCellMinWidth);
+    m_settings.setValue("appearance/gridCellMaxWidth", m_gridCellMaxWidth);
+    if (minChanged)
         emit gridCellMinWidthChanged();
-        emit settingsChanged();
-    }
+    if (maxChanged)
+        emit gridCellMaxWidthChanged();
+    emit settingsChanged();
 }
 
 int Settings::gridCellMaxWidth() const
@@ -258,12 +303,20 @@ int Settings::gridCellMaxWidth() const
 void Settings::setGridCellMaxWidth(int width)
 {
     width = qBound(80, width, 400);
-    if (m_gridCellMaxWidth != width) {
-        m_gridCellMaxWidth = width;
-        m_settings.setValue("appearance/gridCellMaxWidth", width);
+    const int minWidth = qMin(m_gridCellMinWidth, width);
+    const bool minChanged = (m_gridCellMinWidth != minWidth);
+    const bool maxChanged = (m_gridCellMaxWidth != width);
+    if (!minChanged && !maxChanged)
+        return;
+    m_gridCellMinWidth = minWidth;
+    m_gridCellMaxWidth = width;
+    m_settings.setValue("appearance/gridCellMinWidth", m_gridCellMinWidth);
+    m_settings.setValue("appearance/gridCellMaxWidth", m_gridCellMaxWidth);
+    if (minChanged)
+        emit gridCellMinWidthChanged();
+    if (maxChanged)
         emit gridCellMaxWidthChanged();
-        emit settingsChanged();
-    }
+    emit settingsChanged();
 }
 
 QString Settings::groupTypeNextGroupBy(const QString &groupType) const

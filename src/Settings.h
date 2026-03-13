@@ -16,11 +16,13 @@ class Settings : public QObject
     Q_PROPERTY(double volume READ volume WRITE setVolume NOTIFY volumeChanged)
     Q_PROPERTY(QString outputDevice READ outputDevice WRITE setOutputDevice NOTIFY outputDeviceChanged)
     Q_PROPERTY(int bufferSizeMs READ bufferSizeMs WRITE setBufferSizeMs NOTIFY bufferSizeMsChanged)
+    Q_PROPERTY(int gaplessLeadInMs READ gaplessLeadInMs WRITE setGaplessLeadInMs NOTIFY gaplessLeadInMsChanged)
     Q_PROPERTY(bool restoreSession READ restoreSession WRITE setRestoreSession NOTIFY restoreSessionChanged)
     Q_PROPERTY(QStringList coverArtPatterns READ coverArtPatterns WRITE setCoverArtPatterns NOTIFY coverArtPatternsChanged)
     Q_PROPERTY(int addTracksPolicy READ addTracksPolicy WRITE setAddTracksPolicy NOTIFY addTracksPolicyChanged)
     Q_PROPERTY(int previousButtonAction READ previousButtonAction WRITE setPreviousButtonAction NOTIFY previousButtonActionChanged)
     Q_PROPERTY(int openingTracksAction READ openingTracksAction WRITE setOpeningTracksAction NOTIFY openingTracksActionChanged)
+    Q_PROPERTY(bool generatedPlaylistsEnabled READ generatedPlaylistsEnabled WRITE setGeneratedPlaylistsEnabled NOTIFY generatedPlaylistsEnabledChanged)
     Q_PROPERTY(int generatedPlaylistCount READ generatedPlaylistCount WRITE setGeneratedPlaylistCount NOTIFY generatedPlaylistCountChanged)
     Q_PROPERTY(int gridCellMinWidth READ gridCellMinWidth WRITE setGridCellMinWidth NOTIFY gridCellMinWidthChanged)
     Q_PROPERTY(int gridCellMaxWidth READ gridCellMaxWidth WRITE setGridCellMaxWidth NOTIFY gridCellMaxWidthChanged)
@@ -62,6 +64,9 @@ public:
     
     int bufferSizeMs() const;
     void setBufferSizeMs(int ms);
+
+    int gaplessLeadInMs() const;
+    void setGaplessLeadInMs(int ms);
     
     bool restoreSession() const;
     void setRestoreSession(bool restore);
@@ -78,6 +83,9 @@ public:
     
     int openingTracksAction() const;
     void setOpeningTracksAction(int action);
+
+    bool generatedPlaylistsEnabled() const;
+    void setGeneratedPlaylistsEnabled(bool enabled);
     
     int generatedPlaylistCount() const;
     void setGeneratedPlaylistCount(int count);
@@ -119,11 +127,13 @@ signals:
     void volumeChanged();
     void outputDeviceChanged();
     void bufferSizeMsChanged();
+    void gaplessLeadInMsChanged();
     void restoreSessionChanged();
     void coverArtPatternsChanged();
     void addTracksPolicyChanged();
     void previousButtonActionChanged();
     void openingTracksActionChanged();
+    void generatedPlaylistsEnabledChanged();
     void generatedPlaylistCountChanged();
     void gridCellMinWidthChanged();
     void gridCellMaxWidthChanged();
@@ -139,11 +149,13 @@ private:
     double m_volume = 1.0;
     QString m_outputDevice;
     int m_bufferSizeMs = 100;
+    int m_gaplessLeadInMs = 2000;
     bool m_restoreSession = true;
     QStringList m_coverArtPatterns;
     int m_addTracksPolicy = AddNeverStart;
     int m_previousButtonAction = RestartThenJump;
     int m_openingTracksAction = OpeningAppendToViewed;
+    bool m_generatedPlaylistsEnabled = true;
     int m_generatedPlaylistCount = 5;
     int m_gridCellMinWidth = 110;
     int m_gridCellMaxWidth = 130;

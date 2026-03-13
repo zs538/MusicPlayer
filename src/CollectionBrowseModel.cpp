@@ -226,10 +226,11 @@ void CollectionBrowseModel::invalidateCache()
 bool CollectionBrowseModel::canGoBack() const { return !m_backStack.isEmpty(); }
 bool CollectionBrowseModel::canGoForward() const { return !m_forwardStack.isEmpty(); }
 
-QVector<CollectionBrowseModel::HistoryEntry> CollectionBrowseModel::historyTrail(qreal currentScrollY) const
+QVector<CollectionBrowseModel::HistoryEntry> CollectionBrowseModel::historyTrail(qreal currentScrollY,
+                                                                                const QString &currentSelectedEntryId) const
 {
     QVector<HistoryEntry> trail = m_backStack;
-    trail.append({m_filter, m_groupBy, currentScrollY});
+    trail.append({m_filter, m_groupBy, currentScrollY, currentSelectedEntryId});
     for (int i = m_forwardStack.size() - 1; i >= 0; --i)
         trail.append(m_forwardStack[i]);
     return trail;
@@ -238,7 +239,7 @@ QVector<CollectionBrowseModel::HistoryEntry> CollectionBrowseModel::historyTrail
 QVariantList CollectionBrowseModel::breadcrumbPath() const
 {
     QVariantList result;
-    const QVector<HistoryEntry> trail = historyTrail(0);
+    const QVector<HistoryEntry> trail = historyTrail(0, QString());
     result.reserve(trail.size());
 
     for (int i = 0; i < trail.size(); ++i) {
@@ -252,9 +253,9 @@ QVariantList CollectionBrowseModel::breadcrumbPath() const
     return result;
 }
 
-void CollectionBrowseModel::jumpToBreadcrumb(int index, qreal currentScrollY)
+void CollectionBrowseModel::jumpToBreadcrumb(int index, qreal currentScrollY, const QString &currentSelectedEntryId)
 {
-    const QVector<HistoryEntry> trail = historyTrail(currentScrollY);
+    const QVector<HistoryEntry> trail = historyTrail(currentScrollY, currentSelectedEntryId);
     const int currentIndex = m_backStack.size();
 
     if (index < 0 || index >= trail.size() || index == currentIndex)
@@ -274,41 +275,50 @@ void CollectionBrowseModel::jumpToBreadcrumb(int index, qreal currentScrollY)
     m_backStack = newBackStack;
     m_forwardStack = newForwardStack;
     m_pendingScrollY = target.scrollY;
+    m_pendingSelectedEntryId = target.selectedEntryId;
     applyState(target.filter, target.groupBy);
     emit historyChanged();
     emit pendingScrollYChanged();
+    emit pendingSelectedEntryIdChanged();
 }
 
-void CollectionBrowseModel::navigate(const QVariantList &filter, const QString &groupBy, qreal currentScrollY)
+void CollectionBrowseModel::navigate(const QVariantList &filter, const QString &groupBy,
+                                     qreal currentScrollY, const QString &currentSelectedEntryId)
 {
-    m_backStack.append({m_filter, m_groupBy, currentScrollY});
+    m_backStack.append({m_filter, m_groupBy, currentScrollY, currentSelectedEntryId});
     m_forwardStack.clear();
     m_pendingScrollY = 0;
+    m_pendingSelectedEntryId.clear();
     applyState(trackFilterFromVariant(filter), groupBy);
     emit historyChanged();
     emit pendingScrollYChanged();
+    emit pendingSelectedEntryIdChanged();
 }
 
-void CollectionBrowseModel::goBack(qreal currentScrollY)
+void CollectionBrowseModel::goBack(qreal currentScrollY, const QString &currentSelectedEntryId)
 {
     if (m_backStack.isEmpty()) return;
-    m_forwardStack.append({m_filter, m_groupBy, currentScrollY});
+    m_forwardStack.append({m_filter, m_groupBy, currentScrollY, currentSelectedEntryId});
     auto entry = m_backStack.takeLast();
     m_pendingScrollY = entry.scrollY;
+    m_pendingSelectedEntryId = entry.selectedEntryId;
     applyState(entry.filter, entry.groupBy);
     emit historyChanged();
     emit pendingScrollYChanged();
+    emit pendingSelectedEntryIdChanged();
 }
 
-void CollectionBrowseModel::goForward(qreal currentScrollY)
+void CollectionBrowseModel::goForward(qreal currentScrollY, const QString &currentSelectedEntryId)
 {
     if (m_forwardStack.isEmpty()) return;
-    m_backStack.append({m_filter, m_groupBy, currentScrollY});
+    m_backStack.append({m_filter, m_groupBy, currentScrollY, currentSelectedEntryId});
     auto entry = m_forwardStack.takeLast();
     m_pendingScrollY = entry.scrollY;
+    m_pendingSelectedEntryId = entry.selectedEntryId;
     applyState(entry.filter, entry.groupBy);
     emit historyChanged();
     emit pendingScrollYChanged();
+    emit pendingSelectedEntryIdChanged();
 }
 
 void CollectionBrowseModel::applyState(const TrackFilter &filter, const QString &groupBy)
@@ -400,6 +410,33 @@ int CollectionBrowseModel::findGroupRow(const QString &groupType, const QVariant
         const Entry &e = m_entries[i];
         if (e.entryType == QStringLiteral("group") &&
             normalizedGroupKey(e.groupType, e.groupValue) == key)
+            return i;
+    }
+    return -1;
+}
+
+QString CollectionBrowseModel::entryIdForEntry(const Entry &entry) const
+{
+    if (entry.entryType == QStringLiteral("group"))
+        return QStringLiteral("g:%1:%2").arg(entry.groupType, normalizedGroupKey(entry.groupType, entry.groupValue));
+    if (entry.entryType == QStringLiteral("track"))
+        return QStringLiteral("t:%1").arg(entry.filePath);
+    return QString();
+}
+
+QString CollectionBrowseModel::entryIdAt(int row) const
+{
+    if (row < 0 || row >= m_entries.size())
+        return QString();
+    return entryIdForEntry(m_entries.at(row));
+}
+
+int CollectionBrowseModel::indexOfEntryId(const QString &entryId) const
+{
+    if (entryId.isEmpty())
+        return -1;
+    for (int i = 0; i < m_entries.size(); ++i) {
+        if (entryIdForEntry(m_entries.at(i)) == entryId)
             return i;
     }
     return -1;

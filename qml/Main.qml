@@ -85,9 +85,11 @@ ApplicationWindow {
             Layout.minimumHeight: 28
             Layout.maximumHeight: 44
             onSettingsRequested: {
-                settingsWindow.show()
-                settingsWindow.raise()
-                settingsWindow.requestActivate()
+                if (settingsWindow.visible) {
+                    settingsWindow.close()
+                } else {
+                    openSettingsWindow()
+                }
             }
         }
     }
@@ -95,6 +97,13 @@ ApplicationWindow {
     // Settings window (modal)
     SettingsWindow {
         id: settingsWindow
+    }
+
+    function openSettingsWindow() {
+        settingsWindow.resetGeometry(root)
+        settingsWindow.show()
+        settingsWindow.raise()
+        settingsWindow.requestActivate()
     }
 
     // Keyboard shortcuts
@@ -110,10 +119,6 @@ ApplicationWindow {
 
     Shortcut {
         sequence: "Ctrl+,"
-        onActivated: {
-            settingsWindow.show()
-            settingsWindow.raise()
-            settingsWindow.requestActivate()
-        }
+        onActivated: openSettingsWindow()
     }
 }

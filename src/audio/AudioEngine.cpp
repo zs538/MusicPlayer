@@ -360,6 +360,11 @@ void AudioEngine::setSinkBufferMs(int ms)
     emit sinkBufferMsChanged(ms);
 }
 
+void AudioEngine::setGaplessLeadInMs(int ms)
+{
+    m_gaplessLeadInMs = qBound(100, ms, 10000);
+}
+
 void AudioEngine::setState(State state)
 {
     if (m_state != state) {
@@ -662,7 +667,7 @@ void AudioEngine::decodeLoop()
                 // Wait for next track - decoder runs ahead of playback
                 // Calculate wait time based on buffer content
                 qint64 bufferMs = (m_ringBuffer->availableToRead() * 1000) / (m_outputSampleRate * 4);
-                qint64 maxWaitMs = bufferMs + GAPLESS_LEAD_IN_MS;
+                qint64 maxWaitMs = bufferMs + m_gaplessLeadInMs;
                 
                 QElapsedTimer waitTimer;
                 waitTimer.start();
@@ -836,7 +841,7 @@ void AudioEngine::updatePosition()
         // when the user is actually near the end of the track
         qint64 pos = positionMs();
         qint64 remaining = m_durationMs - pos;
-        if (!m_trackAboutToFinishEmitted && remaining <= GAPLESS_LEAD_IN_MS && remaining > 0) {
+        if (!m_trackAboutToFinishEmitted && remaining <= m_gaplessLeadInMs && remaining > 0) {
             m_trackAboutToFinishEmitted = true;
             emit trackAboutToFinish(remaining);
         }

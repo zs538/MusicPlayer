@@ -221,6 +221,7 @@ qt_add_qml_module(appmusicplayer
         qml/windows/CoverWindow.qml
         qml/settings/SettingsWindow.qml
     RESOURCES
+        qml/logo-image-t.png
         qml/icons/skip_previous.svg
         qml/icons/play_arrow.svg
         qml/icons/pause.svg
@@ -268,6 +269,10 @@ target_link_libraries(appmusicplayer PRIVATE
     Qt6::Sql
     Qt6::Svg
     ${THIRD_PARTY_LIBRARIES}
+)
+
+target_compile_definitions(appmusicplayer PRIVATE
+    APP_VERSION="Pre-Release"
 )
 
 install(TARGETS appmusicplayer

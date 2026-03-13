@@ -1,5 +1,7 @@
+#include <QCoreApplication>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
+#include <QQmlContext>
 #include <QQuickStyle>
 #include "CoverImageProvider.h"
 
@@ -9,10 +11,12 @@ int main(int argc, char *argv[])
     
     QCoreApplication::setOrganizationName("MusicPlayer");
     QCoreApplication::setApplicationName("MusicPlayer-");
+    QCoreApplication::setApplicationVersion(QStringLiteral(APP_VERSION));
     
     QQuickStyle::setStyle("Fusion");
     
     QQmlApplicationEngine engine;
+    engine.rootContext()->setContextProperty("AppVersion", QCoreApplication::applicationVersion());
     
     // Register cover image provider
     auto *coverProvider = new CoverImageProvider();

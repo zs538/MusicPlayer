@@ -94,21 +94,44 @@ Item {
     property var _customGroupKeys: []
     property bool _loadingSortSettings: false
     property bool _loadingSubtitleSettings: false
+    property var _selectionByContext: ({})
 
     readonly property alias model: browserModel
     readonly property real _scrollY: gridView.contentY
 
+    function currentSelectedEntryId() {
+        return gridView && gridView.selectedIndex >= 0 ? browserModel.entryIdAt(gridView.selectedIndex) : ""
+    }
+    function contextKey(filter, groupBy) {
+        return JSON.stringify({ filter: filter, groupBy: groupBy })
+    }
+    function rememberSelectionForContext(filter, groupBy, entryId) {
+        const key = contextKey(filter, groupBy)
+        let next = Object.assign({}, _selectionByContext)
+        if (entryId && entryId.length > 0)
+            next[key] = entryId
+        else
+            delete next[key]
+        _selectionByContext = next
+    }
+    function rememberedSelectionForContext(filter, groupBy) {
+        const key = contextKey(filter, groupBy)
+        return _selectionByContext[key] || ""
+    }
     function doNavigate(filter, groupBy) {
-        browserModel.navigate(filter, groupBy, _scrollY)
+        const rememberedEntryId = rememberedSelectionForContext(filter, groupBy)
+        gridView.pendingNavigateSelectionEntryId = rememberedEntryId
+        gridView.selectFirstAfterNavigation = rememberedEntryId.length === 0
+        browserModel.navigate(filter, groupBy, _scrollY, currentSelectedEntryId())
     }
     function doGoBack() {
-        browserModel.goBack(_scrollY)
+        browserModel.goBack(_scrollY, currentSelectedEntryId())
     }
     function doGoForward() {
-        browserModel.goForward(_scrollY)
+        browserModel.goForward(_scrollY, currentSelectedEntryId())
     }
     function jumpToBreadcrumb(index) {
-        browserModel.jumpToBreadcrumb(index, _scrollY)
+        browserModel.jumpToBreadcrumb(index, _scrollY, currentSelectedEntryId())
     }
     function groupLabel(groupBy) {
         return groupBy.indexOf("custom:") === 0 ? "Custom: " + groupBy.slice(7) :
@@ -791,6 +814,10 @@ Item {
             reuseItems: true
             cacheBuffer: 300
             focus: true
+            currentIndex: -1
+            property int selectedIndex: -1
+            property bool selectFirstAfterNavigation: false
+            property string pendingNavigateSelectionEntryId: ""
 
             property int stableCellWidth: Settings.gridCellMinWidth
             property int stableCellHeight: stableCellWidth + 33
@@ -800,6 +827,77 @@ Item {
                 let optimal = Math.floor(width / cols)
                 stableCellWidth = Math.min(optimal, Settings.gridCellMaxWidth)
                 stableCellHeight = stableCellWidth + 33
+            }
+
+            function selectIndex(index) {
+                if (index < 0 || index >= count) {
+                    selectedIndex = -1
+                    currentIndex = -1
+                    root.rememberSelectionForContext(browserModel.filter, browserModel.groupBy, "")
+                    return
+                }
+                selectedIndex = index
+                currentIndex = index
+                forceActiveFocus()
+                positionViewAtIndex(index, GridView.Contain)
+                root.rememberSelectionForContext(browserModel.filter, browserModel.groupBy, browserModel.entryIdAt(index))
+            }
+
+            function activateDelegate(delegateItem, invertOpenAction, selectFirstOnNavigate) {
+                if (!delegateItem)
+                    return
+
+                if (delegateItem.entryType === "group") {
+                    let openAction = Settings.groupTypeOpenAction(delegateItem.groupType)
+                    if (invertOpenAction)
+                        openAction = openAction === "queueTracks" ? "openPanel" : "queueTracks"
+
+                    if (openAction === "queueTracks") {
+                        AppViewModel.browseActivation.addFilteredTracksToViewed(
+                            browserModel.filter, delegateItem.groupType, delegateItem.groupValue)
+                    } else {
+                        selectFirstAfterNavigation = !!selectFirstOnNavigate
+                        let newFilter = browserModel.filter.concat([{field: delegateItem.groupType, op: "=", value: delegateItem.groupValue}])
+                        root.doNavigate(newFilter, Settings.groupTypeNextGroupBy(delegateItem.groupType))
+                    }
+                } else {
+                    AppViewModel.browseActivation.activateCollectionEntry("t:" + delegateItem.filePath)
+                }
+            }
+
+            function activateCurrentSelection(invertOpenAction) {
+                if (selectedIndex < 0 || selectedIndex >= count)
+                    return
+                let item = currentItem
+                if (!item || item.index !== selectedIndex)
+                    item = itemAtIndex(selectedIndex)
+                if (!item)
+                    return
+                activateDelegate(item, invertOpenAction, true)
+            }
+
+            function moveCurrentSelection(moveFn) {
+                if (selectedIndex < 0 || selectedIndex >= count)
+                    return
+                moveFn()
+                if (currentIndex < 0 || currentIndex >= count)
+                    return
+                selectIndex(currentIndex)
+            }
+
+            function shouldPreserveSelectionOnModelChange() {
+                return selectFirstAfterNavigation
+                    || pendingNavigateSelectionEntryId.length > 0
+                    || browserModel.pendingSelectedEntryId.length > 0
+            }
+
+            function finishSelectionPreservation() {
+                Qt.callLater(function() {
+                    if (gridView.selectFirstAfterNavigation)
+                        gridView.selectFirstAfterNavigation = false
+                    if (gridView.pendingNavigateSelectionEntryId.length > 0)
+                        gridView.pendingNavigateSelectionEntryId = ""
+                })
             }
 
             Timer {
@@ -815,6 +913,51 @@ Item {
                 target: Settings
                 function onGridCellMinWidthChanged() { gridView.recalculateCellSize() }
                 function onGridCellMaxWidthChanged() { gridView.recalculateCellSize() }
+            }
+            Connections {
+                target: browserModel
+                function onFilterChanged() {
+                    if (!gridView.shouldPreserveSelectionOnModelChange()) {
+                        gridView.clearSelection()
+                        return
+                    }
+                    gridView.finishSelectionPreservation()
+                }
+                function onGroupByChanged() {
+                    if (!gridView.shouldPreserveSelectionOnModelChange()) {
+                        gridView.clearSelection()
+                        return
+                    }
+                    gridView.finishSelectionPreservation()
+                }
+                function onCountChanged() {
+                    if (gridView.pendingNavigateSelectionEntryId.length > 0) {
+                        const restoreIndex = browserModel.indexOfEntryId(gridView.pendingNavigateSelectionEntryId)
+                        if (restoreIndex >= 0) {
+                            gridView.selectIndex(restoreIndex)
+                            return
+                        }
+                        if (gridView.count > 0) {
+                            gridView.selectIndex(0)
+                            return
+                        }
+                    }
+                    if (gridView.selectFirstAfterNavigation && gridView.count > 0) {
+                        gridView.selectIndex(0)
+                        return
+                    }
+                    if (gridView.selectFirstAfterNavigation)
+                        gridView.selectFirstAfterNavigation = false
+                    if (gridView.selectedIndex >= gridView.count)
+                        gridView.clearSelection()
+                }
+                function onPendingSelectedEntryIdChanged() {
+                    if (!browserModel.pendingSelectedEntryId.length)
+                        return
+                    const restoreIndex = browserModel.indexOfEntryId(browserModel.pendingSelectedEntryId)
+                    if (restoreIndex >= 0)
+                        gridView.selectIndex(restoreIndex)
+                }
             }
 
             cellWidth: stableCellWidth
@@ -852,6 +995,48 @@ Item {
                     contentY = originY
             }
             onVisibleChanged: if (visible) contentY = originY
+            Keys.onLeftPressed: (event) => {
+                if (selectedIndex < 0)
+                    return
+                gridView.moveCurrentSelection(() => gridView.moveCurrentIndexLeft())
+                event.accepted = true
+            }
+            Keys.onRightPressed: (event) => {
+                if (selectedIndex < 0)
+                    return
+                gridView.moveCurrentSelection(() => gridView.moveCurrentIndexRight())
+                event.accepted = true
+            }
+            Keys.onUpPressed: (event) => {
+                if (selectedIndex < 0)
+                    return
+                gridView.moveCurrentSelection(() => gridView.moveCurrentIndexUp())
+                event.accepted = true
+            }
+            Keys.onDownPressed: (event) => {
+                if (selectedIndex < 0)
+                    return
+                gridView.moveCurrentSelection(() => gridView.moveCurrentIndexDown())
+                event.accepted = true
+            }
+            Keys.onReturnPressed: (event) => {
+                if (selectedIndex < 0)
+                    return
+                gridView.activateCurrentSelection((event.modifiers & Qt.ControlModifier) !== 0)
+                event.accepted = true
+            }
+            Keys.onEnterPressed: (event) => {
+                if (selectedIndex < 0)
+                    return
+                gridView.activateCurrentSelection((event.modifiers & Qt.ControlModifier) !== 0)
+                event.accepted = true
+            }
+            Keys.onPressed: (event) => {
+                if (event.key !== Qt.Key_Backspace || !browserModel.canGoBack)
+                    return
+                root.doGoBack()
+                event.accepted = true
+            }
 
             delegate: Item {
                 id: gridDel
@@ -869,15 +1054,11 @@ Item {
                 required property string imagePath
                 required property string filePath
 
-                property bool selected: false
+                readonly property bool selected: gridView.selectedIndex === index
 
-                function select() {
-                    gridView.clearSelection()
-                    selected = true
-                }
-
-                function deselect() {
-                    selected = false
+                function triggerPrimaryAction(invertOpenAction) {
+                    gridView.selectIndex(index)
+                    gridView.activateDelegate(gridDel, invertOpenAction, false)
                 }
 
                 Rectangle {
@@ -1022,25 +1203,12 @@ Item {
                             if (mouse.button === Qt.LeftButton) {
                                 gridView.forceActiveFocus()
                                 if (Settings.collectionSingleClickOpen && gridDel.entryType === "group") {
-                                    // Single click opens group directly
-                                    let openAction = Settings.groupTypeOpenAction(gridDel.groupType)
-                                    if (openAction === "queueTracks") {
-                                        AppViewModel.browseActivation.addFilteredTracksToViewed(
-                                            browserModel.filter, gridDel.groupType, gridDel.groupValue)
-                                    } else {
-                                        let newFilter = browserModel.filter.concat([{field: gridDel.groupType, op: "=", value: gridDel.groupValue}])
-                                        root.doNavigate(newFilter, Settings.groupTypeNextGroupBy(gridDel.groupType))
-                                    }
+                                    gridDel.triggerPrimaryAction(false)
                                 } else {
-                                    // Normal selection behavior
-                                    if (gridDel.selected) {
-                                        gridDel.deselect()
-                                    } else {
-                                        gridDel.select()
-                                    }
+                                    gridView.selectIndex(gridDel.index)
                                 }
                             } else if (mouse.button === Qt.RightButton) {
-                                gridDel.select()
+                                gridView.selectIndex(gridDel.index)
                                 root._openContextMenu(gridDel.entryType, gridDel.groupType, gridDel.groupValue, gridDel.filePath)
                             } else if (mouse.button === Qt.MiddleButton) {
                                 if (gridDel.entryType === "group") {
@@ -1053,18 +1221,7 @@ Item {
                         }
 
                         onDoubleClicked: {
-                            if (gridDel.entryType === "group") {
-                                let openAction = Settings.groupTypeOpenAction(gridDel.groupType)
-                                if (openAction === "queueTracks") {
-                                    AppViewModel.browseActivation.addFilteredTracksToViewed(
-                                        browserModel.filter, gridDel.groupType, gridDel.groupValue)
-                                } else {
-                                    let newFilter = browserModel.filter.concat([{field: gridDel.groupType, op: "=", value: gridDel.groupValue}])
-                                    root.doNavigate(newFilter, Settings.groupTypeNextGroupBy(gridDel.groupType))
-                                }
-                            } else {
-                                AppViewModel.browseActivation.activateCollectionEntry("t:" + gridDel.filePath)
-                            }
+                            gridDel.triggerPrimaryAction(false)
                         }
                     }
 
@@ -1072,7 +1229,7 @@ Item {
                     // Positioned over cover container, outside MouseArea to capture clicks
                     Rectangle {
                         id: playButton
-                        visible: gridDel.selected && gridDel.entryType === "group" && Settings.collectionPlayButtonEnabled && !Settings.collectionSingleClickOpen
+                        visible: gridDel.selected && gridDel.entryType === "group" && Settings.generatedPlaylistsEnabled && Settings.collectionPlayButtonEnabled && !Settings.collectionSingleClickOpen
                         x: parent.width - 24
                         y: 4 + coverContainer.height - 20
                         width: 20
@@ -1106,11 +1263,9 @@ Item {
             }
 
             function clearSelection() {
-                for (let i = 0; i < count; i++) {
-                    let item = itemAtIndex(i)
-                    if (item && item.selected)
-                        item.selected = false
-                }
+                selectedIndex = -1
+                currentIndex = -1
+                root.rememberSelectionForContext(browserModel.filter, browserModel.groupBy, "")
             }
 
             Keys.onEscapePressed: {
