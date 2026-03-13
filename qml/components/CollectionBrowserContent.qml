@@ -287,6 +287,7 @@ Item {
             focus: true
             currentIndex: -1
             property int selectedIndex: -1
+            property bool selectionActive: true
             property bool selectFirstAfterNavigation: false
             property string pendingNavigateSelectionEntryId: ""
 
@@ -304,14 +305,23 @@ Item {
                 if (index < 0 || index >= count) {
                     selectedIndex = -1
                     currentIndex = -1
+                    selectionActive = false
                     root.rememberSelectionForContext(browserModel.filter, browserModel.groupBy, "")
                     return
                 }
                 selectedIndex = index
                 currentIndex = index
+                selectionActive = true
                 forceActiveFocus()
                 positionViewAtIndex(index, GridView.Contain)
                 root.rememberSelectionForContext(browserModel.filter, browserModel.groupBy, browserModel.entryIdAt(index))
+            }
+
+            function hideSelection() {
+                if (selectedIndex < 0 || selectedIndex >= count)
+                    return
+                selectionActive = false
+                forceActiveFocus()
             }
 
             function activateDelegate(delegateItem, invertOpenAction, selectFirstOnNavigate) {
@@ -337,7 +347,7 @@ Item {
             }
 
             function activateCurrentSelection(invertOpenAction) {
-                if (selectedIndex < 0 || selectedIndex >= count)
+                if (!selectionActive || selectedIndex < 0 || selectedIndex >= count)
                     return
                 let item = currentItem
                 if (!item || item.index !== selectedIndex)
@@ -378,7 +388,13 @@ Item {
             }
 
             onWidthChanged: resizeDebounce.restart()
-            Component.onCompleted: recalculateCellSize()
+            Component.onCompleted: {
+                recalculateCellSize()
+                if (count > 0 && selectedIndex < 0) {
+                    selectIndex(0)
+                    hideSelection()
+                }
+            }
 
             Connections {
                 target: Settings
@@ -417,6 +433,11 @@ Item {
                         gridView.selectIndex(0)
                         return
                     }
+                    if (gridView.selectedIndex < 0 && gridView.count > 0) {
+                        gridView.selectIndex(0)
+                        gridView.hideSelection()
+                        return
+                    }
                     if (gridView.selectFirstAfterNavigation)
                         gridView.selectFirstAfterNavigation = false
                     if (gridView.selectedIndex >= gridView.count)
@@ -445,7 +466,7 @@ Item {
                     if (gridView.indexAt(contentPosition.x, contentPosition.y) !== -1)
                         return
                     gridView.forceActiveFocus()
-                    gridView.clearSelection()
+                    gridView.hideSelection()
                     if (button === Qt.RightButton)
                         gridBackgroundContextMenu.popup()
                 }
@@ -512,7 +533,7 @@ Item {
             delegate: CollectionTileDelegate {
                 width: gridView.stableCellWidth
                 height: gridView.stableCellHeight
-                selected: gridView.selectedIndex === index
+                selected: gridView.selectionActive && gridView.selectedIndex === index
                 playButtonVisible: selected && entryType === "group" && Settings.generatedPlaylistsEnabled && Settings.collectionPlayButtonEnabled && !Settings.collectionSingleClickOpen
 
                 onClicked: (idx, button) => {
@@ -521,6 +542,10 @@ Item {
                         if (Settings.collectionSingleClickOpen && entryType === "group") {
                             gridView.selectIndex(idx)
                             gridView.activateDelegate(gridView.itemAtIndex(idx), false, false)
+                        } else if (!gridView.selectionActive) {
+                            gridView.selectIndex(idx)
+                        } else if (gridView.selectedIndex === idx) {
+                            gridView.hideSelection()
                         } else {
                             gridView.selectIndex(idx)
                         }
@@ -550,11 +575,12 @@ Item {
             function clearSelection() {
                 selectedIndex = -1
                 currentIndex = -1
+                selectionActive = false
                 root.rememberSelectionForContext(browserModel.filter, browserModel.groupBy, "")
             }
 
             Keys.onEscapePressed: {
-                clearSelection()
+                hideSelection()
             }
         }
     }
