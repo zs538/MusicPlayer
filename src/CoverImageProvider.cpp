@@ -77,6 +77,11 @@ QQuickImageResponse *CoverImageProvider::requestImageResponse(const QString &id,
     return response;
 }
 
+bool CoverImageProvider::cancelQueuedResponse(CoverImageResponse *response)
+{
+    return response && m_threadPool.tryTake(response);
+}
+
 QImage CoverImageProvider::getCached(const QString &key)
 {
     QMutexLocker locker(&s_cacheMutex);
@@ -204,6 +209,15 @@ static QImage imageFromData(const char *data, unsigned int size)
     QImage img;
     img.loadFromData(reinterpret_cast<const uchar*>(data), size);
     return img;
+}
+
+static QImage makeTransparentPlaceholder(const QSize &requestedSize)
+{
+    const int w = requestedSize.width() > 0 ? requestedSize.width() : 96;
+    const int h = requestedSize.height() > 0 ? requestedSize.height() : 96;
+    QImage image(w, h, QImage::Format_ARGB32);
+    image.fill(Qt::transparent);
+    return image;
 }
 
 QImage CoverImageProvider::loadEmbeddedCover(const QString &filePath)
@@ -334,9 +348,32 @@ QQuickTextureFactory *CoverImageResponse::textureFactory() const
     return QQuickTextureFactory::textureFactoryForImage(m_image);
 }
 
+void CoverImageResponse::cancel()
+{
+    m_canceled.store(true, std::memory_order_relaxed);
+
+    CoverImageProvider *provider = CoverImageProvider::instance();
+    if (provider && provider->cancelQueuedResponse(this))
+        finishWithImage(makeTransparentPlaceholder(m_requestedSize));
+}
+
+void CoverImageResponse::finishWithImage(const QImage &image)
+{
+    if (m_finished.exchange(true, std::memory_order_acq_rel))
+        return;
+
+    m_image = image;
+    emit finished();
+}
+
 void CoverImageResponse::run()
 {
     try {
+        if (m_canceled.load(std::memory_order_relaxed)) {
+            finishWithImage(makeTransparentPlaceholder(m_requestedSize));
+            return;
+        }
+
         // Build cache key including size
         QString cacheKey = m_id;
         if (m_requestedSize.isValid() && m_requestedSize.width() > 0) {
@@ -346,7 +383,7 @@ void CoverImageResponse::run()
         // Check cache first
         m_image = CoverImageProvider::getCached(cacheKey);
         if (!m_image.isNull()) {
-            emit finished();
+            finishWithImage(m_image);
             return;
         }
 
@@ -354,6 +391,9 @@ void CoverImageResponse::run()
 
         // Load the image (runs on worker thread, not blocking render)
         for (const QString &filePath : filePaths) {
+            if (m_canceled.load(std::memory_order_relaxed))
+                break;
+
             if (filePath.isEmpty() || !QFileInfo::exists(filePath))
                 continue;
 
@@ -367,20 +407,27 @@ void CoverImageResponse::run()
             if (!m_image.isNull())
                 break;
         }
-        
+
+        if (m_canceled.load(std::memory_order_relaxed)) {
+            finishWithImage(makeTransparentPlaceholder(m_requestedSize));
+            return;
+        }
+
         // Create placeholder if no image found
         if (m_image.isNull()) {
-            int w = m_requestedSize.width() > 0 ? m_requestedSize.width() : 96;
-            int h = m_requestedSize.height() > 0 ? m_requestedSize.height() : 96;
-            m_image = QImage(w, h, QImage::Format_ARGB32);
-            m_image.fill(Qt::transparent);
+            m_image = makeTransparentPlaceholder(m_requestedSize);
         } else {
             // Scale if needed - use SmoothTransformation for quality
             if (m_requestedSize.isValid() && m_requestedSize.width() > 0 && m_requestedSize.height() > 0) {
                 m_image = m_image.scaled(m_requestedSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
             }
         }
-        
+
+        if (m_canceled.load(std::memory_order_relaxed)) {
+            finishWithImage(makeTransparentPlaceholder(m_requestedSize));
+            return;
+        }
+
         // Cache the result
         if (!cacheKey.isEmpty()) {
             CoverImageProvider::putCached(cacheKey, m_image);
@@ -388,11 +435,8 @@ void CoverImageResponse::run()
     } catch (...) {
         // Catch any exceptions from TagLib or image processing
         qWarning() << "CoverImageResponse: Exception loading cover for" << m_id;
-        int w = m_requestedSize.width() > 0 ? m_requestedSize.width() : 96;
-        int h = m_requestedSize.height() > 0 ? m_requestedSize.height() : 96;
-        m_image = QImage(w, h, QImage::Format_ARGB32);
-        m_image.fill(Qt::transparent);
+        m_image = makeTransparentPlaceholder(m_requestedSize);
     }
-    
-    emit finished();
+
+    finishWithImage(m_image);
 }

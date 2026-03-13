@@ -8,6 +8,9 @@
 #include <QThreadPool>
 #include <QRunnable>
 #include <QStringList>
+#include <atomic>
+
+class CoverImageResponse;
 
 /**
  * @brief Async QQuickImageProvider for cover art images.
@@ -47,6 +50,7 @@ public:
     static QImage getOriginalCached(const QString &key);
     static void putOriginalCached(const QString &key, const QImage &image);
     static void clearCache();
+    bool cancelQueuedResponse(CoverImageResponse *response);
 
 private:
     QThreadPool m_threadPool;
@@ -69,12 +73,17 @@ class CoverImageResponse : public QQuickImageResponse, public QRunnable
 public:
     CoverImageResponse(const QString &id, const QSize &requestedSize);
     QQuickTextureFactory *textureFactory() const override;
+    void cancel() override;
     void run() override;
 
 private:
+    void finishWithImage(const QImage &image);
+
     QString m_id;
     QSize m_requestedSize;
     QImage m_image;
+    std::atomic_bool m_canceled{false};
+    std::atomic_bool m_finished{false};
 };
 
 #endif // COVERIMAGEPROVIDER_H
