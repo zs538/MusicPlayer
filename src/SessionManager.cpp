@@ -1,7 +1,6 @@
 #include "SessionManager.h"
 #include "PlaylistStore.h"
 #include "TrackListModel.h"
-#include "Settings.h"
 #include <QStandardPaths>
 #include <QDir>
 #include <QFile>
@@ -448,7 +447,6 @@ bool SessionManager::deserializePlaylists(const QJsonArray &arr)
     for (const QJsonValue &val : arr) {
         QJsonObject playlist = val.toObject();
         QString name = playlist["name"].toString();
-        QString savedUuid = playlist["uuid"].toString();
         // Default to true for backward compatibility with old sessions
         bool isUserCreated = playlist["isUserCreated"].toBool(true);
         

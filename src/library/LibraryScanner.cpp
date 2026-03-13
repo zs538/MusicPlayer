@@ -158,10 +158,6 @@ void LibraryScanner::doScan(const QStringList &paths, bool detectDeletions, bool
         upsertQuery.prepare(upsertSql);
         QSqlQuery idQuery(db);
         idQuery.prepare("SELECT id FROM tracks WHERE file_path = :file_path");
-        QSqlQuery deleteAttributesQuery(db);
-        deleteAttributesQuery.prepare("DELETE FROM track_attributes WHERE track_id = :track_id");
-        QSqlQuery insertAttributeQuery(db);
-        insertAttributeQuery.prepare("INSERT INTO track_attributes (track_id, key, value) VALUES (:track_id, :key, :value)");
         
         // Wrap in transaction for much better performance
         db.transaction();
@@ -182,20 +178,10 @@ void LibraryScanner::doScan(const QStringList &paths, bool detectDeletions, bool
                     idQuery.bindValue(":file_path", track.filePath);
                     if (idQuery.exec() && idQuery.next()) {
                         const qint64 trackId = idQuery.value(0).toLongLong();
-                        deleteAttributesQuery.bindValue(":track_id", trackId);
-                        if (!deleteAttributesQuery.exec()) {
-                            qWarning() << "Scanner: Failed to clear track attributes:" << deleteAttributesQuery.lastError().text();
-                        } else {
-                            const QVector<QPair<QString, QString>> attributes = LibrarySparseAttributes::sparseAttributesForTrack(track);
-                            for (const auto &attribute : attributes) {
-                                insertAttributeQuery.bindValue(":track_id", trackId);
-                                insertAttributeQuery.bindValue(":key", attribute.first);
-                                insertAttributeQuery.bindValue(":value", attribute.second);
-                                if (!insertAttributeQuery.exec()) {
-                                    qWarning() << "Scanner: Failed to insert track attribute:" << insertAttributeQuery.lastError().text();
-                                    break;
-                                }
-                            }
+                        const QVector<QPair<QString, QString>> attributes = LibrarySparseAttributes::sparseAttributesForTrack(track);
+                        if (!LibrarySparseAttributes::replaceTrackAttributes(db, trackId, attributes,
+                                                                            "Scanner: Failed to replace track attributes:")) {
+                            qWarning() << "Scanner: Failed to replace sparse attributes for" << track.filePath;
                         }
                     } else {
                         qWarning() << "Scanner: Failed to resolve track id after insert:" << idQuery.lastError().text();

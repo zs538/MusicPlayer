@@ -37,7 +37,6 @@ class AppViewModel : public QObject
     Q_PROPERTY(int libraryScanProgress READ libraryScanProgress NOTIFY libraryScanProgressChanged)
     Q_PROPERTY(QStringList watchFolders READ watchFolders NOTIFY libraryFoldersChanged)
     Q_PROPERTY(int libraryTrackCount READ libraryTrackCount NOTIFY libraryTrackCountChanged)
-    Q_PROPERTY(qint64 lastScanTime READ lastScanTime NOTIFY lastScanTimeChanged)
     Q_PROPERTY(QString nowPlayingCoverUrl READ nowPlayingCoverUrl NOTIFY nowPlayingChanged)
     Q_PROPERTY(BrowseActivationService* browseActivation READ browseActivation CONSTANT)
     Q_PROPERTY(LibraryDatabase* libraryDatabase READ libraryDatabase CONSTANT)
@@ -73,7 +72,6 @@ public:
     int libraryScanProgress() const;
     QStringList watchFolders() const;
     int libraryTrackCount() const;
-    qint64 lastScanTime() const;
     BrowseActivationService *browseActivation() const;
     LibraryDatabase *libraryDatabase() const;
     
@@ -117,12 +115,9 @@ signals:
     void displayedPlaylistModelChanged();
     void libraryFoldersChanged();
     void libraryTrackCountChanged();
-    void lastScanTimeChanged();
 
 
 private:
-    void setPlaybackState(PlaybackState state);
-    void setError(const QString &text);
     void clearError();
     void updateNowPlaying(const TrackInfo &track);
     void refreshPlaylistMetadataFromLibrary();

@@ -103,6 +103,21 @@ QString joinSubtitleParts(const QStringList &parts)
     return filteredParts.join(QStringLiteral(" - "));
 }
 
+QVariantMap optionItem(const QString &text, const QString &key)
+{
+    return {
+        {QStringLiteral("text"), text},
+        {QStringLiteral("key"), key},
+    };
+}
+
+QVariantMap categorizedOptionItem(const QString &text, const QString &key, const QString &category)
+{
+    QVariantMap option = optionItem(text, key);
+    option.insert(QStringLiteral("category"), category);
+    return option;
+}
+
 } // anonymous namespace
 
 namespace CollectionBrowseHelper {
@@ -319,16 +334,6 @@ QString breadcrumbLabelForFilter(const TrackFilter &filter)
 
     const FilterCondition &cond = filter.constLast();
     return formatGroupDisplay(cond.field, cond.value);
-}
-
-QStringList defaultTrackSortKeys(const QString &groupType)
-{
-    const QString normalizedGroupType = groupType.trimmed();
-    if (normalizedGroupType == QStringLiteral("artist") || normalizedGroupType == QStringLiteral("albumartist"))
-        return { QStringLiteral("trackNumber"), QStringLiteral("album") };
-    if (normalizedGroupType == QStringLiteral("album"))
-        return { QStringLiteral("trackNumber") };
-    return { QStringLiteral("title") };
 }
 
 int compareTrackMapsByKey(const QVariantMap &left, const QVariantMap &right, const QString &key)
@@ -597,19 +602,19 @@ QVariantList sortOptions(const QString &groupBy)
 {
     if (groupBy == QStringLiteral("none")) {
         return {
-            QVariantMap{{QStringLiteral("text"), QStringLiteral("Name")},       {QStringLiteral("key"), QStringLiteral("name")}},
-            QVariantMap{{QStringLiteral("text"), QStringLiteral("Track Number")},{QStringLiteral("key"), QStringLiteral("trackNumber")}},
-            QVariantMap{{QStringLiteral("text"), QStringLiteral("Year")},        {QStringLiteral("key"), QStringLiteral("year")}},
-            QVariantMap{{QStringLiteral("text"), QStringLiteral("Duration")},    {QStringLiteral("key"), QStringLiteral("duration")}},
-            QVariantMap{{QStringLiteral("text"), QStringLiteral("Date Updated")},{QStringLiteral("key"), QStringLiteral("dateUpdated")}},
+            optionItem(QStringLiteral("Name"), QStringLiteral("name")),
+            optionItem(QStringLiteral("Track Number"), QStringLiteral("trackNumber")),
+            optionItem(QStringLiteral("Year"), QStringLiteral("year")),
+            optionItem(QStringLiteral("Duration"), QStringLiteral("duration")),
+            optionItem(QStringLiteral("Date Updated"), QStringLiteral("dateUpdated")),
         };
     }
     return {
-        QVariantMap{{QStringLiteral("text"), QStringLiteral("Name")},       {QStringLiteral("key"), QStringLiteral("name")}},
-        QVariantMap{{QStringLiteral("text"), QStringLiteral("Year")},        {QStringLiteral("key"), QStringLiteral("year")}},
-        QVariantMap{{QStringLiteral("text"), QStringLiteral("Duration")},    {QStringLiteral("key"), QStringLiteral("duration")}},
-        QVariantMap{{QStringLiteral("text"), QStringLiteral("Track Count")}, {QStringLiteral("key"), QStringLiteral("count")}},
-        QVariantMap{{QStringLiteral("text"), QStringLiteral("Date Updated")},{QStringLiteral("key"), QStringLiteral("dateUpdated")}},
+        optionItem(QStringLiteral("Name"), QStringLiteral("name")),
+        optionItem(QStringLiteral("Year"), QStringLiteral("year")),
+        optionItem(QStringLiteral("Duration"), QStringLiteral("duration")),
+        optionItem(QStringLiteral("Track Count"), QStringLiteral("count")),
+        optionItem(QStringLiteral("Date Updated"), QStringLiteral("dateUpdated")),
     };
 }
 
@@ -617,61 +622,56 @@ QVariantList subtitleOptions(const QString &groupBy)
 {
     if (groupBy == QStringLiteral("none")) {
         return {
-            QVariantMap{{QStringLiteral("text"), QStringLiteral("Track")},              {QStringLiteral("key"), QStringLiteral("trackNumber")}},
-            QVariantMap{{QStringLiteral("text"), QStringLiteral("Duration")},            {QStringLiteral("key"), QStringLiteral("duration")}},
-            QVariantMap{{QStringLiteral("text"), QStringLiteral("Track - Duration")},    {QStringLiteral("key"), QStringLiteral("trackNumberDuration")}},
-            QVariantMap{{QStringLiteral("text"), QStringLiteral("Year")},                {QStringLiteral("key"), QStringLiteral("year")}},
-            QVariantMap{{QStringLiteral("text"), QStringLiteral("Date Updated")},        {QStringLiteral("key"), QStringLiteral("dateUpdated")}},
-            QVariantMap{{QStringLiteral("text"), QStringLiteral("Artist")},              {QStringLiteral("key"), QStringLiteral("artist")}},
-            QVariantMap{{QStringLiteral("text"), QStringLiteral("Album Artist")},        {QStringLiteral("key"), QStringLiteral("albumArtist")}},
-            QVariantMap{{QStringLiteral("text"), QStringLiteral("Album")},               {QStringLiteral("key"), QStringLiteral("album")}},
-            QVariantMap{{QStringLiteral("text"), QStringLiteral("Track - Album")},       {QStringLiteral("key"), QStringLiteral("trackNumberAlbum")}},
-            QVariantMap{{QStringLiteral("text"), QStringLiteral("Artist - Album")},      {QStringLiteral("key"), QStringLiteral("artistAlbum")}},
-            QVariantMap{{QStringLiteral("text"), QStringLiteral("Album Artist - Album")},{QStringLiteral("key"), QStringLiteral("albumArtistAlbum")}},
-            QVariantMap{{QStringLiteral("text"), QStringLiteral("File Type")},           {QStringLiteral("key"), QStringLiteral("fileType")}},
-            QVariantMap{{QStringLiteral("text"), QStringLiteral("Bitrate")},             {QStringLiteral("key"), QStringLiteral("bitrate")}},
+            optionItem(QStringLiteral("Track"), QStringLiteral("trackNumber")),
+            optionItem(QStringLiteral("Duration"), QStringLiteral("duration")),
+            optionItem(QStringLiteral("Track - Duration"), QStringLiteral("trackNumberDuration")),
+            optionItem(QStringLiteral("Year"), QStringLiteral("year")),
+            optionItem(QStringLiteral("Date Updated"), QStringLiteral("dateUpdated")),
+            optionItem(QStringLiteral("Artist"), QStringLiteral("artist")),
+            optionItem(QStringLiteral("Album Artist"), QStringLiteral("albumArtist")),
+            optionItem(QStringLiteral("Album"), QStringLiteral("album")),
+            optionItem(QStringLiteral("Track - Album"), QStringLiteral("trackNumberAlbum")),
+            optionItem(QStringLiteral("Artist - Album"), QStringLiteral("artistAlbum")),
+            optionItem(QStringLiteral("Album Artist - Album"), QStringLiteral("albumArtistAlbum")),
+            optionItem(QStringLiteral("File Type"), QStringLiteral("fileType")),
+            optionItem(QStringLiteral("Bitrate"), QStringLiteral("bitrate")),
         };
     }
     return {
-        QVariantMap{{QStringLiteral("text"), QStringLiteral("Track Count")},            {QStringLiteral("key"), QStringLiteral("count")}},
-        QVariantMap{{QStringLiteral("text"), QStringLiteral("Duration")},                {QStringLiteral("key"), QStringLiteral("duration")}},
-        QVariantMap{{QStringLiteral("text"), QStringLiteral("Tracks - Duration")},       {QStringLiteral("key"), QStringLiteral("countDuration")}},
-        QVariantMap{{QStringLiteral("text"), QStringLiteral("Album Artist")},            {QStringLiteral("key"), QStringLiteral("albumArtist")}},
-        QVariantMap{{QStringLiteral("text"), QStringLiteral("Album Artist - Year")},     {QStringLiteral("key"), QStringLiteral("albumArtistYear")}},
-        QVariantMap{{QStringLiteral("text"), QStringLiteral("Album Artist - Tracks")},   {QStringLiteral("key"), QStringLiteral("albumArtistCount")}},
-        QVariantMap{{QStringLiteral("text"), QStringLiteral("Year - Album Artist")},     {QStringLiteral("key"), QStringLiteral("yearAlbumArtist")}},
-        QVariantMap{{QStringLiteral("text"), QStringLiteral("Year")},                    {QStringLiteral("key"), QStringLiteral("year")}},
-        QVariantMap{{QStringLiteral("text"), QStringLiteral("Year - Tracks")},           {QStringLiteral("key"), QStringLiteral("yearCount")}},
-        QVariantMap{{QStringLiteral("text"), QStringLiteral("Date Updated")},            {QStringLiteral("key"), QStringLiteral("dateUpdated")}},
+        optionItem(QStringLiteral("Track Count"), QStringLiteral("count")),
+        optionItem(QStringLiteral("Duration"), QStringLiteral("duration")),
+        optionItem(QStringLiteral("Tracks - Duration"), QStringLiteral("countDuration")),
+        optionItem(QStringLiteral("Album Artist"), QStringLiteral("albumArtist")),
+        optionItem(QStringLiteral("Album Artist - Year"), QStringLiteral("albumArtistYear")),
+        optionItem(QStringLiteral("Album Artist - Tracks"), QStringLiteral("albumArtistCount")),
+        optionItem(QStringLiteral("Year - Album Artist"), QStringLiteral("yearAlbumArtist")),
+        optionItem(QStringLiteral("Year"), QStringLiteral("year")),
+        optionItem(QStringLiteral("Year - Tracks"), QStringLiteral("yearCount")),
+        optionItem(QStringLiteral("Date Updated"), QStringLiteral("dateUpdated")),
     };
 }
 
 QVariantList groupByOptions(const QStringList &customTagKeys)
 {
     QVariantList options = {
-        QVariantMap{{QStringLiteral("text"), QStringLiteral("Artist")},        {QStringLiteral("key"), QStringLiteral("artist")},       {QStringLiteral("category"), QStringLiteral("main")}},
-        QVariantMap{{QStringLiteral("text"), QStringLiteral("Album Artist")},  {QStringLiteral("key"), QStringLiteral("albumartist")},  {QStringLiteral("category"), QStringLiteral("main")}},
-        QVariantMap{{QStringLiteral("text"), QStringLiteral("Album")},         {QStringLiteral("key"), QStringLiteral("album")},        {QStringLiteral("category"), QStringLiteral("main")}},
-        QVariantMap{{QStringLiteral("text"), QStringLiteral("Genre")},         {QStringLiteral("key"), QStringLiteral("genre")},        {QStringLiteral("category"), QStringLiteral("main")}},
-        QVariantMap{{QStringLiteral("text"), QStringLiteral("Year")},          {QStringLiteral("key"), QStringLiteral("year")},         {QStringLiteral("category"), QStringLiteral("main")}},
-        QVariantMap{{QStringLiteral("text"), QStringLiteral("None (Tracks)")}, {QStringLiteral("key"), QStringLiteral("none")},         {QStringLiteral("category"), QStringLiteral("main")}},
-        QVariantMap{{QStringLiteral("text"), QStringLiteral("Disc")},          {QStringLiteral("key"), QStringLiteral("disc")},         {QStringLiteral("category"), QStringLiteral("other")}},
-        QVariantMap{{QStringLiteral("text"), QStringLiteral("Performer")},     {QStringLiteral("key"), QStringLiteral("performer")},    {QStringLiteral("category"), QStringLiteral("other")}},
-        QVariantMap{{QStringLiteral("text"), QStringLiteral("Composer")},      {QStringLiteral("key"), QStringLiteral("composer")},     {QStringLiteral("category"), QStringLiteral("other")}},
-        QVariantMap{{QStringLiteral("text"), QStringLiteral("Original Year")}, {QStringLiteral("key"), QStringLiteral("originalyear")}, {QStringLiteral("category"), QStringLiteral("other")}},
-        QVariantMap{{QStringLiteral("text"), QStringLiteral("BPM")},           {QStringLiteral("key"), QStringLiteral("bpm")},          {QStringLiteral("category"), QStringLiteral("other")}},
-        QVariantMap{{QStringLiteral("text"), QStringLiteral("Initial Key")},   {QStringLiteral("key"), QStringLiteral("initialkey")},   {QStringLiteral("category"), QStringLiteral("other")}},
-        QVariantMap{{QStringLiteral("text"), QStringLiteral("Bitrate")},       {QStringLiteral("key"), QStringLiteral("bitrate")},      {QStringLiteral("category"), QStringLiteral("other")}},
-        QVariantMap{{QStringLiteral("text"), QStringLiteral("File Type")},     {QStringLiteral("key"), QStringLiteral("filetype")},     {QStringLiteral("category"), QStringLiteral("other")}},
+        categorizedOptionItem(QStringLiteral("Artist"), QStringLiteral("artist"), QStringLiteral("main")),
+        categorizedOptionItem(QStringLiteral("Album Artist"), QStringLiteral("albumartist"), QStringLiteral("main")),
+        categorizedOptionItem(QStringLiteral("Album"), QStringLiteral("album"), QStringLiteral("main")),
+        categorizedOptionItem(QStringLiteral("Genre"), QStringLiteral("genre"), QStringLiteral("main")),
+        categorizedOptionItem(QStringLiteral("Year"), QStringLiteral("year"), QStringLiteral("main")),
+        categorizedOptionItem(QStringLiteral("None (Tracks)"), QStringLiteral("none"), QStringLiteral("main")),
+        categorizedOptionItem(QStringLiteral("Disc"), QStringLiteral("disc"), QStringLiteral("other")),
+        categorizedOptionItem(QStringLiteral("Performer"), QStringLiteral("performer"), QStringLiteral("other")),
+        categorizedOptionItem(QStringLiteral("Composer"), QStringLiteral("composer"), QStringLiteral("other")),
+        categorizedOptionItem(QStringLiteral("Original Year"), QStringLiteral("originalyear"), QStringLiteral("other")),
+        categorizedOptionItem(QStringLiteral("BPM"), QStringLiteral("bpm"), QStringLiteral("other")),
+        categorizedOptionItem(QStringLiteral("Initial Key"), QStringLiteral("initialkey"), QStringLiteral("other")),
+        categorizedOptionItem(QStringLiteral("Bitrate"), QStringLiteral("bitrate"), QStringLiteral("other")),
+        categorizedOptionItem(QStringLiteral("File Type"), QStringLiteral("filetype"), QStringLiteral("other")),
     };
 
-    for (const QString &tag : customTagKeys) {
-        options.append(QVariantMap{
-            {QStringLiteral("text"), tag},
-            {QStringLiteral("key"), QStringLiteral("custom:") + tag},
-            {QStringLiteral("category"), QStringLiteral("custom")},
-        });
-    }
+    for (const QString &tag : customTagKeys)
+        options.append(categorizedOptionItem(tag, QStringLiteral("custom:") + tag, QStringLiteral("custom")));
 
     return options;
 }

@@ -50,19 +50,7 @@ public:
         CoverFilePathsRole,
         ImagePathRole,
         FilePathRole,
-        TitleRole,
-        ArtistRole,
-        AlbumRole,
-        AlbumArtistRole,
-        TrackNumberRole,
-        DiscNumberRole,
-        DurationMsRole,
-        GenreRole,
-        YearRole,
-        BitrateRole,
-        FileTypeRole,
-        TrackDataRole,
-        TotalDurationMsRole
+        TrackDataRole
     };
 
     explicit CollectionBrowseModel(QObject *parent = nullptr);
@@ -95,7 +83,6 @@ public:
     int count() const { return m_entries.size(); }
     QString title() const { return m_title; }
 
-    Q_INVOKABLE void setTrackListSort(const QString &sortKey, bool ascending = true);
     Q_INVOKABLE QStringList displayedFilePaths() const;
     Q_INVOKABLE QString entryIdAt(int row) const;
     Q_INVOKABLE int indexOfEntryId(const QString &entryId) const;
@@ -179,8 +166,6 @@ private:
     QString m_sortBy = "name";  // "name", "year", "duration", "count", "dateUpdated"
     bool m_sortAscending = true;
     QString m_subtitleKey = "count";
-    QString m_trackListSortKey;
-    bool m_trackListSortAscending = true;
     QString m_searchFilter;
     QString m_title;
     QVector<Entry> m_entries;     // The flat displayed list

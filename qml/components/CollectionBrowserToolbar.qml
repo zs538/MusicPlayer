@@ -21,14 +21,6 @@ Rectangle {
     // Toolbar needs to expose the search field so the host can wire focus-loss logic
     readonly property alias searchField: searchField
 
-    function sortOptions() {
-        return root.browserModel ? root.browserModel.sortOptions() : []
-    }
-
-    function subtitleOptions() {
-        return root.browserModel ? root.browserModel.subtitleOptions() : []
-    }
-
     component TopStripIconButton: Item {
         id: control
 
@@ -239,7 +231,7 @@ Rectangle {
                 id: sortMenu
 
                 Instantiator {
-                    model: root.sortOptions()
+                    model: root.browserModel ? root.browserModel.sortOptions() : []
 
                     delegate: MenuItem {
                         required property var modelData
@@ -389,7 +381,7 @@ Rectangle {
                     title: "Subtitle"
 
                     Instantiator {
-                        model: root.subtitleOptions()
+                        model: root.browserModel ? root.browserModel.subtitleOptions() : []
 
                         delegate: MenuItem {
                             required property var modelData

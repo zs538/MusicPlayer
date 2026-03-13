@@ -45,6 +45,15 @@ TrackFilter BrowseActivationService::buildGroupFilter(const QVariantList &filter
     return trackFilter;
 }
 
+QVector<LibraryTrack> BrowseActivationService::filteredTracks(const QVariantList &filter,
+                                                              const QString &groupType,
+                                                              const QVariant &groupValue) const
+{
+    if (!m_libraryDb)
+        return {};
+    return m_libraryDb->tracksMatchingFilter(buildGroupFilter(filter, groupType, groupValue));
+}
+
 TrackInfo BrowseActivationService::resolveTrack(const QString &filePath) const
 {
     if (m_libraryDb) {
@@ -72,19 +81,38 @@ QString BrowseActivationService::generatePlaylistName(const QString &groupType,
     return name;
 }
 
-void BrowseActivationService::populateModel(TrackListModel *model,
-                                             const QVector<LibraryTrack> &tracks,
-                                             const QString &playlistId)
+int BrowseActivationService::populateModel(TrackListModel *model,
+                                           const QVector<LibraryTrack> &tracks,
+                                           const QString &playlistId,
+                                           const QString &startFilePath,
+                                           int insertPos)
 {
+    if (!model)
+        return -1;
+
+    const bool appendMode = insertPos < 0;
+    const int baseRow = appendMode ? model->count() : qBound(0, insertPos, model->count());
     const bool suppress = !playlistId.isEmpty() && model->count() == 0;
     if (suppress)
         m_store->setGeneratedPlaylistDirtyTrackingSuppressed(playlistId, true);
 
-    for (const LibraryTrack &track : tracks)
-        model->addTrack(MetadataExtractor::toTrackInfo(track));
+    int row = baseRow;
+    int playRow = baseRow;
+    for (const LibraryTrack &track : tracks) {
+        const TrackInfo info = MetadataExtractor::toTrackInfo(track);
+        if (appendMode)
+            model->addTrack(info);
+        else
+            model->insertTrack(row, info);
+        if (!startFilePath.isEmpty() && track.filePath == startFilePath)
+            playRow = row;
+        ++row;
+    }
 
     if (suppress)
         m_store->setGeneratedPlaylistDirtyTrackingSuppressed(playlistId, false);
+
+    return playRow;
 }
 
 QString BrowseActivationService::entryIdToFilePath(const QString &entryId)
@@ -130,10 +158,7 @@ void BrowseActivationService::dropUrlsToViewed(const QList<QUrl> &urls)
             model->addTrack(track);
     }
     
-    if (shouldAutoplay() && m_app) {
-        router()->setActiveToViewed();
-        m_app->playIndex(startRow);
-    }
+    autoplayViewedAt(startRow);
 }
 
 void BrowseActivationService::applyTracksToPlaylist(const QStringList &filePaths, int startRow)
@@ -145,8 +170,7 @@ void BrowseActivationService::applyTracksToPlaylist(const QStringList &filePaths
     if (targetId.isEmpty())
         return;
     
-    router()->setViewedPlaylistId(targetId);
-    TrackListModel *model = m_store->displayedPlaylist();
+    TrackListModel *model = showViewedPlaylist(targetId);
     if (!model)
         return;
     
@@ -158,10 +182,50 @@ void BrowseActivationService::applyTracksToPlaylist(const QStringList &filePaths
             model->addTrack(track);
     }
     
-    if (shouldAutoplay()) {
+    autoplayViewedAt(insertRow + startRow);
+}
+
+TrackListModel *BrowseActivationService::showViewedPlaylist(const QString &playlistId)
+{
+    if (playlistId.isEmpty() || !m_store || !router())
+        return nullptr;
+    router()->setViewedPlaylistId(playlistId);
+    return m_store->displayedPlaylist();
+}
+
+TrackListModel *BrowseActivationService::insertionPlaylist() const
+{
+    if (!m_store)
+        return nullptr;
+    TrackListModel *model = m_store->activePlaylist();
+    if (!model)
+        model = m_store->displayedPlaylist();
+    return model;
+}
+
+bool BrowseActivationService::showExistingGeneratedPlaylist(const QString &playlistName, bool autoplay, int playRow)
+{
+    if (!m_store || !router())
+        return false;
+
+    const QString existingId = m_store->findGeneratedPlaylistByName(playlistName);
+    if (existingId.isEmpty())
+        return false;
+
+    router()->setViewedPlaylistId(existingId);
+    if (autoplay && m_app) {
         router()->setActiveToViewed();
-        m_app->playIndex(insertRow + startRow);
+        m_app->playIndex(playRow);
     }
+    return true;
+}
+
+void BrowseActivationService::autoplayViewedAt(int row)
+{
+    if (!shouldAutoplay() || !m_app || !router())
+        return;
+    router()->setActiveToViewed();
+    m_app->playIndex(row);
 }
 
 QString BrowseActivationService::resolveTargetPlaylistId(const QString &generatedName)
@@ -211,41 +275,28 @@ void BrowseActivationService::addFilteredTracksToViewed(const QVariantList &filt
     if (!m_libraryDb || !m_store || !router())
         return;
     
-    const QVector<LibraryTrack> tracks = m_libraryDb->tracksMatchingFilter(buildGroupFilter(filter, groupType, groupValue));
+    const QVector<LibraryTrack> tracks = filteredTracks(filter, groupType, groupValue);
     if (tracks.isEmpty())
         return;
     
     const QString playlistName = generatePlaylistName(groupType, groupValue, tracks);
     
     Settings *settings = Settings::instance();
-    if (settings && settings->openingTracksAction() == Settings::OpeningCreateNewPlaylist) {
-        QString existingId = m_store->findGeneratedPlaylistByName(playlistName);
-        if (!existingId.isEmpty()) {
-            router()->setViewedPlaylistId(existingId);
-            if (shouldAutoplay() && m_app) {
-                router()->setActiveToViewed();
-                m_app->playIndex(0);
-            }
-            return;
-        }
-    }
+    if (settings && settings->openingTracksAction() == Settings::OpeningCreateNewPlaylist
+        && showExistingGeneratedPlaylist(playlistName, shouldAutoplay(), 0))
+        return;
     
     QString targetId = resolveTargetPlaylistId(playlistName);
     if (targetId.isEmpty())
         return;
     
-    router()->setViewedPlaylistId(targetId);
-    TrackListModel *model = m_store->displayedPlaylist();
+    TrackListModel *model = showViewedPlaylist(targetId);
     if (!model)
         return;
     
     int startRow = model->count();
     populateModel(model, tracks, targetId);
-
-    if (shouldAutoplay() && m_app) {
-        router()->setActiveToViewed();
-        m_app->playIndex(startRow);
-    }
+    autoplayViewedAt(startRow);
 }
 
 void BrowseActivationService::addFilteredTracksToViewedStartingAt(const QVariantList &filter,
@@ -256,47 +307,27 @@ void BrowseActivationService::addFilteredTracksToViewedStartingAt(const QVariant
     if (!m_libraryDb || !m_store || !router())
         return;
 
-    const QVector<LibraryTrack> tracks = m_libraryDb->tracksMatchingFilter(buildGroupFilter(filter, groupType, groupValue));
+    const QVector<LibraryTrack> tracks = filteredTracks(filter, groupType, groupValue);
     if (tracks.isEmpty())
         return;
 
     const QString playlistName = generatePlaylistName(groupType, groupValue, tracks);
 
     Settings *settings = Settings::instance();
-    if (settings && settings->openingTracksAction() == Settings::OpeningCreateNewPlaylist) {
-        QString existingId = m_store->findGeneratedPlaylistByName(playlistName);
-        if (!existingId.isEmpty()) {
-            router()->setViewedPlaylistId(existingId);
-            if (shouldAutoplay() && m_app) {
-                router()->setActiveToViewed();
-                m_app->playIndex(0);
-            }
-            return;
-        }
-    }
+    if (settings && settings->openingTracksAction() == Settings::OpeningCreateNewPlaylist
+        && showExistingGeneratedPlaylist(playlistName, shouldAutoplay(), 0))
+        return;
 
     QString targetId = resolveTargetPlaylistId(playlistName);
     if (targetId.isEmpty())
         return;
 
-    router()->setViewedPlaylistId(targetId);
-    TrackListModel *model = m_store->displayedPlaylist();
+    TrackListModel *model = showViewedPlaylist(targetId);
     if (!model)
         return;
 
-    int startRow = model->count();
-    int playRow = startRow;
-
-    for (int i = 0; i < tracks.size(); ++i) {
-        model->addTrack(MetadataExtractor::toTrackInfo(tracks[i]));
-        if (tracks[i].filePath == startFilePath)
-            playRow = startRow + i;
-    }
-
-    if (shouldAutoplay() && m_app) {
-        router()->setActiveToViewed();
-        m_app->playIndex(playRow);
-    }
+    const int playRow = populateModel(model, tracks, targetId, startFilePath);
+    autoplayViewedAt(playRow);
 }
 
 // Context menu: Append to viewed playlist (no autoplay, no target resolution)
@@ -307,7 +338,7 @@ void BrowseActivationService::appendFilteredTracksToViewed(const QVariantList &f
     if (!m_libraryDb || !m_store || !router())
         return;
     
-    const QVector<LibraryTrack> tracks = m_libraryDb->tracksMatchingFilter(buildGroupFilter(filter, groupType, groupValue));
+    const QVector<LibraryTrack> tracks = filteredTracks(filter, groupType, groupValue);
     if (tracks.isEmpty())
         return;
     
@@ -315,8 +346,7 @@ void BrowseActivationService::appendFilteredTracksToViewed(const QVariantList &f
     if (!model)
         return;
     
-    for (const LibraryTrack &track : tracks)
-        model->addTrack(MetadataExtractor::toTrackInfo(track));
+    populateModel(model, tracks);
 }
 
 void BrowseActivationService::appendFilePathsToViewed(const QStringList &filePaths)
@@ -359,13 +389,11 @@ void BrowseActivationService::appendFilteredTracksAfterPlaying(const QVariantLis
     if (!m_libraryDb || !m_store || !router() || !m_app)
         return;
     
-    const QVector<LibraryTrack> tracks = m_libraryDb->tracksMatchingFilter(buildGroupFilter(filter, groupType, groupValue));
+    const QVector<LibraryTrack> tracks = filteredTracks(filter, groupType, groupValue);
     if (tracks.isEmpty())
         return;
     
-    TrackListModel *model = m_store->activePlaylist();
-    if (!model)
-        model = m_store->displayedPlaylist();
+    TrackListModel *model = insertionPlaylist();
     if (!model)
         return;
     
@@ -373,8 +401,7 @@ void BrowseActivationService::appendFilteredTracksAfterPlaying(const QVariantLis
     if (insertPos < 0 || insertPos > model->count())
         insertPos = model->count();
     
-    for (int i = 0; i < tracks.size(); ++i)
-        model->insertTrack(insertPos + i, MetadataExtractor::toTrackInfo(tracks[i]));
+    populateModel(model, tracks, QString(), QString(), insertPos);
 }
 
 void BrowseActivationService::appendCollectionEntryAfterPlaying(const QString &entryId)
@@ -405,38 +432,25 @@ void BrowseActivationService::openFilteredTracksInNewPlaylist(const QVariantList
     if (!m_libraryDb || !m_store || !router())
         return;
     
-    const QVector<LibraryTrack> tracks = m_libraryDb->tracksMatchingFilter(buildGroupFilter(filter, groupType, groupValue));
+    const QVector<LibraryTrack> tracks = filteredTracks(filter, groupType, groupValue);
     if (tracks.isEmpty())
         return;
     
     const QString playlistName = generatePlaylistName(groupType, groupValue, tracks);
-    
-    QString existingId = m_store->findGeneratedPlaylistByName(playlistName);
-    if (!existingId.isEmpty()) {
-        router()->setViewedPlaylistId(existingId);
-        if (shouldAutoplay() && m_app) {
-            router()->setActiveToViewed();
-            m_app->playIndex(0);
-        }
+    if (showExistingGeneratedPlaylist(playlistName, shouldAutoplay(), 0))
         return;
-    }
     
     QString targetId = m_store->getOrCreateGeneratedPlaylist(playlistName);
     if (targetId.isEmpty())
         return;
     
-    router()->setViewedPlaylistId(targetId);
-    TrackListModel *model = m_store->displayedPlaylist();
+    TrackListModel *model = showViewedPlaylist(targetId);
     if (!model)
         return;
     
     int startRow = model->count();
     populateModel(model, tracks, targetId);
-    
-    if (shouldAutoplay() && m_app) {
-        router()->setActiveToViewed();
-        m_app->playIndex(startRow);
-    }
+    autoplayViewedAt(startRow);
 }
 
 void BrowseActivationService::playFilteredTracksInNewPlaylist(const QVariantList &filter,
@@ -446,28 +460,20 @@ void BrowseActivationService::playFilteredTracksInNewPlaylist(const QVariantList
     if (!m_libraryDb || !m_store || !router() || !m_app)
         return;
 
-    const QVector<LibraryTrack> tracks = m_libraryDb->tracksMatchingFilter(buildGroupFilter(filter, groupType, groupValue));
+    const QVector<LibraryTrack> tracks = filteredTracks(filter, groupType, groupValue);
     if (tracks.isEmpty())
         return;
 
     const QString playlistName = generatePlaylistName(groupType, groupValue, tracks);
-
-    const QString existingId = m_store->findGeneratedPlaylistByName(playlistName);
-    if (!existingId.isEmpty()) {
-        router()->setViewedPlaylistId(existingId);
-        router()->setActiveToViewed();
-        m_app->playIndex(0);
+    if (showExistingGeneratedPlaylist(playlistName, true, 0))
         return;
-    }
 
     const QString targetId = m_store->createNewTab(playlistName, false);
     if (targetId.isEmpty())
         return;
 
     m_store->enforceGeneratedPlaylistCount();
-    router()->setViewedPlaylistId(targetId);
-
-    TrackListModel *model = m_store->displayedPlaylist();
+    TrackListModel *model = showViewedPlaylist(targetId);
     if (!model)
         return;
 

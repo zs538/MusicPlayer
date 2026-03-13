@@ -1,6 +1,5 @@
 #include "MetadataExtractor.h"
 #include <QFileInfo>
-#include <QDir>
 #include <QSet>
 #include <taglib/fileref.h>
 #include <taglib/tag.h>

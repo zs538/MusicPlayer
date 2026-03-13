@@ -203,19 +203,7 @@ QVariant CollectionBrowseModel::data(const QModelIndex &index, int role) const
     case CoverFilePathsRole: return e.coverFilePaths;
     case ImagePathRole: return e.imagePath;
     case FilePathRole: return e.filePath;
-    case TitleRole: return e.title;
-    case ArtistRole: return e.artist;
-    case AlbumRole: return e.album;
-    case AlbumArtistRole: return e.albumArtist;
-    case TrackNumberRole: return e.trackNumber;
-    case DiscNumberRole: return e.discNumber;
-    case DurationMsRole: return e.durationMs;
-    case GenreRole: return e.genre;
-    case YearRole: return e.year;
-    case BitrateRole: return e.bitrate;
-    case FileTypeRole: return e.fileType;
     case TrackDataRole: return e.trackData;
-    case TotalDurationMsRole: return e.totalDurationMs;
     }
     return QVariant();
 }
@@ -233,19 +221,7 @@ QHash<int, QByteArray> CollectionBrowseModel::roleNames() const
         { CoverFilePathsRole, "coverFilePaths" },
         { ImagePathRole, "imagePath" },
         { FilePathRole, "filePath" },
-        { TitleRole, "title" },
-        { ArtistRole, "artist" },
-        { AlbumRole, "album" },
-        { AlbumArtistRole, "albumArtist" },
-        { TrackNumberRole, "trackNumber" },
-        { DiscNumberRole, "discNumber" },
-        { DurationMsRole, "durationMs" },
-        { GenreRole, "genre" },
-        { YearRole, "year" },
-        { BitrateRole, "bitrate" },
-        { FileTypeRole, "fileType" },
-        { TrackDataRole, "trackData" },
-        { TotalDurationMsRole, "totalDurationMs" }
+        { TrackDataRole, "trackData" }
     };
 }
 
@@ -484,22 +460,6 @@ void CollectionBrowseModel::refresh()
         }
 
         emit titleChanged();
-    }
-}
-
-void CollectionBrowseModel::setTrackListSort(const QString &sortKey, bool ascending)
-{
-    const QString normalizedKey = sortKey.trimmed();
-    if (m_trackListSortKey == normalizedKey && m_trackListSortAscending == ascending)
-        return;
-
-    m_trackListSortKey = normalizedKey;
-    m_trackListSortAscending = ascending;
-    if (m_groupBy == QStringLiteral("none")) {
-        beginResetModel();
-        m_entries = CBH::filteredAndSortedEntries(m_allEntries, m_searchFilter, m_sortBy, m_sortAscending, m_groupBy);
-        endResetModel();
-        emit countChanged();
     }
 }
 

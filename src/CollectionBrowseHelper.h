@@ -49,7 +49,6 @@ QString formatSubtitle(const Entry &entry, const QString &subtitleKey);
 void applySubtitleToEntries(QVector<Entry> &entries, const QString &subtitleKey);
 QString normalizedGroupKey(const QString &groupType, const QVariant &groupValue);
 QString breadcrumbLabelForFilter(const TrackFilter &filter);
-QStringList defaultTrackSortKeys(const QString &groupType);
 int compareTrackMapsByKey(const QVariantMap &left, const QVariantMap &right, const QString &key);
 
 // --- Projection: LibraryTrack → Entry transformation ---

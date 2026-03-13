@@ -15,6 +15,16 @@ QString legacyCollectionViewSettingKey(const QString &groupBy, const QString &se
     return QStringLiteral("collection/%1/%2").arg(groupBy, settingName);
 }
 
+template <typename T, typename Callback>
+void updateStoredValue(QSettings &settings, T &member, const T &value, const QString &key, Callback callback)
+{
+    if (member == value)
+        return;
+    member = value;
+    settings.setValue(key, value);
+    callback();
+}
+
 }
 
 Settings::Settings(QObject *parent)
@@ -63,12 +73,10 @@ QString Settings::outputDevice() const
 
 void Settings::setOutputDevice(const QString &device)
 {
-    if (m_outputDevice != device) {
-        m_outputDevice = device;
-        m_settings.setValue("audio/outputDevice", device);
+    updateStoredValue(m_settings, m_outputDevice, device, QStringLiteral("audio/outputDevice"), [this]() {
         emit outputDeviceChanged();
         emit settingsChanged();
-    }
+    });
 }
 
 int Settings::bufferSizeMs() const
@@ -79,12 +87,10 @@ int Settings::bufferSizeMs() const
 void Settings::setBufferSizeMs(int ms)
 {
     ms = qBound(10, ms, 1000);
-    if (m_bufferSizeMs != ms) {
-        m_bufferSizeMs = ms;
-        m_settings.setValue("audio/bufferSizeMs", ms);
+    updateStoredValue(m_settings, m_bufferSizeMs, ms, QStringLiteral("audio/bufferSizeMs"), [this]() {
         emit bufferSizeMsChanged();
         emit settingsChanged();
-    }
+    });
 }
 
 int Settings::gaplessLeadInMs() const
@@ -95,12 +101,10 @@ int Settings::gaplessLeadInMs() const
 void Settings::setGaplessLeadInMs(int ms)
 {
     ms = qBound(100, ms, 10000);
-    if (m_gaplessLeadInMs != ms) {
-        m_gaplessLeadInMs = ms;
-        m_settings.setValue("audio/gaplessLeadInMs", ms);
+    updateStoredValue(m_settings, m_gaplessLeadInMs, ms, QStringLiteral("audio/gaplessLeadInMs"), [this]() {
         emit gaplessLeadInMsChanged();
         emit settingsChanged();
-    }
+    });
 }
 
 bool Settings::restoreSession() const
@@ -110,12 +114,10 @@ bool Settings::restoreSession() const
 
 void Settings::setRestoreSession(bool restore)
 {
-    if (m_restoreSession != restore) {
-        m_restoreSession = restore;
-        m_settings.setValue("session/restore", restore);
+    updateStoredValue(m_settings, m_restoreSession, restore, QStringLiteral("session/restore"), [this]() {
         emit restoreSessionChanged();
         emit settingsChanged();
-    }
+    });
 }
 
 QStringList Settings::coverArtPatterns() const
@@ -202,12 +204,10 @@ int Settings::addTracksPolicy() const
 
 void Settings::setAddTracksPolicy(int policy)
 {
-    if (m_addTracksPolicy != policy) {
-        m_addTracksPolicy = policy;
-        m_settings.setValue("behavior/addTracksPolicy", policy);
+    updateStoredValue(m_settings, m_addTracksPolicy, policy, QStringLiteral("behavior/addTracksPolicy"), [this]() {
         emit addTracksPolicyChanged();
         emit settingsChanged();
-    }
+    });
 }
 
 int Settings::previousButtonAction() const
@@ -217,12 +217,10 @@ int Settings::previousButtonAction() const
 
 void Settings::setPreviousButtonAction(int action)
 {
-    if (m_previousButtonAction != action) {
-        m_previousButtonAction = action;
-        m_settings.setValue("behavior/previousButtonAction", action);
+    updateStoredValue(m_settings, m_previousButtonAction, action, QStringLiteral("behavior/previousButtonAction"), [this]() {
         emit previousButtonActionChanged();
         emit settingsChanged();
-    }
+    });
 }
 
 int Settings::openingTracksAction() const
@@ -232,12 +230,10 @@ int Settings::openingTracksAction() const
 
 void Settings::setOpeningTracksAction(int action)
 {
-    if (m_openingTracksAction != action) {
-        m_openingTracksAction = action;
-        m_settings.setValue("behavior/openingTracksAction", action);
+    updateStoredValue(m_settings, m_openingTracksAction, action, QStringLiteral("behavior/openingTracksAction"), [this]() {
         emit openingTracksActionChanged();
         emit settingsChanged();
-    }
+    });
 }
 
 bool Settings::generatedPlaylistsEnabled() const
@@ -247,12 +243,10 @@ bool Settings::generatedPlaylistsEnabled() const
 
 void Settings::setGeneratedPlaylistsEnabled(bool enabled)
 {
-    if (m_generatedPlaylistsEnabled != enabled) {
-        m_generatedPlaylistsEnabled = enabled;
-        m_settings.setValue("behavior/generatedPlaylistsEnabled", enabled);
+    updateStoredValue(m_settings, m_generatedPlaylistsEnabled, enabled, QStringLiteral("behavior/generatedPlaylistsEnabled"), [this]() {
         emit generatedPlaylistsEnabledChanged();
         emit settingsChanged();
-    }
+    });
 }
 
 int Settings::generatedPlaylistCount() const
@@ -263,12 +257,10 @@ int Settings::generatedPlaylistCount() const
 void Settings::setGeneratedPlaylistCount(int count)
 {
     count = qBound(1, count, 20);
-    if (m_generatedPlaylistCount != count) {
-        m_generatedPlaylistCount = count;
-        m_settings.setValue("behavior/generatedPlaylistCount", count);
+    updateStoredValue(m_settings, m_generatedPlaylistCount, count, QStringLiteral("behavior/generatedPlaylistCount"), [this]() {
         emit generatedPlaylistCountChanged();
         emit settingsChanged();
-    }
+    });
 }
 
 int Settings::gridCellMinWidth() const
@@ -459,12 +451,10 @@ bool Settings::watcherEnabled() const
 
 void Settings::setWatcherEnabled(bool enabled)
 {
-    if (m_watcherEnabled != enabled) {
-        m_watcherEnabled = enabled;
-        m_settings.setValue("library/watcherEnabled", enabled);
+    updateStoredValue(m_settings, m_watcherEnabled, enabled, QStringLiteral("library/watcherEnabled"), [this]() {
         emit watcherEnabledChanged();
         emit settingsChanged();
-    }
+    });
 }
 
 int Settings::periodicRescanMinutes() const
@@ -475,12 +465,10 @@ int Settings::periodicRescanMinutes() const
 void Settings::setPeriodicRescanMinutes(int minutes)
 {
     minutes = qBound(0, minutes, 1440);  // 0 = disabled, max 24 hours
-    if (m_periodicRescanMinutes != minutes) {
-        m_periodicRescanMinutes = minutes;
-        m_settings.setValue("library/periodicRescanMinutes", minutes);
+    updateStoredValue(m_settings, m_periodicRescanMinutes, minutes, QStringLiteral("library/periodicRescanMinutes"), [this]() {
         emit periodicRescanMinutesChanged();
         emit settingsChanged();
-    }
+    });
 }
 
 bool Settings::collectionPlayButtonEnabled() const
@@ -490,12 +478,10 @@ bool Settings::collectionPlayButtonEnabled() const
 
 void Settings::setCollectionPlayButtonEnabled(bool enabled)
 {
-    if (m_collectionPlayButtonEnabled != enabled) {
-        m_collectionPlayButtonEnabled = enabled;
-        m_settings.setValue("collection/playButtonEnabled", enabled);
+    updateStoredValue(m_settings, m_collectionPlayButtonEnabled, enabled, QStringLiteral("collection/playButtonEnabled"), [this]() {
         emit collectionPlayButtonEnabledChanged();
         emit settingsChanged();
-    }
+    });
 }
 
 bool Settings::collectionSingleClickOpen() const
@@ -505,10 +491,8 @@ bool Settings::collectionSingleClickOpen() const
 
 void Settings::setCollectionSingleClickOpen(bool enabled)
 {
-    if (m_collectionSingleClickOpen != enabled) {
-        m_collectionSingleClickOpen = enabled;
-        m_settings.setValue("collection/singleClickOpen", enabled);
+    updateStoredValue(m_settings, m_collectionSingleClickOpen, enabled, QStringLiteral("collection/singleClickOpen"), [this]() {
         emit collectionSingleClickOpenChanged();
         emit settingsChanged();
-    }
+    });
 }

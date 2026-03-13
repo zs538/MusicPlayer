@@ -13,7 +13,6 @@ Rectangle {
     property int _columnContextIndex: -1
     property int _dragColumnIndex: -1
     property int _dragSeparatorIndex: -1
-    property real _dragCurrentX: 0
     property int _resizeColumnIndex: -1
     property real _resizeStartX: 0
     property var _resizeBaseLayout: ({})
@@ -89,15 +88,13 @@ Rectangle {
         if (root.normalizedLayout.headerLocked)
             return
         root._dragColumnIndex = index
-        root._dragCurrentX = localX
         root._dragSeparatorIndex = root.nearestSeparatorIndex(localX)
     }
 
     function updateDrag(localX) {
         if (root._dragColumnIndex < 0)
             return
-        root._dragCurrentX = Math.max(0, Math.min(root.contentWidth, localX))
-        root._dragSeparatorIndex = root.nearestSeparatorIndex(root._dragCurrentX)
+        root._dragSeparatorIndex = root.nearestSeparatorIndex(Math.max(0, Math.min(root.contentWidth, localX)))
     }
 
     function endDrag() {
@@ -107,7 +104,6 @@ Rectangle {
         let separatorIndex = root._dragSeparatorIndex
         root._dragColumnIndex = -1
         root._dragSeparatorIndex = -1
-        root._dragCurrentX = 0
         if (separatorIndex < 0)
             return
         let targetIndex = separatorIndex > fromIndex ? separatorIndex - 1 : separatorIndex

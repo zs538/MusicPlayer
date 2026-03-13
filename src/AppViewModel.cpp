@@ -513,13 +513,6 @@ int AppViewModel::libraryTrackCount() const
     return m_libraryController ? m_libraryController->trackCount() : 0;
 }
 
-qint64 AppViewModel::lastScanTime() const
-{
-    // This would need to be stored in the database
-    // For now, return 0 to indicate "never"
-    return 0;
-}
-
 BrowseActivationService *AppViewModel::browseActivation() const
 {
     return m_browseActivation;
@@ -528,22 +521,6 @@ BrowseActivationService *AppViewModel::browseActivation() const
 LibraryDatabase *AppViewModel::libraryDatabase() const
 {
     return m_libraryController->database();
-}
-
-void AppViewModel::setPlaybackState(PlaybackState state)
-{
-    if (m_playbackState != state) {
-        m_playbackState = state;
-        emit playbackStateChanged();
-    }
-}
-
-void AppViewModel::setError(const QString &text)
-{
-    m_errorText = text;
-    m_hasError = !text.isEmpty();
-    emit errorTextChanged();
-    emit hasErrorChanged();
 }
 
 void AppViewModel::clearError()

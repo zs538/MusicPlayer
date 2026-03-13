@@ -58,23 +58,6 @@ Item {
     function jumpToBreadcrumb(index) {
         browserModel.jumpToBreadcrumb(index, _scrollY, currentSelectedEntryId())
     }
-    function groupLabel(groupBy) {
-        return groupBy.indexOf("custom:") === 0 ? "Custom: " + groupBy.slice(7) :
-               groupBy === "artist" ? "Artists" :
-               groupBy === "albumartist" ? "Album Artists" :
-               groupBy === "album" ? "Albums" :
-               groupBy === "genre" ? "Genres" :
-               groupBy === "year" ? "Years" :
-               groupBy === "disc" ? "Discs" :
-               groupBy === "performer" ? "Performers" :
-               groupBy === "composer" ? "Composers" :
-               groupBy === "originalyear" ? "Original Years" :
-               groupBy === "bpm" ? "BPM" :
-               groupBy === "initialkey" ? "Keys" :
-               groupBy === "bitrate" ? "Bitrates" :
-               groupBy === "filetype" ? "File Types" :
-               groupBy === "none" ? "Tracks" : groupBy
-    }
     function contextGroupTypeForFilter(filter) {
         return filter.length > 0 ? filter[filter.length - 1].field : "all"
     }

@@ -8,6 +8,7 @@
 #include <QTextStream>
 #include <QUrl>
 #include <QtConcurrent>
+#include <functional>
 
 PlaylistStore::PlaylistStore(QObject *parent)
     : QObject(parent)
@@ -356,6 +357,41 @@ QString normalizePlaylistFilePath(const QString &filePath)
 
     return QDir::cleanPath(QDir::fromNativeSeparators(normalized));
 }
+
+bool forEachPlaylistEntry(const QString &normalizedPath, bool utf8, const std::function<bool(const QString &)> &visitor)
+{
+    QFile file(normalizedPath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+        return false;
+
+    QTextStream in(&file);
+    in.setEncoding(utf8 ? QStringConverter::Utf8 : QStringConverter::Latin1);
+    const QString playlistDir = QFileInfo(normalizedPath).absolutePath();
+
+    while (!in.atEnd()) {
+        const QString line = in.readLine().trimmed();
+        if (line.isEmpty() || line.startsWith('#'))
+            continue;
+
+        const QString fullPath = QDir::isAbsolutePath(line) ? line : QDir::cleanPath(playlistDir + '/' + line);
+        if (!visitor(fullPath))
+            return true;
+    }
+
+    return true;
+}
+
+int countPlaylistEntries(const QString &normalizedPath, bool utf8)
+{
+    int total = 0;
+    if (!forEachPlaylistEntry(normalizedPath, utf8, [&total](const QString &) {
+        ++total;
+        return true;
+    })) {
+        return -1;
+    }
+    return total;
+}
 }
 
 QString PlaylistStore::importPlaylist(const QString &filePath)
@@ -391,26 +427,12 @@ bool PlaylistStore::exportPlaylist(const QString &uuid, const QString &filePath)
 bool PlaylistStore::importM3U(TrackListModel *model, const QString &filePath, bool utf8)
 {
     const QString normalizedPath = normalizePlaylistFilePath(filePath);
-    QFile file(normalizedPath);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
-        return false;
-    
-    QTextStream in(&file);
-    in.setEncoding(utf8 ? QStringConverter::Utf8 : QStringConverter::Latin1);
-    
-    QString playlistDir = QFileInfo(normalizedPath).absolutePath();
-
-    while (!in.atEnd()) {
-        QString line = in.readLine().trimmed();
-        if (line.isEmpty() || line.startsWith('#'))
-            continue;
-
-        QString fullPath = QDir::isAbsolutePath(line) ? line : QDir::cleanPath(playlistDir + '/' + line);
+    return forEachPlaylistEntry(normalizedPath, utf8, [model](const QString &fullPath) {
         TrackInfo track = MetadataExtractor::extractTrackInfo(fullPath);
         if (track.isValid())
             model->addTrack(track);
-    }
-    return true;
+        return true;
+    });
 }
 
 bool PlaylistStore::exportM3U(TrackListModel *model, const QString &filePath, bool utf8)
@@ -449,8 +471,8 @@ QString PlaylistStore::importPlaylistAsync(const QString &filePath)
 void PlaylistStore::importM3UAsync(const QString &uuid, const QString &filePath, bool utf8)
 {
     const QString normalizedPath = normalizePlaylistFilePath(filePath);
-    QFile file(normalizedPath);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    const int totalLines = countPlaylistEntries(normalizedPath, utf8);
+    if (totalLines < 0) {
         QMetaObject::invokeMethod(this, [this, uuid]() {
             closeTab(uuid);
             emit importFinished(uuid, false);
@@ -458,67 +480,43 @@ void PlaylistStore::importM3UAsync(const QString &uuid, const QString &filePath,
         return;
     }
 
-    // First pass: count lines for progress
-    QTextStream countStream(&file);
-    countStream.setEncoding(utf8 ? QStringConverter::Utf8 : QStringConverter::Latin1);
-    int totalLines = 0;
-    while (!countStream.atEnd()) {
-        QString line = countStream.readLine().trimmed();
-        if (!line.isEmpty() && !line.startsWith('#'))
-            ++totalLines;
-    }
-    file.seek(0);
-
-    // Second pass: extract metadata and batch insert
-    QTextStream in(&file);
-    in.setEncoding(utf8 ? QStringConverter::Utf8 : QStringConverter::Latin1);
-    QString playlistDir = QFileInfo(normalizedPath).absolutePath();
-
     QVector<TrackInfo> batch;
     int imported = 0;
     constexpr int BATCH_SIZE = 50;
 
-    while (!in.atEnd()) {
-        QString line = in.readLine().trimmed();
-        if (line.isEmpty() || line.startsWith('#'))
-            continue;
-        
-        QString fullPath = QDir::isAbsolutePath(line) ? line : QDir::cleanPath(playlistDir + '/' + line);
+    auto flushBatch = [this, &uuid, &batch, &imported, totalLines]() {
+        if (batch.isEmpty())
+            return;
+        QVector<TrackInfo> toSend = batch;
+        batch.clear();
+        const int currentImported = imported;
+        QMetaObject::invokeMethod(this, [this, uuid, toSend, currentImported, totalLines]() {
+            TrackListModel *model = getPlaylistModel(uuid);
+            if (model)
+                model->addTracks(toSend);
+            emit importProgress(uuid, currentImported, totalLines);
+        }, Qt::QueuedConnection);
+    };
+
+    if (!forEachPlaylistEntry(normalizedPath, utf8, [this, &batch, &imported, &flushBatch](const QString &fullPath) {
         TrackInfo track = MetadataExtractor::extractTrackInfo(fullPath);
         if (track.isValid()) {
             batch.append(track);
             ++imported;
         }
-        
-        // Send batch to UI thread when full
-        if (batch.size() >= BATCH_SIZE) {
-            QVector<TrackInfo> toSend = batch;
-            batch.clear();
-            int currentImported = imported;
-            QMetaObject::invokeMethod(this, [this, uuid, toSend, currentImported, totalLines]() {
-                TrackListModel *model = getPlaylistModel(uuid);
-                if (model) {
-                    model->addTracks(toSend);
-                }
-                emit importProgress(uuid, currentImported, totalLines);
-            }, Qt::QueuedConnection);
-        }
-    }
-    
-    // Send remaining tracks
-    if (!batch.isEmpty()) {
-        QVector<TrackInfo> toSend = batch;
-        int currentImported = imported;
-        QMetaObject::invokeMethod(this, [this, uuid, toSend, currentImported, totalLines]() {
-            TrackListModel *model = getPlaylistModel(uuid);
-            if (model) {
-                model->addTracks(toSend);
-            }
-            emit importProgress(uuid, currentImported, totalLines);
+        if (batch.size() >= BATCH_SIZE)
+            flushBatch();
+        return true;
+    })) {
+        QMetaObject::invokeMethod(this, [this, uuid]() {
+            closeTab(uuid);
+            emit importFinished(uuid, false);
         }, Qt::QueuedConnection);
+        return;
     }
-    
-    // Signal completion
+
+    flushBatch();
+
     QMetaObject::invokeMethod(this, [this, uuid]() {
         emit importFinished(uuid, true);
     }, Qt::QueuedConnection);

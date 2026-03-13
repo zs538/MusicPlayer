@@ -7,6 +7,7 @@
 #include <QStringList>
 #include <QVariantList>
 #include <QVariantMap>
+#include <QVector>
 
 class AppViewModel;
 class PlaylistStore;
@@ -80,14 +81,21 @@ public:
 private:
     // Consolidated helpers
     TrackFilter buildGroupFilter(const QVariantList &filter, const QString &groupType, const QVariant &groupValue) const;
+    QVector<LibraryTrack> filteredTracks(const QVariantList &filter, const QString &groupType, const QVariant &groupValue) const;
     TrackInfo resolveTrack(const QString &filePath) const;
     QString generatePlaylistName(const QString &groupType, const QVariant &groupValue,
                                  const QVector<LibraryTrack> &tracks) const;
-    void populateModel(TrackListModel *model, const QVector<LibraryTrack> &tracks,
-                       const QString &playlistId = QString());
+    int populateModel(TrackListModel *model, const QVector<LibraryTrack> &tracks,
+                      const QString &playlistId = QString(),
+                      const QString &startFilePath = QString(),
+                      int insertPos = -1);
     static QString entryIdToFilePath(const QString &entryId);
 
     void applyTracksToPlaylist(const QStringList &filePaths, int startRow = 0);
+    TrackListModel *showViewedPlaylist(const QString &playlistId);
+    TrackListModel *insertionPlaylist() const;
+    bool showExistingGeneratedPlaylist(const QString &playlistName, bool autoplay, int playRow = 0);
+    void autoplayViewedAt(int row);
     QString resolveTargetPlaylistId(const QString &generatedName = QString());
     bool shouldAutoplay() const;
     ViewedPlaylistRouter *router() const;

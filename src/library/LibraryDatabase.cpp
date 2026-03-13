@@ -180,22 +180,6 @@ bool LibraryDatabase::upsertTrack(const LibraryTrack &track)
     return true;
 }
 
-bool LibraryDatabase::removeTrack(qint64 id)
-{
-    QSqlQuery query(m_db);
-    query.prepare("DELETE FROM tracks WHERE id = :id");
-    query.bindValue(":id", id);
-    
-    if (!query.exec()) {
-        return false;
-    }
-    
-    if (query.numRowsAffected() > 0) {
-        emit databaseChanged();
-    }
-    return true;
-}
-
 QString LibraryDatabase::normalizeFileSystemPath(const QString &path)
 {
     QString normalized = path.trimmed();
@@ -297,28 +281,6 @@ QVector<LibraryTrack> LibraryDatabase::allTracks() const
 
     while (query.next()) {
         tracks.append(trackFromQuery(query));
-    }
-    LSA::hydrateSparseAttributes(m_db, tracks);
-    return tracks;
-}
-
-QVector<LibraryTrack> LibraryDatabase::searchTracks(const QString &searchQuery) const
-{
-    QVector<LibraryTrack> tracks;
-    QSqlQuery query(m_db);
-    QString pattern = "%" + searchQuery + "%";
-    query.prepare(baseTrackSelectSql() + R"(
-        WHERE title LIKE :pattern
-           OR artist LIKE :pattern
-           OR album LIKE :pattern
-        ORDER BY artist, album, track_number
-    )");
-    query.bindValue(":pattern", pattern);
-
-    if (query.exec()) {
-        while (query.next()) {
-            tracks.append(trackFromQuery(query));
-        }
     }
     LSA::hydrateSparseAttributes(m_db, tracks);
     return tracks;

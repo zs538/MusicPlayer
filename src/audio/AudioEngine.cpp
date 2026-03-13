@@ -1,13 +1,11 @@
 #include "AudioEngine.h"
 #include "AudioOutputWorker.h"
 #include "SPSCRingBuffer.h"
-#include "BufferIODevice.h"
 #include <QElapsedTimer>
 #include <QTimer>
 #include <QDebug>
 #include <QLoggingCategory>
 #include <QMutexLocker>
-#include <QMediaDevices>
 
 extern "C" {
 #include <libavformat/avformat.h>

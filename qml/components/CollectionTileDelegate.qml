@@ -86,6 +86,17 @@ Item {
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignLeft
 
+                HoverHandler {
+                    id: titleHoverHandler
+                }
+
+                StyledHoverToolTip {
+                    parent: titleLabel
+                    visible: titleHoverHandler.hovered && titleLabel.text.length > 0
+                    delay: 800
+                    timeout: 5000
+                    text: titleLabel.text
+                }
             }
 
             Label {
@@ -97,6 +108,17 @@ Item {
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignLeft
 
+                HoverHandler {
+                    id: subtitleHoverHandler
+                }
+
+                StyledHoverToolTip {
+                    parent: subtitleLabel
+                    visible: subtitleHoverHandler.hovered && subtitleLabel.text.length > 0
+                    delay: 800
+                    timeout: 5000
+                    text: subtitleLabel.text
+                }
             }
         }
 
@@ -106,47 +128,6 @@ Item {
             hoverEnabled: true
             acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
             cursorShape: Qt.PointingHandCursor
-            property point toolTipAnchorPos: Qt.point(0, 0)
-
-            function updateToolTipAnchor(x, y) {
-                toolTipAnchorPos = Qt.point(x + 8, y + 12)
-            }
-
-            function toolTipTextAt(x, y) {
-                let titlePos = gridMouseArea.mapFromItem(titleLabel, 0, 0)
-                if (x >= titlePos.x && x <= titlePos.x + titleLabel.width
-                        && y >= titlePos.y && y <= titlePos.y + titleLabel.height)
-                    return titleLabel.text
-
-                let subtitlePos = gridMouseArea.mapFromItem(subtitleLabel, 0, 0)
-                if (x >= subtitlePos.x && x <= subtitlePos.x + subtitleLabel.width
-                        && y >= subtitlePos.y && y <= subtitlePos.y + subtitleLabel.height)
-                    return subtitleLabel.text
-
-                return ""
-            }
-
-            readonly property string hoveredToolTipText: containsMouse ? toolTipTextAt(mouseX, mouseY) : ""
-
-            StyledHoverToolTip {
-                id: gridToolTip
-                parent: gridMouseArea
-                visible: gridMouseArea.containsMouse && gridMouseArea.hoveredToolTipText.length > 0
-                delay: 800
-                timeout: 5000
-                text: gridMouseArea.hoveredToolTipText
-                x: Math.max(0, gridMouseArea.toolTipAnchorPos.x)
-                y: Math.max(0, gridMouseArea.toolTipAnchorPos.y)
-                onVisibleChanged: {
-                    if (visible)
-                        gridMouseArea.updateToolTipAnchor(gridMouseArea.mouseX, gridMouseArea.mouseY)
-                }
-            }
-
-            onHoveredToolTipTextChanged: {
-                if (hoveredToolTipText.length > 0 && gridToolTip.visible)
-                    updateToolTipAnchor(mouseX, mouseY)
-            }
 
             onClicked: (mouse) => {
                 if (mouse.button === Qt.LeftButton) {

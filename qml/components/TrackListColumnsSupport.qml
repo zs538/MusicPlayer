@@ -32,8 +32,6 @@ QtObject {
         "filePath"
     ]
 
-    readonly property var builtinKeys: mainBuiltinKeys.concat(otherBuiltinKeys)
-
     function normalizeKey(key) {
         let text = String(key === undefined || key === null ? "" : key).trim()
         if (!text.length)
@@ -83,23 +81,6 @@ QtObject {
             filePath: { title: "Path", weight: 280 / 354, minWidth: 80, alignment: "left", tone: "secondary" }
         }
         return meta[key] || { title: String(key), weight: 0.2, minWidth: 48, alignment: "left", tone: "secondary" }
-    }
-
-    function customColumnKeys(customTagKeys) {
-        let custom = []
-        if (customTagKeys && customTagKeys.length !== undefined) {
-            for (let i = 0; i < customTagKeys.length; ++i) {
-                let key = String(customTagKeys[i] || "").trim()
-                if (key.length)
-                    custom.push("custom:" + key.toUpperCase())
-            }
-        }
-        custom.sort(function(a, b) { return a.localeCompare(b) })
-        return custom
-    }
-
-    function availableColumnKeys(customTagKeys) {
-        return builtinKeys.concat(customColumnKeys(customTagKeys))
     }
 
     function titleForKey(key) {
@@ -228,13 +209,6 @@ QtObject {
     function setHeaderLocked(layout, locked) {
         let next = ensureLayout(layout)
         next.headerLocked = locked
-        return next
-    }
-
-    function appendEmptyColumn(layout) {
-        let next = ensureLayout(layout)
-        next.columns.push(createColumn(""))
-        next.columns = normalizeColumns(next.columns)
         return next
     }
 

@@ -62,13 +62,11 @@ public:
     QString databasePath() const { return m_dbPath; }
     
     bool upsertTrack(const LibraryTrack &track);
-    bool removeTrack(qint64 id);
     bool removeTracksInFolder(const QString &folderPath);
     
     std::optional<LibraryTrack> trackByPath(const QString &filePath) const;
     
     QVector<LibraryTrack> allTracks() const;
-    QVector<LibraryTrack> searchTracks(const QString &query) const;
     QVector<LibraryTrack> tracksMatchingFilter(const TrackFilter &filter) const;
     Q_INVOKABLE QStringList customTagKeys() const;
     
