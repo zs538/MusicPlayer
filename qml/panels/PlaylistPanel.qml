@@ -8,14 +8,6 @@ Rectangle {
     id: root
     color: Theme.surface
 
-    component TextCursor: HoverHandler {
-        cursorShape: Qt.IBeamCursor
-    }
-
-    component PointingCursor: HoverHandler {
-        cursorShape: Qt.PointingHandCursor
-    }
-
     readonly property int playlistRowHeight: 22
 
     property string playlistId: ViewedPlaylistRouter.viewedPlaylistId
@@ -222,7 +214,7 @@ Rectangle {
                     toolTipAnchorPos = Qt.point(x + 8, y + 12)
                 }
 
-                ToolTip {
+                StyledHoverToolTip {
                     id: headerToolTip
                     parent: headerMouseArea
                     visible: headerMouseArea.containsMouse && headerLabel.text.length > 0
@@ -231,21 +223,6 @@ Rectangle {
                     text: headerLabel.text
                     x: Math.max(0, headerMouseArea.toolTipAnchorPos.x)
                     y: Math.max(0, headerMouseArea.toolTipAnchorPos.y)
-                    leftPadding: 5
-                    rightPadding: 5
-                    topPadding: 2
-                    bottomPadding: 2
-                    background: Rectangle {
-                        color: Theme.surfaceAlt
-                        border.color: "#3a3a3a"
-                        border.width: 1
-                        radius: Theme.radiusNone
-                    }
-                    contentItem: Text {
-                        text: headerToolTip.text
-                        color: "#3a3a3a"
-                        font.pixelSize: 11
-                    }
                     onVisibleChanged: {
                         if (visible)
                             headerMouseArea.updateToolTipAnchor(headerMouseArea.mouseX, headerMouseArea.mouseY)
@@ -626,7 +603,7 @@ Rectangle {
                         toolTipAnchorPos = Qt.point(x + 8, y + 12)
                     }
 
-                    ToolTip {
+                    StyledHoverToolTip {
                         id: rowToolTip
                         parent: ma
                         visible: ma.containsMouse && !DragManager.isDragging && ma.hoveredColumnText.length > 0
@@ -635,21 +612,6 @@ Rectangle {
                         text: ma.hoveredColumnText
                         x: Math.max(0, ma.toolTipAnchorPos.x)
                         y: Math.max(0, ma.toolTipAnchorPos.y)
-                        leftPadding: 5
-                        rightPadding: 5
-                        topPadding: 2
-                        bottomPadding: 2
-                        background: Rectangle {
-                            color: Theme.surfaceAlt
-                            border.color: "#3a3a3a"
-                            border.width: 1
-                            radius: Theme.radiusNone
-                        }
-                        contentItem: Text {
-                            text: rowToolTip.text
-                            color: "#3a3a3a"
-                            font.pixelSize: 11
-                        }
                         onVisibleChanged: {
                             if (visible)
                                 ma.updateToolTipAnchor(ma.mouseX, ma.mouseY)

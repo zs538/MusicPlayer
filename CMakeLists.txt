@@ -210,9 +210,14 @@ qt_add_qml_module(appmusicplayer
         qml/Theme.qml
         qml/DragManager.qml
         qml/components/CollectionBrowserContent.qml
+        qml/components/CollectionBrowserToolbar.qml
+        qml/components/CollectionTileDelegate.qml
         qml/components/IconImage.qml
         qml/components/TrackColumnsHeader.qml
         qml/components/TrackColumnsRow.qml
+        qml/components/PointingCursor.qml
+        qml/components/TextCursor.qml
+        qml/components/StyledHoverToolTip.qml
         qml/components/TrackListColumnsSupport.qml
         qml/panels/CollectionPanel.qml
         qml/panels/PlaylistPanel.qml

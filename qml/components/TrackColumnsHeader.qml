@@ -5,10 +5,6 @@ import MusicPlayer
 Rectangle {
     id: root
 
-    component PointingCursor: HoverHandler {
-        cursorShape: Qt.PointingHandCursor
-    }
-
     property var layout: TrackListColumnsSupport.defaultLayout()
     property var customTagKeys: []
     property int rowHeight: 22

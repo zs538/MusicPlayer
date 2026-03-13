@@ -34,10 +34,6 @@ Window {
         }
     }
 
-    component PointingCursor: HoverHandler {
-        cursorShape: Qt.PointingHandCursor
-    }
-
     component CategoryHeader: Label {
         font.bold: true
         font.pixelSize: 14

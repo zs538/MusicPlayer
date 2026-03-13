@@ -12,10 +12,6 @@ Rectangle {
     implicitHeight: 32
     property real lastNonZeroVolume: Settings.volume > 0 ? Settings.volume : 1.0
 
-    component PointingCursor: HoverHandler {
-        cursorShape: Qt.PointingHandCursor
-    }
-
     component SectionSeparator: Rectangle {
         Layout.preferredWidth: 1
         Layout.fillHeight: true
@@ -23,25 +19,6 @@ Rectangle {
         Layout.bottomMargin: 6
         color: Theme.border
         opacity: 0.9
-    }
-
-    component StyledHoverToolTip: ToolTip {
-        id: toolTip
-        leftPadding: 5
-        rightPadding: 5
-        topPadding: 2
-        bottomPadding: 2
-        background: Rectangle {
-            color: Theme.surfaceAlt
-            border.color: "#3a3a3a"
-            border.width: 1
-            radius: Theme.radiusNone
-        }
-        contentItem: Text {
-            text: toolTip.text
-            color: "#3a3a3a"
-            font.pixelSize: 11
-        }
     }
 
     component FlatSlider: Slider {
