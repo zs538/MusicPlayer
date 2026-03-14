@@ -21,6 +21,17 @@ Rectangle {
     // Toolbar needs to expose the search field so the host can wire focus-loss logic
     readonly property alias searchField: searchField
 
+    function openSortMenu() {
+        sortMenu.popup()
+        if (sortMenu.count > 0)
+            sortMenu.currentIndex = 0
+    }
+    function openGroupByMenu() {
+        groupByMenu.popup()
+        if (groupByMenu.count > 0)
+            groupByMenu.currentIndex = 0
+    }
+
     component TopStripIconButton: Item {
         id: control
 
@@ -225,7 +236,7 @@ Rectangle {
             iconSource: Qt.resolvedUrl("../icons/sort.svg")
             iconSize: 16
             toolTipText: "Sort"
-            onClicked: sortMenu.popup()
+            onClicked: root.openSortMenu()
 
             Menu {
                 id: sortMenu
@@ -268,7 +279,7 @@ Rectangle {
             iconSource: Qt.resolvedUrl("../icons/filter_alt.svg")
             iconSize: 16
             toolTipText: "Group By"
-            onClicked: groupByMenu.popup()
+            onClicked: root.openGroupByMenu()
 
             Menu {
                 id: groupByMenu

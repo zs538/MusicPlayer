@@ -56,6 +56,7 @@ ApplicationWindow {
 
                 // Cover panel (fixed 1:1 aspect ratio)
                 CoverPanel {
+                    id: coverPanel
                     Layout.fillWidth: true
                     Layout.preferredHeight: width
                     Layout.minimumHeight: 200
@@ -64,6 +65,7 @@ ApplicationWindow {
 
                 // Playlist panel (fills remaining space)
                 PlaylistPanel {
+                    id: playlistPanel
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                 }
@@ -94,6 +96,7 @@ ApplicationWindow {
         }
     }
 
+
     // Settings window (modal)
     SettingsWindow {
         id: settingsWindow
@@ -120,5 +123,71 @@ ApplicationWindow {
     Shortcut {
         sequence: "Ctrl+,"
         onActivated: openSettingsWindow()
+    }
+
+    Shortcut {
+        sequence: "Tab"
+        onActivated: {
+            if (playlistPanel.focusWithinPlaylist) {
+                collectionPanel.focusBrowser()
+            } else if (collectionPanel.focusWithinBrowser) {
+                playlistPanel.focusPlaylist()
+            } else {
+                playlistPanel.focusPlaylist()
+            }
+        }
+    }
+
+    Shortcut {
+        sequence: "G"
+        onActivated: collectionPanel.openGroupByMenu()
+    }
+
+    Shortcut {
+        sequence: "S"
+        onActivated: collectionPanel.openSortMenu()
+    }
+
+    Shortcut {
+        sequence: "M"
+        onActivated: {
+            playlistPanel.focusPlaylist()
+            playlistPanel.openPlaylistMenu()
+        }
+    }
+
+    Shortcut {
+        sequence: "N"
+        onActivated: playlistPanel.createNewPlaylistAndFocus()
+    }
+
+    Shortcut {
+        sequence: "R"
+        onActivated: playlistPanel.startRenameViewedPlaylist()
+    }
+
+    Shortcut {
+        sequence: "Ctrl+Shift+R"
+        onActivated: AppViewModel.rescanLibrary()
+    }
+
+    Shortcut {
+        sequence: "Q"
+        onActivated: AppViewModel.stop()
+    }
+
+    Shortcut {
+        sequence: "Ctrl+Left"
+        onActivated: AppViewModel.seek(Math.max(0, AppViewModel.positionMs - 5000))
+    }
+
+    Shortcut {
+        sequence: "Ctrl+Right"
+        onActivated: AppViewModel.seek(Math.min(AppViewModel.durationMs, AppViewModel.positionMs + 5000))
+    }
+
+    Shortcut {
+        sequence: "V"
+        onActivated: coverPanel.showCurrentTrackInPlaylist()
     }
 }

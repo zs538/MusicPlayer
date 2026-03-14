@@ -15,11 +15,63 @@ Rectangle {
     property var customTagKeys: AppViewModel.libraryDatabase ? AppViewModel.libraryDatabase.customTagKeys() : []
     property string playlistSortKey: ""
     property bool playlistSortAscending: true
+    readonly property bool focusWithinPlaylist: root.activeFocus || renameField.activeFocus || listView.activeFocus
     property bool isUserCreated: {
         let idx = AppViewModel.playlistStore.indexOfUuid(playlistId)
         return idx >= 0 ? AppViewModel.playlistStore.tabIsUserCreated(idx) : true
     }
 
+    function focusPlaylist() {
+        if (playlistHeader.renaming)
+            renameField.forceActiveFocus()
+        else
+            listView.forceActiveFocus()
+    }
+    function orderedPlaylists() {
+        let userPlaylists = []
+        let generatedPlaylists = []
+        for (let i = 0; i < AppViewModel.playlistTabsModel.rowCount(); i++) {
+            let idx = AppViewModel.playlistTabsModel.index(i, 0)
+            let item = {
+                uuid: AppViewModel.playlistTabsModel.data(idx, 257),
+                isUserCreated: AppViewModel.playlistTabsModel.data(idx, 262)
+            }
+            if (item.isUserCreated)
+                userPlaylists.push(item.uuid)
+            else
+                generatedPlaylists.push(item.uuid)
+        }
+        return userPlaylists.concat(generatedPlaylists)
+    }
+    function stepViewedPlaylist(delta) {
+        let ordered = orderedPlaylists()
+        let currentIdx = ordered.indexOf(root.playlistId)
+        if (currentIdx < 0)
+            currentIdx = 0
+        let nextIdx = Math.max(0, Math.min(ordered.length - 1, currentIdx + delta))
+        if (nextIdx !== currentIdx && ordered[nextIdx]) {
+            ViewedPlaylistRouter.viewedPlaylistId = ordered[nextIdx]
+            Qt.callLater(function() {
+                root.focusPlaylist()
+            })
+        }
+    }
+    function openPlaylistMenu() {
+        playlistSwitchMenu.popup()
+        if (playlistSwitchMenu.count > 0)
+            playlistSwitchMenu.currentIndex = 0
+    }
+    function createNewPlaylistAndFocus() {
+        let newId = AppViewModel.playlistStore.createNewTab()
+        if (newId.length === 0)
+            return
+        ViewedPlaylistRouter.viewedPlaylistId = newId
+        focusPlaylist()
+    }
+    function startRenameViewedPlaylist() {
+        focusPlaylist()
+        playlistHeader.startRename()
+    }
     function setPlaylistTrackListLayout(layout) {
         let normalized = TrackListColumnsSupport.ensureLayout(layout)
         playlistTrackListLayout = normalized
@@ -111,12 +163,12 @@ Rectangle {
             function cancelRename() {
                 renaming = false
                 renameField.text = renameOriginalText
-                forceActiveFocus()
+                root.focusPlaylist()
             }
             function commitRename() {
                 let trimmed = renameField.text.trim()
                 renaming = false
-                forceActiveFocus()
+                root.focusPlaylist()
                 if (trimmed.length > 0 && trimmed !== renameOriginalText)
                     AppViewModel.playlistStore.renameTab(root.playlistId, trimmed)
                 updateHeaderTitle()
@@ -229,44 +281,15 @@ Rectangle {
                     }
                 }
                 
-                // Build ordered playlist list (user first, then generated) - same as menu
-                function getOrderedPlaylists() {
-                    let userPlaylists = []
-                    let genPlaylists = []
-                    for (let i = 0; i < AppViewModel.playlistTabsModel.rowCount(); i++) {
-                        let idx = AppViewModel.playlistTabsModel.index(i, 0)
-                        let item = {
-                            uuid: AppViewModel.playlistTabsModel.data(idx, 257),
-                            isUserCreated: AppViewModel.playlistTabsModel.data(idx, 262)
-                        }
-                        if (item.isUserCreated) userPlaylists.push(item.uuid)
-                        else genPlaylists.push(item.uuid)
-                    }
-                    return userPlaylists.concat(genPlaylists)
-                }
-                
                 onClicked: (mouse) => {
                     if (mouse.button === Qt.LeftButton)
-                        playlistSwitchMenu.popup()
+                        root.openPlaylistMenu()
                     else if (mouse.button === Qt.RightButton)
                         playlistActionsMenu.popup()
                 }
                 
                 onWheel: (wheel) => {
-                    let ordered = getOrderedPlaylists()
-                    let currentIdx = ordered.indexOf(root.playlistId)
-                    if (currentIdx < 0) currentIdx = 0
-                    
-                    let newIdx = currentIdx
-                    if (wheel.angleDelta.y > 0) {
-                        if (currentIdx > 0) newIdx = currentIdx - 1
-                    } else {
-                        if (currentIdx < ordered.length - 1) newIdx = currentIdx + 1
-                    }
-                    
-                    if (newIdx !== currentIdx && ordered[newIdx]) {
-                        ViewedPlaylistRouter.viewedPlaylistId = ordered[newIdx]
-                    }
+                    root.stepViewedPlaylist(wheel.angleDelta.y > 0 ? -1 : 1)
                     wheel.accepted = true
                 }
             }
@@ -329,6 +352,9 @@ Rectangle {
                     onTriggered: {
                         let newId = AppViewModel.playlistStore.createNewTab()
                         ViewedPlaylistRouter.viewedPlaylistId = newId
+                        Qt.callLater(function() {
+                            root.focusPlaylist()
+                        })
                     }
                 }
                 MenuSeparator {}
@@ -349,7 +375,12 @@ Rectangle {
                     icon.width: 12
                     icon.height: 12
                     PointingCursor {}
-                    onTriggered: ViewedPlaylistRouter.viewedPlaylistId = plUuid
+                    onTriggered: {
+                        ViewedPlaylistRouter.viewedPlaylistId = plUuid
+                        Qt.callLater(function() {
+                            root.focusPlaylist()
+                        })
+                    }
                 }
             }
             
@@ -432,7 +463,7 @@ Rectangle {
             Layout.fillHeight: true
             clip: true
             interactive: false
-            activeFocusOnTab: true
+            activeFocusOnTab: false
             model: controller.model
             boundsBehavior: Flickable.StopAtBounds
 
@@ -486,6 +517,50 @@ Rectangle {
                     return
                 listView.ensureRowVisible(row)
                 event.accepted = true
+            }
+            Keys.onLeftPressed: (event) => {
+                if ((event.modifiers & Qt.AltModifier) === 0)
+                    return
+                root.stepViewedPlaylist(-1)
+                event.accepted = true
+            }
+            Keys.onRightPressed: (event) => {
+                if ((event.modifiers & Qt.AltModifier) === 0)
+                    return
+                root.stepViewedPlaylist(1)
+                event.accepted = true
+            }
+            Keys.onPressed: (event) => {
+                if (event.modifiers === Qt.AltModifier) {
+                    if (event.key === Qt.Key_H) {
+                        root.stepViewedPlaylist(-1)
+                        event.accepted = true
+                    } else if (event.key === Qt.Key_L) {
+                        root.stepViewedPlaylist(1)
+                        event.accepted = true
+                    }
+                    return
+                }
+                if (event.modifiers !== Qt.NoModifier)
+                    return
+                if (event.key === Qt.Key_M) {
+                    root.openPlaylistMenu()
+                    event.accepted = true
+                    return
+                }
+                if (event.key === Qt.Key_J) {
+                    const row = controller.keyboardMoveSelection(1, false)
+                    if (row < 0)
+                        return
+                    listView.ensureRowVisible(row)
+                    event.accepted = true
+                } else if (event.key === Qt.Key_K) {
+                    const row = controller.keyboardMoveSelection(-1, false)
+                    if (row < 0)
+                        return
+                    listView.ensureRowVisible(row)
+                    event.accepted = true
+                }
             }
             
             MouseArea {

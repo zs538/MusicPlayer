@@ -23,9 +23,13 @@ Item {
 
     readonly property alias model: browserModel
     readonly property real _scrollY: gridView.contentY
+    readonly property bool focusWithinBrowser: root.activeFocus || topStrip.searchField.activeFocus || gridView.activeFocus
 
     function currentSelectedEntryId() {
         return gridView && gridView.selectedIndex >= 0 ? browserModel.entryIdAt(gridView.selectedIndex) : ""
+    }
+    function focusBrowser() {
+        gridView.forceActiveFocus()
     }
     function contextKey(filter, groupBy) {
         return JSON.stringify({ filter: filter, groupBy: groupBy })
@@ -208,6 +212,23 @@ Item {
         root._ctxGroupValue = groupValue
         root._ctxFilePath = filePath
         sharedContextMenu.popup()
+    }
+    function playCurrentSelection() {
+        if (!gridView.selectionActive || gridView.selectedIndex < 0 || gridView.selectedIndex >= browserModel.count)
+            return
+        let item = gridView.currentItem
+        if (!item || item.index !== gridView.selectedIndex)
+            item = gridView.itemAtIndex(gridView.selectedIndex)
+        if (!item || item.entryType !== "group")
+            return
+        AppViewModel.browseActivation.playFilteredTracksInNewPlaylist(
+            browserModel.filter, item.groupType, item.groupValue)
+    }
+    function openSortMenu() {
+        topStrip.openSortMenu()
+    }
+    function openGroupByMenu() {
+        topStrip.openGroupByMenu()
     }
 
     TapHandler {
@@ -395,9 +416,24 @@ Item {
                 }
                 function onGroupByChanged() {
                     if (!gridView.shouldPreserveSelectionOnModelChange()) {
-                        gridView.clearSelection()
+                        if (gridView.count > 0)
+                            gridView.selectIndex(0)
+                        else
+                            gridView.clearSelection()
                         return
                     }
+                    gridView.finishSelectionPreservation()
+                }
+                function onSortByChanged() {
+                    if (root._loadingSortSettings)
+                        return
+                    gridView.selectFirstAfterNavigation = true
+                    gridView.finishSelectionPreservation()
+                }
+                function onSortAscendingChanged() {
+                    if (root._loadingSortSettings)
+                        return
+                    gridView.selectFirstAfterNavigation = true
                     gridView.finishSelectionPreservation()
                 }
                 function onCountChanged() {
@@ -442,7 +478,7 @@ Item {
             Behavior on contentY { enabled: !root._restoring; NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
             TapHandler {
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
-                acceptedDevices: PointerDevice.Mouse
+                acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                 gesturePolicy: TapHandler.ReleaseWithinBounds
                 onTapped: function(eventPoint, button) {
                     const contentPosition = gridView.mapToItem(gridView.contentItem, eventPoint.position.x, eventPoint.position.y)
@@ -471,12 +507,26 @@ Item {
             }
             onVisibleChanged: if (visible) contentY = originY
             Keys.onLeftPressed: (event) => {
+                if ((event.modifiers & Qt.AltModifier) !== 0) {
+                    if (!browserModel.canGoBack)
+                        return
+                    root.doGoBack()
+                    event.accepted = true
+                    return
+                }
                 if (selectedIndex < 0)
                     return
                 gridView.moveCurrentSelection(() => gridView.moveCurrentIndexLeft())
                 event.accepted = true
             }
             Keys.onRightPressed: (event) => {
+                if ((event.modifiers & Qt.AltModifier) !== 0) {
+                    if (!browserModel.canGoForward)
+                        return
+                    root.doGoForward()
+                    event.accepted = true
+                    return
+                }
                 if (selectedIndex < 0)
                     return
                 gridView.moveCurrentSelection(() => gridView.moveCurrentIndexRight())
@@ -497,20 +547,74 @@ Item {
             Keys.onReturnPressed: (event) => {
                 if (selectedIndex < 0)
                     return
+                if ((event.modifiers & Qt.ShiftModifier) !== 0) {
+                    root.playCurrentSelection()
+                    event.accepted = true
+                    return
+                }
                 gridView.activateCurrentSelection((event.modifiers & Qt.ControlModifier) !== 0)
                 event.accepted = true
             }
             Keys.onEnterPressed: (event) => {
                 if (selectedIndex < 0)
                     return
+                if ((event.modifiers & Qt.ShiftModifier) !== 0) {
+                    root.playCurrentSelection()
+                    event.accepted = true
+                    return
+                }
                 gridView.activateCurrentSelection((event.modifiers & Qt.ControlModifier) !== 0)
                 event.accepted = true
             }
             Keys.onPressed: (event) => {
-                if (event.key !== Qt.Key_Backspace || !browserModel.canGoBack)
+                if (event.key === Qt.Key_Backspace) {
+                    if (!browserModel.canGoBack)
+                        return
+                    root.doGoBack()
+                    event.accepted = true
                     return
-                root.doGoBack()
-                event.accepted = true
+                }
+                if (event.modifiers === Qt.AltModifier) {
+                    if (event.key === Qt.Key_H) {
+                        if (!browserModel.canGoBack)
+                            return
+                        root.doGoBack()
+                        event.accepted = true
+                    } else if (event.key === Qt.Key_L) {
+                        if (!browserModel.canGoForward)
+                            return
+                        root.doGoForward()
+                        event.accepted = true
+                    }
+                    return
+                }
+                if (event.modifiers !== Qt.NoModifier)
+                    return
+                if (event.key === Qt.Key_G) {
+                    root.openGroupByMenu()
+                    event.accepted = true
+                    return
+                }
+                if (event.key === Qt.Key_S) {
+                    root.openSortMenu()
+                    event.accepted = true
+                    return
+                }
+                if (selectedIndex < 0)
+                    return
+                if (event.key === Qt.Key_H) {
+                    gridView.moveCurrentSelection(() => gridView.moveCurrentIndexLeft())
+                    event.accepted = true
+                } else if (event.key === Qt.Key_L) {
+                    gridView.moveCurrentSelection(() => gridView.moveCurrentIndexRight())
+                    event.accepted = true
+                } else if (event.key === Qt.Key_K) {
+                    gridView.moveCurrentSelection(() => gridView.moveCurrentIndexUp())
+                    event.accepted = true
+                } else if (event.key === Qt.Key_J) {
+                    gridView.moveCurrentSelection(() => gridView.moveCurrentIndexDown())
+                    event.accepted = true
+                }
             }
 
             delegate: CollectionTileDelegate {

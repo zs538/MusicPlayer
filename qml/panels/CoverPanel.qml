@@ -9,6 +9,13 @@ Rectangle {
 
     onHasCoverChanged: if (!hasCover) backImg.source = ""
 
+    function showCurrentTrackInPlaylist() {
+        if (!root.hasCover || AppViewModel.currentIndex < 0)
+            return
+        ViewedPlaylistRouter.viewedPlaylistId = ViewedPlaylistRouter.activePlaylistId
+        ViewedPlaylistRouter.requestScrollToIndex(AppViewModel.currentIndex)
+    }
+
     // Back image holds current, front loads new then swaps
     Image {
         id: backImg
@@ -64,10 +71,7 @@ Rectangle {
 
         MenuItem {
             text: qsTr("Show in playlist")
-            onTriggered: {
-                ViewedPlaylistRouter.viewedPlaylistId = ViewedPlaylistRouter.activePlaylistId
-                ViewedPlaylistRouter.requestScrollToIndex(AppViewModel.currentIndex)
-            }
+            onTriggered: root.showCurrentTrackInPlaylist()
         }
     }
 }

@@ -7,7 +7,22 @@ Rectangle {
     id: root
     color: Theme.background
 
+    readonly property alias focusWithinBrowser: browserContent.focusWithinBrowser
+
+    function focusBrowser() {
+        browserContent.focusBrowser()
+    }
+    function openGroupByMenu() {
+        browserContent.focusBrowser()
+        browserContent.openGroupByMenu()
+    }
+    function openSortMenu() {
+        browserContent.focusBrowser()
+        browserContent.openSortMenu()
+    }
+
     CollectionBrowserContent {
+        id: browserContent
         anchors.fill: parent
         initialGroupBy: Settings.groupTypeNextGroupBy("all")
     }

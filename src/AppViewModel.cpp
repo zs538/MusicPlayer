@@ -13,7 +13,9 @@
 #include "library/LibraryDatabase.h"
 #include "ViewedPlaylistRouter.h"
 #include "BrowseActivationService.h"
+#include <QCursor>
 #include <QFileInfo>
+#include <QGuiApplication>
 
 static AppViewModel *s_instance = nullptr;
 
@@ -29,7 +31,17 @@ AppViewModel::AppViewModel(QObject *parent)
     
     m_libraryController->initialize();
     
-    connect(m_libraryController, &LibraryController::scanningChanged, this, &AppViewModel::libraryScanningChanged);
+    connect(m_libraryController, &LibraryController::scanningChanged, this, [this]() {
+        emit libraryScanningChanged();
+        if (libraryScanning()) {
+            if (QGuiApplication::overrideCursor())
+                QGuiApplication::changeOverrideCursor(QCursor(Qt::WaitCursor));
+            else
+                QGuiApplication::setOverrideCursor(QCursor(Qt::WaitCursor));
+        } else if (QGuiApplication::overrideCursor()) {
+            QGuiApplication::restoreOverrideCursor();
+        }
+    });
     connect(m_libraryController, &LibraryController::scanProgressChanged, this, &AppViewModel::libraryScanProgressChanged);
     connect(m_libraryController, &LibraryController::libraryFoldersChanged, this, &AppViewModel::libraryFoldersChanged);
     connect(m_libraryController, &LibraryController::trackCountChanged, this, &AppViewModel::libraryTrackCountChanged);
