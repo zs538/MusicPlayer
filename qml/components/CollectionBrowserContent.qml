@@ -31,6 +31,9 @@ Item {
     function focusBrowser() {
         gridView.forceActiveFocus()
     }
+    function focusFilterField() {
+        topStrip.focusSearchField()
+    }
     function contextKey(filter, groupBy) {
         return JSON.stringify({ filter: filter, groupBy: groupBy })
     }
@@ -258,6 +261,18 @@ Item {
         anchors.fill: parent
         spacing: 0
 
+        Shortcut {
+            sequence: "Ctrl+F"
+            enabled: root.focusWithinBrowser
+            onActivated: root.focusFilterField()
+        }
+
+        Shortcut {
+            sequence: "/"
+            enabled: root.focusWithinBrowser && !topStrip.searchField.activeFocus
+            onActivated: root.focusFilterField()
+        }
+
         CollectionBrowserToolbar {
             id: topStrip
             Layout.fillWidth: true
@@ -271,6 +286,7 @@ Item {
             onSortAscendingToggled: (ascending) => root.setSortAscending(ascending)
             onSubtitleOptionSelected: (key) => root.setSubtitleOption(key)
             onSearchFilterChanged: (text) => browserModel.searchFilter = text
+            onSearchFieldEscapePressed: root.focusBrowser()
             onOpenActionChanged: (action) => {
                 Settings.setGroupTypeOpenAction(browserModel.groupBy, action)
                 root._currentOpenAction = action
@@ -305,7 +321,7 @@ Item {
                 stableCellHeight = stableCellWidth + 33
             }
 
-            function selectIndex(index) {
+            function selectIndex(index, focusGrid = true) {
                 if (index < 0 || index >= count) {
                     selectedIndex = -1
                     currentIndex = -1
@@ -316,7 +332,8 @@ Item {
                 selectedIndex = index
                 currentIndex = index
                 selectionActive = true
-                forceActiveFocus()
+                if (focusGrid)
+                    forceActiveFocus()
                 positionViewAtIndex(index, GridView.Contain)
                 root.rememberSelectionForContext(browserModel.filter, browserModel.groupBy, browserModel.entryIdAt(index))
             }
@@ -437,24 +454,26 @@ Item {
                     gridView.finishSelectionPreservation()
                 }
                 function onCountChanged() {
+                    const preserveSearchFocus = topStrip.searchField.activeFocus
                     if (gridView.pendingNavigateSelectionEntryId.length > 0) {
                         const restoreIndex = browserModel.indexOfEntryId(gridView.pendingNavigateSelectionEntryId)
                         if (restoreIndex >= 0) {
-                            gridView.selectIndex(restoreIndex)
+                            gridView.selectIndex(restoreIndex, !preserveSearchFocus)
                             return
                         }
                         if (gridView.count > 0) {
-                            gridView.selectIndex(0)
+                            gridView.selectIndex(0, !preserveSearchFocus)
                             return
                         }
                     }
                     if (gridView.selectFirstAfterNavigation && gridView.count > 0) {
-                        gridView.selectIndex(0)
+                        gridView.selectIndex(0, !preserveSearchFocus)
                         return
                     }
                     if (gridView.selectedIndex < 0 && gridView.count > 0) {
-                        gridView.selectIndex(0)
-                        gridView.hideSelection()
+                        gridView.selectIndex(0, !preserveSearchFocus)
+                        if (!preserveSearchFocus)
+                            gridView.hideSelection()
                         return
                     }
                     if (gridView.selectFirstAfterNavigation)
@@ -467,7 +486,7 @@ Item {
                         return
                     const restoreIndex = browserModel.indexOfEntryId(browserModel.pendingSelectedEntryId)
                     if (restoreIndex >= 0)
-                        gridView.selectIndex(restoreIndex)
+                        gridView.selectIndex(restoreIndex, !topStrip.searchField.activeFocus)
                 }
             }
 

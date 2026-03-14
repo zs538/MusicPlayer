@@ -81,6 +81,12 @@ Rectangle {
             return
         AppViewModel.playlistStore.closeTab(root.playlistId)
     }
+    function moveSelectedTracksBy(delta) {
+        const row = controller.moveSelectedBy(delta)
+        if (row >= 0)
+            listView.ensureRowVisible(row)
+        focusPlaylist()
+    }
     function setPlaylistTrackListLayout(layout) {
         let normalized = TrackListColumnsSupport.ensureLayout(layout)
         playlistTrackListLayout = normalized
@@ -514,6 +520,11 @@ Rectangle {
                 event.accepted = true
             }
             Keys.onUpPressed: (event) => {
+                if ((event.modifiers & Qt.ControlModifier) !== 0) {
+                    root.moveSelectedTracksBy(-1)
+                    event.accepted = true
+                    return
+                }
                 const row = controller.keyboardMoveSelection(-1, (event.modifiers & Qt.ShiftModifier) !== 0)
                 if (row < 0)
                     return
@@ -521,6 +532,11 @@ Rectangle {
                 event.accepted = true
             }
             Keys.onDownPressed: (event) => {
+                if ((event.modifiers & Qt.ControlModifier) !== 0) {
+                    root.moveSelectedTracksBy(1)
+                    event.accepted = true
+                    return
+                }
                 const row = controller.keyboardMoveSelection(1, (event.modifiers & Qt.ShiftModifier) !== 0)
                 if (row < 0)
                     return
@@ -553,6 +569,12 @@ Rectangle {
                 if (event.modifiers === Qt.ControlModifier) {
                     if (event.key === Qt.Key_A) {
                         root.selectAllTracks()
+                        event.accepted = true
+                    } else if (event.key === Qt.Key_K) {
+                        root.moveSelectedTracksBy(-1)
+                        event.accepted = true
+                    } else if (event.key === Qt.Key_J) {
+                        root.moveSelectedTracksBy(1)
                         event.accepted = true
                     }
                     return

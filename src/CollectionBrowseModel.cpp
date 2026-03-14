@@ -255,9 +255,9 @@ QVariantList CollectionBrowseModel::sortOptions() const
     return CBH::sortOptions(m_groupBy);
 }
 
-QVariantList CollectionBrowseModel::subtitleOptions() const
+QVariantList CollectionBrowseModel::subtitleOptions(const QStringList &customTagKeys) const
 {
-    return CBH::subtitleOptions(m_groupBy);
+    return CBH::subtitleOptions(m_groupBy, customTagKeys);
 }
 
 QVariantList CollectionBrowseModel::groupByOptions(const QStringList &customTagKeys) const

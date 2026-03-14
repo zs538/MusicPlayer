@@ -37,6 +37,143 @@ QString customTagSortText(const QVariantMap &trackData, const QString &tagKey)
     return {};
 }
 
+QVariant mapValueCaseInsensitive(const QVariantMap &map, const QString &key)
+{
+    if (key.isEmpty())
+        return {};
+    if (map.contains(key))
+        return map.value(key);
+    for (auto it = map.constBegin(); it != map.constEnd(); ++it) {
+        if (it.key().compare(key, Qt::CaseInsensitive) == 0)
+            return it.value();
+    }
+    return {};
+}
+
+QString canonicalSubtitleFieldKey(const QString &fieldKey)
+{
+    const QString key = fieldKey.trimmed().toLower();
+    if (key == QStringLiteral("albumartist")) return QStringLiteral("albumArtist");
+    if (key == QStringLiteral("tracknumber")) return QStringLiteral("trackNumber");
+    if (key == QStringLiteral("discnumber")) return QStringLiteral("discNumber");
+    if (key == QStringLiteral("originalyear")) return QStringLiteral("originalYear");
+    if (key == QStringLiteral("samplerate")) return QStringLiteral("sampleRate");
+    if (key == QStringLiteral("bitdepth")) return QStringLiteral("bitDepth");
+    if (key == QStringLiteral("duration")) return QStringLiteral("durationMs");
+    if (key == QStringLiteral("dateupdated")) return QStringLiteral("dateModified");
+    if (key == QStringLiteral("datecreated")) return QStringLiteral("dateCreated");
+    if (key == QStringLiteral("filetype")) return QStringLiteral("fileType");
+    if (key == QStringLiteral("filepath")) return QStringLiteral("filePath");
+    if (key == QStringLiteral("filename")) return QStringLiteral("fileName");
+    if (key == QStringLiteral("initialkey")) return QStringLiteral("initialKey");
+    return fieldKey.trimmed();
+}
+
+bool hasMeaningfulValue(const QVariant &value)
+{
+    if (!value.isValid() || value.isNull())
+        return false;
+
+    switch (value.metaType().id()) {
+    case QMetaType::QString:
+        return !value.toString().trimmed().isEmpty();
+    case QMetaType::Int:
+    case QMetaType::UInt:
+    case QMetaType::LongLong:
+    case QMetaType::ULongLong:
+    case QMetaType::Double:
+    case QMetaType::Float:
+        return value.toLongLong() > 0;
+    case QMetaType::QDateTime:
+        return value.toDateTime().isValid();
+    case QMetaType::QStringList:
+        return !value.toStringList().isEmpty();
+    case QMetaType::QVariantList:
+        return !value.toList().isEmpty();
+    case QMetaType::QVariantMap:
+        return !value.toMap().isEmpty();
+    default:
+        break;
+    }
+
+    if (value.canConvert<QDateTime>())
+        return value.toDateTime().isValid();
+    return !value.toString().trimmed().isEmpty();
+}
+
+void mergeMissingSubtitleData(QVariantMap &target, const QVariantMap &source)
+{
+    for (auto it = source.constBegin(); it != source.constEnd(); ++it) {
+        if (it.key() == QStringLiteral("customTags"))
+            continue;
+        if (hasMeaningfulValue(mapValueCaseInsensitive(target, it.key())))
+            continue;
+        if (hasMeaningfulValue(it.value()))
+            target.insert(it.key(), it.value());
+    }
+
+    QVariantMap targetCustomTags = mapValueCaseInsensitive(target, QStringLiteral("customTags")).toMap();
+    const QVariantMap sourceCustomTags = source.value(QStringLiteral("customTags")).toMap();
+    for (auto it = sourceCustomTags.constBegin(); it != sourceCustomTags.constEnd(); ++it) {
+        if (hasMeaningfulValue(mapValueCaseInsensitive(targetCustomTags, it.key())))
+            continue;
+        if (hasMeaningfulValue(it.value()))
+            targetCustomTags.insert(it.key(), it.value());
+    }
+    if (!targetCustomTags.isEmpty())
+        target.insert(QStringLiteral("customTags"), targetCustomTags);
+}
+
+QString subtitleDataValueText(const QVariantMap &subtitleData, const QString &subtitleKey)
+{
+    const QString key = subtitleKey.trimmed();
+    if (key.isEmpty())
+        return {};
+
+    if (key.startsWith(QStringLiteral("field:"), Qt::CaseInsensitive))
+        return subtitleDataValueText(subtitleData, key.mid(6));
+
+    if (key.startsWith(QStringLiteral("custom:"), Qt::CaseInsensitive)) {
+        const QVariantMap customTags = mapValueCaseInsensitive(subtitleData, QStringLiteral("customTags")).toMap();
+        const QVariant value = mapValueCaseInsensitive(customTags, key.mid(7));
+        return hasMeaningfulValue(value) ? variantToSortText(value) : QString();
+    }
+
+    const QString canonicalKey = canonicalSubtitleFieldKey(key);
+    QVariant value = mapValueCaseInsensitive(subtitleData, canonicalKey);
+    if (canonicalKey == QStringLiteral("albumArtist") && !hasMeaningfulValue(value))
+        value = mapValueCaseInsensitive(subtitleData, QStringLiteral("artist"));
+    if (!hasMeaningfulValue(value))
+        return {};
+
+    if (canonicalKey == QStringLiteral("durationMs"))
+        return CollectionBrowseHelper::formatDurationMs(value.toLongLong());
+    if (canonicalKey == QStringLiteral("bitrate")) {
+        const int bitrate = value.toInt();
+        return bitrate > 0 ? QStringLiteral("%1 kbps").arg(bitrate / 1000) : QString();
+    }
+    if (canonicalKey == QStringLiteral("sampleRate")) {
+        const int sampleRate = value.toInt();
+        return sampleRate > 0 ? QStringLiteral("%1 Hz").arg(sampleRate) : QString();
+    }
+    if (canonicalKey == QStringLiteral("dateCreated") || canonicalKey == QStringLiteral("dateModified")) {
+        const QDateTime dateTime = value.toDateTime();
+        return dateTime.isValid() ? dateTime.date().toString(Qt::ISODate) : QString();
+    }
+    if (canonicalKey == QStringLiteral("trackNumber") ||
+        canonicalKey == QStringLiteral("discNumber") ||
+        canonicalKey == QStringLiteral("year") ||
+        canonicalKey == QStringLiteral("originalYear") ||
+        canonicalKey == QStringLiteral("bpm") ||
+        canonicalKey == QStringLiteral("bitDepth") ||
+        canonicalKey == QStringLiteral("channels")) {
+        const int number = value.toInt();
+        return number > 0 ? QString::number(number) : QString();
+    }
+
+    return value.toString().trimmed();
+}
+
 int compareTextValue(const QString &left, const QString &right)
 {
     const QString a = left.trimmed();
@@ -143,6 +280,7 @@ QVariantMap libraryTrackToVariantMap(const LibraryTrack &track)
     map.insert(QStringLiteral("sampleRate"), track.sampleRate);
     map.insert(QStringLiteral("bitDepth"), track.bitDepth);
     map.insert(QStringLiteral("bitrate"), track.bitrate);
+    map.insert(QStringLiteral("channels"), track.channels);
     map.insert(QStringLiteral("url"), track.url);
     map.insert(QStringLiteral("fileName"), track.fileName);
     map.insert(QStringLiteral("fileSize"), track.fileSize);
@@ -152,6 +290,7 @@ QVariantMap libraryTrackToVariantMap(const LibraryTrack &track)
     map.insert(QStringLiteral("comment"), track.comment);
     map.insert(QStringLiteral("bpm"), track.bpm);
     map.insert(QStringLiteral("initialKey"), track.initialKey);
+    map.insert(QStringLiteral("codec"), track.codec);
     map.insert(QStringLiteral("customTags"), track.customTags);
     map.insert(QStringLiteral("display"), track.title.isEmpty() ? track.fileName : track.title);
     return map;
@@ -259,6 +398,9 @@ QString formatSubtitle(const Entry &entry, const QString &subtitleKey)
     const QString key = subtitleKey.trimmed();
     const QString yearText = entry.year > 0 ? QString::number(entry.year) : QString();
     const QString dateUpdatedText = formatModifiedDate(entry.modifiedTime);
+    const QString subtitleArtistText = subtitleDataValueText(entry.subtitleData, QStringLiteral("artist"));
+    const QString subtitleAlbumText = subtitleDataValueText(entry.subtitleData, QStringLiteral("album"));
+    const QString subtitleAlbumArtistText = subtitleDataValueText(entry.subtitleData, QStringLiteral("albumArtist"));
 
     if (entry.entryType == QStringLiteral("group")) {
         const QString countText = QStringLiteral("%1 tracks").arg(entry.childCount);
@@ -272,6 +414,16 @@ QString formatSubtitle(const Entry &entry, const QString &subtitleKey)
             return joinSubtitleParts(QStringList{entry.artist, countText});
         if (key == QStringLiteral("yearAlbumArtist"))
             return joinSubtitleParts(QStringList{yearText, entry.artist});
+        if (key == QStringLiteral("albumArtistAlbum"))
+            return joinSubtitleParts(QStringList{subtitleAlbumArtistText.isEmpty() ? entry.artist : subtitleAlbumArtistText, subtitleAlbumText});
+        if (key == QStringLiteral("artistDuration"))
+            return joinSubtitleParts(QStringList{subtitleArtistText, durationText});
+        if (key == QStringLiteral("artistYear"))
+            return joinSubtitleParts(QStringList{subtitleArtistText, yearText});
+        if (key == QStringLiteral("trackNumberAlbum"))
+            return joinSubtitleParts(QStringList{subtitleDataValueText(entry.subtitleData, QStringLiteral("trackNumber")), subtitleAlbumText});
+        if (key == QStringLiteral("yearDuration"))
+            return joinSubtitleParts(QStringList{yearText, durationText});
         if (key == QStringLiteral("duration"))
             return durationText;
         if (key == QStringLiteral("countDuration"))
@@ -282,6 +434,12 @@ QString formatSubtitle(const Entry &entry, const QString &subtitleKey)
             return joinSubtitleParts(QStringList{yearText, countText});
         if (key == QStringLiteral("dateUpdated"))
             return dateUpdatedText;
+        const QString dynamicText = subtitleDataValueText(entry.subtitleData, key);
+        if (!dynamicText.isEmpty())
+            return dynamicText;
+        if (key.startsWith(QStringLiteral("field:"), Qt::CaseInsensitive) ||
+            key.startsWith(QStringLiteral("custom:"), Qt::CaseInsensitive))
+            return QStringLiteral("-");
         return countText;
     }
 
@@ -301,19 +459,28 @@ QString formatSubtitle(const Entry &entry, const QString &subtitleKey)
         return albumArtistText;
     if (key == QStringLiteral("album"))
         return entry.album;
+    if (key == QStringLiteral("artistDuration"))
+        return joinSubtitleParts(QStringList{entry.artist, durationText});
+    if (key == QStringLiteral("artistYear"))
+        return joinSubtitleParts(QStringList{entry.artist, yearText});
     if (key == QStringLiteral("artistAlbum"))
         return joinSubtitleParts(QStringList{entry.artist, entry.album});
     if (key == QStringLiteral("albumArtistAlbum"))
         return joinSubtitleParts(QStringList{albumArtistText, entry.album});
+    if (key == QStringLiteral("albumArtistYear"))
+        return joinSubtitleParts(QStringList{albumArtistText, yearText});
     if (key == QStringLiteral("year"))
         return yearText;
+    if (key == QStringLiteral("yearDuration"))
+        return joinSubtitleParts(QStringList{yearText, durationText});
     if (key == QStringLiteral("fileType"))
         return entry.fileType;
     if (key == QStringLiteral("bitrate"))
         return entry.bitrate > 0 ? QStringLiteral("%1 kbps").arg(entry.bitrate / 1000) : QString();
     if (key == QStringLiteral("dateUpdated"))
         return dateUpdatedText;
-    return durationText;
+    const QString dynamicText = subtitleDataValueText(entry.subtitleData, key);
+    return dynamicText.isEmpty() ? durationText : dynamicText;
 }
 
 void applySubtitleToEntries(QVector<Entry> &entries, const QString &subtitleKey)
@@ -434,6 +601,7 @@ QVector<Entry> buildGroups(const QVector<LibraryTrack> &tracks, const QString &g
         int year = 0;
         QString artist;
         QString album;
+        QVariantMap subtitleData;
         qint64 totalDurationMs = 0;
         qint64 modifiedTime = 0;
     };
@@ -446,6 +614,7 @@ QVector<Entry> buildGroups(const QVector<LibraryTrack> &tracks, const QString &g
 
         if (!groups.contains(key)) {
             GroupData groupData;
+            const QVariantMap trackData = libraryTrackToVariantMap(track);
             groupData.value = value;
             groupData.count = 1;
             groupData.representativeFilePath = track.filePath;
@@ -454,19 +623,29 @@ QVector<Entry> buildGroups(const QVector<LibraryTrack> &tracks, const QString &g
             groupData.year = track.year;
             groupData.artist = track.albumArtist.isEmpty() ? track.artist : track.albumArtist;
             groupData.album = track.album;
+            groupData.subtitleData = trackData;
             groupData.totalDurationMs = track.durationMs;
             groupData.modifiedTime = track.modifiedTime;
             groups.insert(key, groupData);
         } else {
             GroupData &groupData = groups[key];
+            const QVariantMap trackData = libraryTrackToVariantMap(track);
             groupData.count++;
             if (!track.filePath.isEmpty() && !groupData.coverFilePaths.contains(track.filePath))
                 groupData.coverFilePaths.append(track.filePath);
             groupData.totalDurationMs += track.durationMs;
             if (track.year > 0 && (groupData.year == 0 || track.year < groupData.year))
                 groupData.year = track.year;
+            if (groupData.artist.isEmpty()) {
+                const QString artistText = track.albumArtist.isEmpty() ? track.artist : track.albumArtist;
+                if (!artistText.isEmpty())
+                    groupData.artist = artistText;
+            }
+            if (groupData.album.isEmpty() && !track.album.isEmpty())
+                groupData.album = track.album;
             if (track.modifiedTime > groupData.modifiedTime)
                 groupData.modifiedTime = track.modifiedTime;
+            mergeMissingSubtitleData(groupData.subtitleData, trackData);
         }
     }
 
@@ -491,6 +670,7 @@ QVector<Entry> buildGroups(const QVector<LibraryTrack> &tracks, const QString &g
         entry.year = groupData.year;
         entry.artist = groupData.artist;
         entry.album = groupData.album;
+        entry.subtitleData = groupData.subtitleData;
         entry.totalDurationMs = groupData.totalDurationMs;
         entry.modifiedTime = groupData.modifiedTime;
         entries.append(entry);
@@ -522,6 +702,7 @@ QVector<Entry> buildTracks(const QVector<LibraryTrack> &tracks, const QString &s
         entry.bitrate = track.bitrate;
         entry.fileType = track.fileType;
         entry.trackData = libraryTrackToVariantMap(track);
+        entry.subtitleData = entry.trackData;
         entry.representativeFilePath = track.filePath;
         if (!track.filePath.isEmpty())
             entry.coverFilePaths = { track.filePath };
@@ -618,37 +799,86 @@ QVariantList sortOptions(const QString &groupBy)
     };
 }
 
-QVariantList subtitleOptions(const QString &groupBy)
+QVariantList subtitleOptions(const QString &groupBy, const QStringList &customTagKeys)
 {
+    QVariantList options;
+
     if (groupBy == QStringLiteral("none")) {
-        return {
-            optionItem(QStringLiteral("Track"), QStringLiteral("trackNumber")),
-            optionItem(QStringLiteral("Duration"), QStringLiteral("duration")),
-            optionItem(QStringLiteral("Track - Duration"), QStringLiteral("trackNumberDuration")),
-            optionItem(QStringLiteral("Year"), QStringLiteral("year")),
-            optionItem(QStringLiteral("Date Updated"), QStringLiteral("dateUpdated")),
-            optionItem(QStringLiteral("Artist"), QStringLiteral("artist")),
-            optionItem(QStringLiteral("Album Artist"), QStringLiteral("albumArtist")),
-            optionItem(QStringLiteral("Album"), QStringLiteral("album")),
-            optionItem(QStringLiteral("Track - Album"), QStringLiteral("trackNumberAlbum")),
-            optionItem(QStringLiteral("Artist - Album"), QStringLiteral("artistAlbum")),
-            optionItem(QStringLiteral("Album Artist - Album"), QStringLiteral("albumArtistAlbum")),
-            optionItem(QStringLiteral("File Type"), QStringLiteral("fileType")),
-            optionItem(QStringLiteral("Bitrate"), QStringLiteral("bitrate")),
+        options = {
+            categorizedOptionItem(QStringLiteral("Album Artist"), QStringLiteral("albumArtist"), QStringLiteral("main")),
+            categorizedOptionItem(QStringLiteral("Artist"), QStringLiteral("artist"), QStringLiteral("main")),
+            categorizedOptionItem(QStringLiteral("Duration"), QStringLiteral("duration"), QStringLiteral("main")),
+            categorizedOptionItem(QStringLiteral("Album"), QStringLiteral("album"), QStringLiteral("main")),
+            categorizedOptionItem(QStringLiteral("Year"), QStringLiteral("year"), QStringLiteral("main")),
+            categorizedOptionItem(QStringLiteral("Date Updated"), QStringLiteral("dateUpdated"), QStringLiteral("main")),
+            categorizedOptionItem(QStringLiteral("Album Artist - Album"), QStringLiteral("albumArtistAlbum"), QStringLiteral("other")),
+            categorizedOptionItem(QStringLiteral("Album Artist - Year"), QStringLiteral("albumArtistYear"), QStringLiteral("other")),
+            categorizedOptionItem(QStringLiteral("Artist - Duration"), QStringLiteral("artistDuration"), QStringLiteral("other")),
+            categorizedOptionItem(QStringLiteral("Artist - Year"), QStringLiteral("artistYear"), QStringLiteral("other")),
+            categorizedOptionItem(QStringLiteral("Track"), QStringLiteral("field:trackNumber"), QStringLiteral("other")),
+            categorizedOptionItem(QStringLiteral("Track - Album"), QStringLiteral("trackNumberAlbum"), QStringLiteral("other")),
+            categorizedOptionItem(QStringLiteral("Year - Duration"), QStringLiteral("yearDuration"), QStringLiteral("other")),
         };
+        const QList<QPair<QString, QString>> dynamicFields = {
+            { QStringLiteral("discNumber"), QStringLiteral("Disc") },
+            { QStringLiteral("genre"), QStringLiteral("Genre") },
+            { QStringLiteral("performer"), QStringLiteral("Performer") },
+            { QStringLiteral("composer"), QStringLiteral("Composer") },
+            { QStringLiteral("originalYear"), QStringLiteral("Original Year") },
+            { QStringLiteral("comment"), QStringLiteral("Comment") },
+            { QStringLiteral("bpm"), QStringLiteral("BPM") },
+            { QStringLiteral("initialKey"), QStringLiteral("Initial Key") },
+            { QStringLiteral("fileType"), QStringLiteral("File Type") },
+            { QStringLiteral("bitrate"), QStringLiteral("Bitrate") },
+            { QStringLiteral("sampleRate"), QStringLiteral("Sample Rate") },
+            { QStringLiteral("bitDepth"), QStringLiteral("Bit Depth") },
+            { QStringLiteral("channels"), QStringLiteral("Channels") },
+            { QStringLiteral("codec"), QStringLiteral("Codec") },
+        };
+
+        for (const auto &field : dynamicFields)
+            options.append(categorizedOptionItem(field.second, QStringLiteral("field:") + field.first, QStringLiteral("other")));
+    } else {
+        options = {
+            categorizedOptionItem(QStringLiteral("Album Artist"), QStringLiteral("albumArtist"), QStringLiteral("main")),
+            categorizedOptionItem(QStringLiteral("Artist"), QStringLiteral("field:artist"), QStringLiteral("main")),
+            categorizedOptionItem(QStringLiteral("Duration"), QStringLiteral("duration"), QStringLiteral("main")),
+            categorizedOptionItem(QStringLiteral("Album"), QStringLiteral("field:album"), QStringLiteral("main")),
+            categorizedOptionItem(QStringLiteral("Year"), QStringLiteral("year"), QStringLiteral("main")),
+            categorizedOptionItem(QStringLiteral("Track Count"), QStringLiteral("count"), QStringLiteral("main")),
+            categorizedOptionItem(QStringLiteral("Date Updated"), QStringLiteral("dateUpdated"), QStringLiteral("main")),
+            categorizedOptionItem(QStringLiteral("Album Artist - Album"), QStringLiteral("albumArtistAlbum"), QStringLiteral("other")),
+            categorizedOptionItem(QStringLiteral("Album Artist - Year"), QStringLiteral("albumArtistYear"), QStringLiteral("other")),
+            categorizedOptionItem(QStringLiteral("Artist - Duration"), QStringLiteral("artistDuration"), QStringLiteral("other")),
+            categorizedOptionItem(QStringLiteral("Artist - Year"), QStringLiteral("artistYear"), QStringLiteral("other")),
+            categorizedOptionItem(QStringLiteral("Track - Album"), QStringLiteral("trackNumberAlbum"), QStringLiteral("other")),
+            categorizedOptionItem(QStringLiteral("Track"), QStringLiteral("field:trackNumber"), QStringLiteral("other")),
+            categorizedOptionItem(QStringLiteral("Year - Duration"), QStringLiteral("yearDuration"), QStringLiteral("other")),
+        };
+        const QList<QPair<QString, QString>> dynamicFields = {
+            { QStringLiteral("genre"), QStringLiteral("Genre") },
+            { QStringLiteral("performer"), QStringLiteral("Performer") },
+            { QStringLiteral("composer"), QStringLiteral("Composer") },
+            { QStringLiteral("originalYear"), QStringLiteral("Original Year") },
+            { QStringLiteral("comment"), QStringLiteral("Comment") },
+            { QStringLiteral("bpm"), QStringLiteral("BPM") },
+            { QStringLiteral("initialKey"), QStringLiteral("Initial Key") },
+            { QStringLiteral("fileType"), QStringLiteral("File Type") },
+            { QStringLiteral("bitrate"), QStringLiteral("Bitrate") },
+            { QStringLiteral("sampleRate"), QStringLiteral("Sample Rate") },
+            { QStringLiteral("bitDepth"), QStringLiteral("Bit Depth") },
+            { QStringLiteral("channels"), QStringLiteral("Channels") },
+            { QStringLiteral("codec"), QStringLiteral("Codec") },
+        };
+
+        for (const auto &field : dynamicFields)
+            options.append(categorizedOptionItem(field.second, QStringLiteral("field:") + field.first, QStringLiteral("other")));
     }
-    return {
-        optionItem(QStringLiteral("Track Count"), QStringLiteral("count")),
-        optionItem(QStringLiteral("Duration"), QStringLiteral("duration")),
-        optionItem(QStringLiteral("Tracks - Duration"), QStringLiteral("countDuration")),
-        optionItem(QStringLiteral("Album Artist"), QStringLiteral("albumArtist")),
-        optionItem(QStringLiteral("Album Artist - Year"), QStringLiteral("albumArtistYear")),
-        optionItem(QStringLiteral("Album Artist - Tracks"), QStringLiteral("albumArtistCount")),
-        optionItem(QStringLiteral("Year - Album Artist"), QStringLiteral("yearAlbumArtist")),
-        optionItem(QStringLiteral("Year"), QStringLiteral("year")),
-        optionItem(QStringLiteral("Year - Tracks"), QStringLiteral("yearCount")),
-        optionItem(QStringLiteral("Date Updated"), QStringLiteral("dateUpdated")),
-    };
+
+    for (const QString &tag : customTagKeys)
+        options.append(categorizedOptionItem(tag, QStringLiteral("custom:") + tag, QStringLiteral("custom")));
+
+    return options;
 }
 
 QVariantList groupByOptions(const QStringList &customTagKeys)

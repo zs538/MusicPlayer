@@ -88,7 +88,7 @@ public:
 
     // Vocabulary option lists for toolbar menus
     Q_INVOKABLE QVariantList sortOptions() const;
-    Q_INVOKABLE QVariantList subtitleOptions() const;
+    Q_INVOKABLE QVariantList subtitleOptions(const QStringList &customTagKeys) const;
     Q_INVOKABLE QVariantList groupByOptions(const QStringList &customTagKeys) const;
 
     // History navigation — atomic filter+groupBy change, single refresh

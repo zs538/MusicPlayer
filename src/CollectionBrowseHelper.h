@@ -36,6 +36,7 @@ struct Entry {
     int bitrate = 0;
     QString fileType;
     QVariantMap trackData;
+    QVariantMap subtitleData;
     qint64 totalDurationMs = 0;
     qint64 modifiedTime = 0;
 };
@@ -63,7 +64,7 @@ QVector<Entry> filteredAndSortedEntries(const QVector<Entry> &allEntries,
 // --- Option lists: vocabulary for toolbar menus ---
 
 QVariantList sortOptions(const QString &groupBy);
-QVariantList subtitleOptions(const QString &groupBy);
+QVariantList subtitleOptions(const QString &groupBy, const QStringList &customTagKeys);
 QVariantList groupByOptions(const QStringList &customTagKeys);
 
 // --- Utility ---

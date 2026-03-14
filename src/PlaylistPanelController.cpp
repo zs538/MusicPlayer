@@ -223,6 +223,32 @@ void PlaylistPanelController::moveSelectedTo(int targetRow)
     m_selectionAnchorRow = insertPos;
 }
 
+int PlaylistPanelController::moveSelectedBy(int delta)
+{
+    if (!m_model || m_selectedRowsCache.isEmpty() || delta == 0)
+        return -1;
+
+    QList<int> rows = m_selectedRowsCache;
+    std::sort(rows.begin(), rows.end());
+
+    const int firstRow = rows.constFirst();
+    const int lastRow = rows.constLast();
+    const int rowCount = m_model->rowCount();
+
+    if (delta < 0) {
+        if (firstRow <= 0)
+            return firstRow;
+        moveSelectedTo(firstRow - 1);
+        return firstRow - 1;
+    }
+
+    if (lastRow >= rowCount - 1)
+        return firstRow;
+
+    moveSelectedTo(lastRow + 2);
+    return qMin(firstRow + 1, rowCount - 1);
+}
+
 void PlaylistPanelController::sortByColumn(const QString &key, bool ascending)
 {
     if (!m_model || key.trimmed().isEmpty())

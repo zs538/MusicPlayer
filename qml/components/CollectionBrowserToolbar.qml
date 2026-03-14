@@ -7,6 +7,7 @@ Rectangle {
     id: root
 
     property var browserModel: null
+    signal searchFieldEscapePressed()
     property bool showBreadcrumbHomeButton: true
     property var customGroupKeys: []
     property string currentOpenAction: "openPanel"
@@ -30,6 +31,10 @@ Rectangle {
         groupByMenu.popup()
         if (groupByMenu.count > 0)
             groupByMenu.currentIndex = 0
+    }
+    function focusSearchField() {
+        searchField.forceActiveFocus()
+        searchField.selectAll()
     }
 
     component TopStripIconButton: Item {
@@ -200,6 +205,10 @@ Rectangle {
                     }
                 }
                 onTextChanged: root.searchFilterChanged(text)
+                Keys.onEscapePressed: (event) => {
+                    root.searchFieldEscapePressed()
+                    event.accepted = true
+                }
 
                 TopStripIconButton {
                     id: searchActionButton
@@ -391,8 +400,13 @@ Rectangle {
                     id: subtitleMenu
                     title: "Subtitle"
 
+                    property var allOptions: root.browserModel ? root.browserModel.subtitleOptions(root.customGroupKeys) : []
+                    property var mainOptions: allOptions.filter(function(o) { return o.category === "main" })
+                    property var otherOptions: allOptions.filter(function(o) { return o.category === "other" })
+                    property var customOptions: allOptions.filter(function(o) { return o.category === "custom" })
+
                     Instantiator {
-                        model: root.browserModel ? root.browserModel.subtitleOptions() : []
+                        model: subtitleMenu.mainOptions
 
                         delegate: MenuItem {
                             required property var modelData
@@ -410,6 +424,66 @@ Rectangle {
 
                         onObjectRemoved: function(index, object) {
                             subtitleMenu.removeItem(object)
+                        }
+                    }
+
+                    Menu {
+                        id: otherSubtitleMenu
+                        title: "Other"
+
+                        Instantiator {
+                            model: subtitleMenu.otherOptions
+
+                            delegate: MenuItem {
+                                required property var modelData
+
+                                text: modelData.text
+                                checkable: true
+                                checked: root.browserModel ? root.browserModel.subtitleKey === modelData.key : false
+                                PointingCursor {}
+                                onTriggered: root.subtitleOptionSelected(modelData.key)
+                            }
+
+                            onObjectAdded: function(index, object) {
+                                otherSubtitleMenu.insertItem(index, object)
+                            }
+
+                            onObjectRemoved: function(index, object) {
+                                otherSubtitleMenu.removeItem(object)
+                            }
+                        }
+                    }
+
+                    Menu {
+                        id: customSubtitleMenu
+                        title: "Custom"
+
+                        MenuItem {
+                            text: "No custom tags found"
+                            enabled: false
+                            visible: subtitleMenu.customOptions.length === 0
+                        }
+
+                        Instantiator {
+                            model: subtitleMenu.customOptions
+
+                            delegate: MenuItem {
+                                required property var modelData
+
+                                text: modelData.text
+                                checkable: true
+                                checked: root.browserModel ? root.browserModel.subtitleKey === modelData.key : false
+                                PointingCursor {}
+                                onTriggered: root.subtitleOptionSelected(modelData.key)
+                            }
+
+                            onObjectAdded: function(index, object) {
+                                customSubtitleMenu.insertItem(index, object)
+                            }
+
+                            onObjectRemoved: function(index, object) {
+                                customSubtitleMenu.removeItem(object)
+                            }
                         }
                     }
                 }
