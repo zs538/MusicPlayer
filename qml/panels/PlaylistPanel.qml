@@ -544,15 +544,25 @@ Rectangle {
                 event.accepted = true
             }
             Keys.onLeftPressed: (event) => {
-                if ((event.modifiers & Qt.AltModifier) === 0)
+                if ((event.modifiers & Qt.AltModifier) !== 0) {
+                    root.stepViewedPlaylist(-1)
+                    event.accepted = true
                     return
-                root.stepViewedPlaylist(-1)
+                }
+                if (event.modifiers !== Qt.NoModifier)
+                    return
+                AppViewModel.seek(Math.max(0, AppViewModel.positionMs - 5000))
                 event.accepted = true
             }
             Keys.onRightPressed: (event) => {
-                if ((event.modifiers & Qt.AltModifier) === 0)
+                if ((event.modifiers & Qt.AltModifier) !== 0) {
+                    root.stepViewedPlaylist(1)
+                    event.accepted = true
                     return
-                root.stepViewedPlaylist(1)
+                }
+                if (event.modifiers !== Qt.NoModifier)
+                    return
+                AppViewModel.seek(Math.min(AppViewModel.durationMs, AppViewModel.positionMs + 5000))
                 event.accepted = true
             }
             Keys.onPressed: (event) => {
@@ -588,6 +598,23 @@ Rectangle {
                 }
                 if (event.modifiers !== Qt.NoModifier)
                     return
+                if (event.key === Qt.Key_Home) {
+                    if (listView.count <= 0)
+                        return
+                    controller.clickRow(0, false, false)
+                    listView.ensureRowVisible(0)
+                    event.accepted = true
+                    return
+                }
+                if (event.key === Qt.Key_End) {
+                    if (listView.count <= 0)
+                        return
+                    const row = listView.count - 1
+                    controller.clickRow(row, false, false)
+                    listView.ensureRowVisible(row)
+                    event.accepted = true
+                    return
+                }
                 if (event.key === Qt.Key_M) {
                     root.openPlaylistMenu()
                     event.accepted = true
@@ -693,7 +720,9 @@ Rectangle {
                     function onSelectionChanged() { del.selected = controller.isRowSelected(del.index) }
                 }
 
-                color: selected ? Theme.pressed : ma.containsMouse ? Theme.hover : "transparent"
+                color: selected
+                    ? (root.focusWithinPlaylist ? Theme.pressed : Theme.selected)
+                    : (ma.containsMouse ? Theme.hover : "transparent")
                 opacity: DragManager.isDragging && DragManager.sourceId === root.playlistId && DragManager.draggedIndices.indexOf(index) >= 0 ? 0.4 : 1
 
                 TrackColumnsRow {

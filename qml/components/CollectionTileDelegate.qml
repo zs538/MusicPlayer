@@ -110,6 +110,7 @@ Item {
                     anchors.fill: parent
                     acceptedButtons: Qt.NoButton
                     hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
                     property point toolTipAnchorPos: Qt.point(0, 0)
 
                     function updateToolTipAnchor(x, y) {
@@ -147,6 +148,7 @@ Item {
                     anchors.fill: parent
                     acceptedButtons: Qt.NoButton
                     hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
                     property point toolTipAnchorPos: Qt.point(0, 0)
 
                     function updateToolTipAnchor(x, y) {

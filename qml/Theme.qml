@@ -23,7 +23,7 @@ QtObject {
     readonly property color errorBg: "#ffebee"
     
     readonly property color hover: "#f0f0f0"
-    readonly property color selected: "#e3f2fd"
+    readonly property color selected: "#e6e6e6"
     readonly property color pressed: "#d0d0d0"
     
     readonly property int radiusNone: 0
