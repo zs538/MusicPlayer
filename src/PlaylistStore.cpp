@@ -13,7 +13,7 @@
 PlaylistStore::PlaylistStore(QObject *parent)
     : QObject(parent)
 {
-    createNewTab(QStringLiteral("Playlist 1"));
+    createNewTab();
     
     // Connect to settings to enforce generated playlist count when it changes
     Settings *settings = Settings::instance();
@@ -61,7 +61,7 @@ PlaylistStore::~PlaylistStore()
 
 QString PlaylistStore::createNewTab(const QString &name, bool isUserCreated)
 {
-    QString tabName = name.isEmpty() ? QStringLiteral("Playlist %1").arg(m_tabs.size() + 1) : name;
+    QString tabName = name.isEmpty() ? QStringLiteral("New Playlist") : name;
     
     Tab tab;
     tab.uuid = QUuid::createUuid();

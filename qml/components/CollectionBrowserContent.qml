@@ -493,9 +493,10 @@ Item {
             WheelHandler {
                 acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                 onWheel: (e) => {
+                    const wheelBoost = 1.35
                     let minY = gridView.originY
                     let maxY = gridView.originY + gridView.contentHeight - gridView.height
-                    gridView.contentY = Math.max(minY, Math.min(maxY, gridView.contentY - e.angleDelta.y))
+                    gridView.contentY = Math.max(minY, Math.min(maxY, gridView.contentY - e.angleDelta.y * wheelBoost))
                 }
             }
             onContentHeightChanged: {

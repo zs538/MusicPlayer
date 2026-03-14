@@ -72,6 +72,15 @@ Rectangle {
         focusPlaylist()
         playlistHeader.startRename()
     }
+    function selectAllTracks() {
+        controller.selectAll()
+        focusPlaylist()
+    }
+    function closeViewedPlaylist() {
+        if (AppViewModel.playlistTabsModel.rowCount() <= 1)
+            return
+        AppViewModel.playlistStore.closeTab(root.playlistId)
+    }
     function setPlaylistTrackListLayout(layout) {
         let normalized = TrackListColumnsSupport.ensureLayout(layout)
         playlistTrackListLayout = normalized
@@ -537,6 +546,20 @@ Rectangle {
                         event.accepted = true
                     } else if (event.key === Qt.Key_L) {
                         root.stepViewedPlaylist(1)
+                        event.accepted = true
+                    }
+                    return
+                }
+                if (event.modifiers === Qt.ControlModifier) {
+                    if (event.key === Qt.Key_A) {
+                        root.selectAllTracks()
+                        event.accepted = true
+                    }
+                    return
+                }
+                if (event.modifiers === (Qt.ControlModifier | Qt.ShiftModifier)) {
+                    if (event.key === Qt.Key_C) {
+                        root.closeViewedPlaylist()
                         event.accepted = true
                     }
                     return
