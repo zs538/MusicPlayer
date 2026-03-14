@@ -11,6 +11,7 @@ Rectangle {
 
     implicitHeight: 32
     property real lastNonZeroVolume: Settings.volume > 0 ? Settings.volume : 1.0
+    signal focusReturnRequested()
 
     component SectionSeparator: Rectangle {
         Layout.preferredWidth: 1
@@ -215,6 +216,21 @@ Rectangle {
             onMoved: {
                 seeking = true
                 displayValue = value
+            }
+
+            Keys.onLeftPressed: (event) => {
+                AppViewModel.seek(Math.max(0, AppViewModel.positionMs - 5000))
+                event.accepted = true
+            }
+
+            Keys.onRightPressed: (event) => {
+                AppViewModel.seek(Math.min(AppViewModel.durationMs, AppViewModel.positionMs + 5000))
+                event.accepted = true
+            }
+
+            Keys.onEscapePressed: (event) => {
+                root.focusReturnRequested()
+                event.accepted = true
             }
 
             Binding {

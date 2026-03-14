@@ -86,6 +86,12 @@ ApplicationWindow {
             Layout.preferredHeight: 32
             Layout.minimumHeight: 28
             Layout.maximumHeight: 44
+            onFocusReturnRequested: {
+                if (playlistPanel.focusWithinPlaylist)
+                    playlistPanel.focusPlaylist()
+                else
+                    collectionPanel.focusBrowser()
+            }
             onSettingsRequested: {
                 if (settingsWindow.visible) {
                     settingsWindow.close()
