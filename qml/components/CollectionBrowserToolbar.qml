@@ -8,6 +8,7 @@ Rectangle {
 
     property var browserModel: null
     signal searchFieldEscapePressed()
+    signal searchFieldAccepted()
     property bool showBreadcrumbHomeButton: true
     property var customGroupKeys: []
     property string currentOpenAction: "openPanel"
@@ -207,6 +208,14 @@ Rectangle {
                 onTextChanged: root.searchFilterChanged(text)
                 Keys.onEscapePressed: (event) => {
                     root.searchFieldEscapePressed()
+                    event.accepted = true
+                }
+                Keys.onReturnPressed: (event) => {
+                    root.searchFieldAccepted()
+                    event.accepted = true
+                }
+                Keys.onEnterPressed: (event) => {
+                    root.searchFieldAccepted()
                     event.accepted = true
                 }
 

@@ -34,6 +34,15 @@ Item {
     function focusFilterField() {
         topStrip.focusSearchField()
     }
+    function clearSearchFilter() {
+        if (topStrip.searchField.text.length > 0)
+            topStrip.searchField.clear()
+    }
+    function acceptFilterField() {
+        if (gridView.count > 0)
+            gridView.selectIndex(0, false)
+        root.focusBrowser()
+    }
     function contextKey(filter, groupBy) {
         return JSON.stringify({ filter: filter, groupBy: groupBy })
     }
@@ -52,18 +61,30 @@ Item {
     }
     function doNavigate(filter, groupBy) {
         const rememberedEntryId = rememberedSelectionForContext(filter, groupBy)
+        const scrollY = _scrollY
+        const selectedEntryId = currentSelectedEntryId()
         gridView.pendingNavigateSelectionEntryId = rememberedEntryId
         gridView.selectFirstAfterNavigation = rememberedEntryId.length === 0
-        browserModel.navigate(filter, groupBy, _scrollY, currentSelectedEntryId())
+        clearSearchFilter()
+        browserModel.navigate(filter, groupBy, scrollY, selectedEntryId)
     }
     function doGoBack() {
-        browserModel.goBack(_scrollY, currentSelectedEntryId())
+        const scrollY = _scrollY
+        const selectedEntryId = currentSelectedEntryId()
+        clearSearchFilter()
+        browserModel.goBack(scrollY, selectedEntryId)
     }
     function doGoForward() {
-        browserModel.goForward(_scrollY, currentSelectedEntryId())
+        const scrollY = _scrollY
+        const selectedEntryId = currentSelectedEntryId()
+        clearSearchFilter()
+        browserModel.goForward(scrollY, selectedEntryId)
     }
     function jumpToBreadcrumb(index) {
-        browserModel.jumpToBreadcrumb(index, _scrollY, currentSelectedEntryId())
+        const scrollY = _scrollY
+        const selectedEntryId = currentSelectedEntryId()
+        clearSearchFilter()
+        browserModel.jumpToBreadcrumb(index, scrollY, selectedEntryId)
     }
     function contextGroupTypeForFilter(filter) {
         return filter.length > 0 ? filter[filter.length - 1].field : "all"
@@ -287,6 +308,7 @@ Item {
             onSubtitleOptionSelected: (key) => root.setSubtitleOption(key)
             onSearchFilterChanged: (text) => browserModel.searchFilter = text
             onSearchFieldEscapePressed: root.focusBrowser()
+            onSearchFieldAccepted: root.acceptFilterField()
             onOpenActionChanged: (action) => {
                 Settings.setGroupTypeOpenAction(browserModel.groupBy, action)
                 root._currentOpenAction = action

@@ -28,6 +28,28 @@ Item {
         anchors.fill: parent
         color: gridMouseArea.containsMouse ? "#ebebeb" : "transparent"
 
+        MouseArea {
+            id: gridMouseArea
+            anchors.fill: parent
+            hoverEnabled: true
+            acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+            cursorShape: Qt.PointingHandCursor
+
+            onClicked: (mouse) => {
+                if (mouse.button === Qt.LeftButton) {
+                    gridDel.clicked(gridDel.index, Qt.LeftButton)
+                } else if (mouse.button === Qt.RightButton) {
+                    gridDel.contextMenuRequested(gridDel.index, gridDel.entryType, gridDel.groupType, gridDel.groupValue, gridDel.filePath)
+                } else if (mouse.button === Qt.MiddleButton) {
+                    gridDel.clicked(gridDel.index, Qt.MiddleButton)
+                }
+            }
+
+            onDoubleClicked: {
+                gridDel.doubleClicked(gridDel.index)
+            }
+        }
+
         ColumnLayout {
             anchors.fill: parent
             anchors.leftMargin: 4
@@ -83,16 +105,31 @@ Item {
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignLeft
 
-                HoverHandler {
-                    id: titleHoverHandler
-                }
+                MouseArea {
+                    id: titleMouseArea
+                    anchors.fill: parent
+                    acceptedButtons: Qt.NoButton
+                    hoverEnabled: true
+                    property point toolTipAnchorPos: Qt.point(0, 0)
 
-                StyledHoverToolTip {
-                    parent: titleLabel
-                    visible: titleHoverHandler.hovered && titleLabel.text.length > 0
-                    delay: 800
-                    timeout: 5000
-                    text: titleLabel.text
+                    function updateToolTipAnchor(x, y) {
+                        toolTipAnchorPos = Qt.point(x + 8, y + 12)
+                    }
+
+                    StyledHoverToolTip {
+                        id: titleToolTip
+                        parent: titleMouseArea
+                        visible: titleMouseArea.containsMouse && titleLabel.text.length > 0
+                        delay: 800
+                        timeout: 5000
+                        text: titleLabel.text
+                        x: Math.max(0, titleMouseArea.toolTipAnchorPos.x)
+                        y: Math.max(0, titleMouseArea.toolTipAnchorPos.y)
+                        onVisibleChanged: {
+                            if (visible)
+                                titleMouseArea.updateToolTipAnchor(titleMouseArea.mouseX, titleMouseArea.mouseY)
+                        }
+                    }
                 }
             }
 
@@ -105,39 +142,32 @@ Item {
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignLeft
 
-                HoverHandler {
-                    id: subtitleHoverHandler
+                MouseArea {
+                    id: subtitleMouseArea
+                    anchors.fill: parent
+                    acceptedButtons: Qt.NoButton
+                    hoverEnabled: true
+                    property point toolTipAnchorPos: Qt.point(0, 0)
+
+                    function updateToolTipAnchor(x, y) {
+                        toolTipAnchorPos = Qt.point(x + 8, y + 12)
+                    }
+
+                    StyledHoverToolTip {
+                        id: subtitleToolTip
+                        parent: subtitleMouseArea
+                        visible: subtitleMouseArea.containsMouse && subtitleLabel.text.length > 0
+                        delay: 800
+                        timeout: 5000
+                        text: subtitleLabel.text
+                        x: Math.max(0, subtitleMouseArea.toolTipAnchorPos.x)
+                        y: Math.max(0, subtitleMouseArea.toolTipAnchorPos.y)
+                        onVisibleChanged: {
+                            if (visible)
+                                subtitleMouseArea.updateToolTipAnchor(subtitleMouseArea.mouseX, subtitleMouseArea.mouseY)
+                        }
+                    }
                 }
-
-                StyledHoverToolTip {
-                    parent: subtitleLabel
-                    visible: subtitleHoverHandler.hovered && subtitleLabel.text.length > 0
-                    delay: 800
-                    timeout: 5000
-                    text: subtitleLabel.text
-                }
-            }
-        }
-
-        MouseArea {
-            id: gridMouseArea
-            anchors.fill: parent
-            hoverEnabled: true
-            acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
-            cursorShape: Qt.PointingHandCursor
-
-            onClicked: (mouse) => {
-                if (mouse.button === Qt.LeftButton) {
-                    gridDel.clicked(gridDel.index, Qt.LeftButton)
-                } else if (mouse.button === Qt.RightButton) {
-                    gridDel.contextMenuRequested(gridDel.index, gridDel.entryType, gridDel.groupType, gridDel.groupValue, gridDel.filePath)
-                } else if (mouse.button === Qt.MiddleButton) {
-                    gridDel.clicked(gridDel.index, Qt.MiddleButton)
-                }
-            }
-
-            onDoubleClicked: {
-                gridDel.doubleClicked(gridDel.index)
             }
         }
 
