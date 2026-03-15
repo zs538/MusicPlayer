@@ -388,7 +388,7 @@ Window {
                                     enabled: periodicRescanCheckBox.checked
                                     Layout.preferredWidth: 90
                                     PointingCursor {}
-                                    onValueCommitted: {
+                                    onValueCommitted: function(committedValue) {
                                         root.periodicRescanFallbackMinutes = committedValue
                                         if (Settings.periodicRescanMinutes > 0)
                                             Settings.periodicRescanMinutes = committedValue
@@ -519,7 +519,9 @@ Window {
                                 enabled: Settings.generatedPlaylistsEnabled
                                 Layout.preferredWidth: 80
                                 PointingCursor {}
-                                onValueCommitted: Settings.generatedPlaylistCount = committedValue
+                                onValueCommitted: function(committedValue) {
+                                    Settings.generatedPlaylistCount = committedValue
+                                }
                             }
                         }
 
@@ -607,7 +609,9 @@ Window {
                                     value: Settings.gridCellMinWidth
                                     Layout.preferredWidth: 84
                                     PointingCursor {}
-                                    onValueCommitted: Settings.gridCellMinWidth = committedValue
+                                    onValueCommitted: function(committedValue) {
+                                        Settings.gridCellMinWidth = committedValue
+                                    }
                                 }
 
                                 Label {
@@ -632,7 +636,9 @@ Window {
                                     value: Settings.gridCellMaxWidth
                                     Layout.preferredWidth: 84
                                     PointingCursor {}
-                                    onValueCommitted: Settings.gridCellMaxWidth = committedValue
+                                    onValueCommitted: function(committedValue) {
+                                        Settings.gridCellMaxWidth = committedValue
+                                    }
                                 }
 
                                 Label {
@@ -679,7 +685,9 @@ Window {
                                 stepSize: 10
                                 value: Settings.bufferSizeMs
                                 PointingCursor {}
-                                onValueCommitted: Settings.bufferSizeMs = committedValue
+                                onValueCommitted: function(committedValue) {
+                                    Settings.bufferSizeMs = committedValue
+                                }
                             }
 
                             Label {
@@ -711,7 +719,9 @@ Window {
                                 stepSize: 100
                                 value: Settings.gaplessLeadInMs
                                 PointingCursor {}
-                                onValueCommitted: Settings.gaplessLeadInMs = committedValue
+                                onValueCommitted: function(committedValue) {
+                                    Settings.gaplessLeadInMs = committedValue
+                                }
                             }
 
                             Label {
