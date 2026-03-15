@@ -522,7 +522,7 @@ bool AudioEngine::initAudioOutput(int sampleRate, int channels)
     m_audioThread->setObjectName(QStringLiteral("AudioOutputThread"));
     
     // Create worker (will be moved to audio thread)
-    m_audioWorker = new AudioOutputWorker(m_ringBuffer.get());
+    m_audioWorker = new AudioOutputWorker(m_ringBuffer.get(), m_volume);
     m_audioWorker->moveToThread(m_audioThread.get());
     
     // Connect worker signals to engine slots (queued connections for thread safety)
@@ -815,10 +815,6 @@ void AudioEngine::onAudioWorkerInitialized(bool success)
     if (!success) {
         qCWarning(lcAudioEngine) << "Audio worker initialization failed";
         m_audioInitialized = false;
-    } else {
-        // Apply current volume to the newly initialized audio sink
-        QMetaObject::invokeMethod(m_audioWorker, "setVolume", Qt::QueuedConnection,
-                                  Q_ARG(qreal, m_volume));
     }
 }
 

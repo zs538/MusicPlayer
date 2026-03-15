@@ -25,7 +25,7 @@ class AudioOutputWorker : public QObject
     Q_OBJECT
 
 public:
-    explicit AudioOutputWorker(SPSCRingBuffer *ringBuffer, QObject *parent = nullptr);
+    explicit AudioOutputWorker(SPSCRingBuffer *ringBuffer, qreal initialVolume = 1.0, QObject *parent = nullptr);
     ~AudioOutputWorker();
 
 public slots:
@@ -49,6 +49,8 @@ private slots:
     void pushPosition();
 
 private:
+    void setOutputArmed(bool armed);
+
     SPSCRingBuffer *m_ringBuffer = nullptr;
     std::unique_ptr<QAudioSink> m_audioSink;
     std::unique_ptr<BufferIODevice> m_bufferDevice;
@@ -56,6 +58,7 @@ private:
     QTimer *m_positionTimer = nullptr;
     int m_bufferMs = 100;
     bool m_running = false;  // Only accessed from audio thread
+    qreal m_volume = 1.0;
 };
 
 #endif // AUDIOOUTPUTWORKER_H

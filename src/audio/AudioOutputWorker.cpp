@@ -8,9 +8,10 @@
 
 Q_LOGGING_CATEGORY(lcAudioWorker, "musicplayer.audio.worker")
 
-AudioOutputWorker::AudioOutputWorker(SPSCRingBuffer *ringBuffer, QObject *parent)
+AudioOutputWorker::AudioOutputWorker(SPSCRingBuffer *ringBuffer, qreal initialVolume, QObject *parent)
     : QObject(parent)
     , m_ringBuffer(ringBuffer)
+    , m_volume(qBound<qreal>(0.0, initialVolume, 1.0))
 {
     // Position timer runs in this thread's event loop
     m_positionTimer = new QTimer(this);
@@ -50,7 +51,8 @@ void AudioOutputWorker::initialize(int sampleRate, int channels, int bufferMs)
     connect(m_audioSink.get(), &QAudioSink::stateChanged,
             this, &AudioOutputWorker::onAudioStateChanged);
     
-    m_bufferDevice = std::make_unique<BufferIODevice>(m_ringBuffer);
+    m_bufferDevice = std::make_unique<BufferIODevice>(m_ringBuffer, static_cast<float>(m_volume));
+    setOutputArmed(false);
     
     qCDebug(lcAudioWorker) << "initialize()" << "rate=" << sampleRate
                            << "ch=" << channels << "bufferMs=" << bufferMs;
@@ -65,16 +67,17 @@ void AudioOutputWorker::start()
         return;
     }
     
+    setOutputArmed(false);
     m_audioSink->start(m_bufferDevice.get());
-    m_audioSink->suspend();  // Start suspended, resume() will activate
     m_running = true;
     
-    qCDebug(lcAudioWorker) << "start() - audio sink started (suspended)";
+    qCDebug(lcAudioWorker) << "start() - audio sink started (output gated)";
 }
 
 void AudioOutputWorker::suspend()
 {
     if (m_audioSink && m_running) {
+        setOutputArmed(false);
         m_audioSink->suspend();
         m_positionTimer->stop();
         qCDebug(lcAudioWorker) << "suspend()";
@@ -84,7 +87,10 @@ void AudioOutputWorker::suspend()
 void AudioOutputWorker::resume()
 {
     if (m_audioSink && m_running) {
-        m_audioSink->resume();
+        setOutputArmed(true);
+        if (m_audioSink->state() == QAudio::SuspendedState) {
+            m_audioSink->resume();
+        }
         m_positionTimer->start();
         
         // Aggressively force QAudioSink to 1.0 to combat PipeWire's stream-restore
@@ -119,11 +125,12 @@ void AudioOutputWorker::resume()
 
 void AudioOutputWorker::setVolume(qreal volume)
 {
-    qCDebug(lcAudioWorker) << "setVolume:" << volume;
+    m_volume = qBound<qreal>(0.0, volume, 1.0);
+    qCDebug(lcAudioWorker) << "setVolume:" << m_volume;
     // Software volume control via BufferIODevice sample scaling
     // QAudioSink is kept at 1.0 to avoid PipeWire volume stacking
     if (m_bufferDevice) {
-        m_bufferDevice->setVolume(static_cast<float>(volume));
+        m_bufferDevice->setVolume(static_cast<float>(m_volume));
     }
 }
 
@@ -131,6 +138,7 @@ void AudioOutputWorker::stop()
 {
     m_running = false;
     m_positionTimer->stop();
+    setOutputArmed(false);
     
     if (m_audioSink) {
         m_audioSink->stop();
@@ -145,6 +153,13 @@ void AudioOutputWorker::onAudioStateChanged(QAudio::State state)
 {
     qCDebug(lcAudioWorker) << "QAudioSink stateChanged:" << state;
     emit stateChanged(state);
+}
+
+void AudioOutputWorker::setOutputArmed(bool armed)
+{
+    if (m_bufferDevice) {
+        m_bufferDevice->setArmed(armed);
+    }
 }
 
 void AudioOutputWorker::pushPosition()
