@@ -1,6 +1,7 @@
 #include <QCoreApplication>
 #include <QGuiApplication>
 #include <QIcon>
+#include <QLoggingCategory>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
@@ -9,6 +10,11 @@
 int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
+    
+    // Disable debug logging in release builds
+    #ifndef QT_DEBUG
+    QLoggingCategory::setFilterRules("*.debug=false\n*.info=false\nmusicplayer.*.warning=true\nmusicplayer.*.critical=true");
+    #endif
     
     QCoreApplication::setOrganizationName("MusicPlayer");
     QCoreApplication::setApplicationName("MusicPlayer");
