@@ -129,7 +129,13 @@ endif()
 
 qt_standard_project_setup(REQUIRES 6.5)
 
+set(app_icon_resource_windows "")
+if(WIN32)
+    set(app_icon_resource_windows "${CMAKE_CURRENT_SOURCE_DIR}/resources/windows/app.rc")
+endif()
+
 qt_add_executable(appmusicplayer
+    ${app_icon_resource_windows}
     src/main.cpp
     src/AppViewModel.h
     src/AppViewModel.cpp
@@ -235,6 +241,7 @@ qt_add_qml_module(appmusicplayer
         qml/settings/SettingsWindow.qml
     RESOURCES
         qml/logo-image-t.png
+        qml/logo-icon-256.png
         qml/icons/skip_previous.svg
         qml/icons/play_arrow.svg
         qml/icons/pause.svg

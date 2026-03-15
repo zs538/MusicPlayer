@@ -68,7 +68,7 @@ ApplicationWindow {
                     id: coverPanel
                     Layout.fillWidth: true
                     Layout.preferredHeight: width
-                    Layout.minimumHeight: 200
+                    Layout.minimumHeight: root.height * 0.20
                     Layout.maximumHeight: root.height * 0.70
                 }
 

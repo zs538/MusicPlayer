@@ -161,9 +161,18 @@ Window {
         onActivated: root.close()
     }
 
+    Rectangle {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        height: 1
+        color: Theme.border
+    }
+
     Flickable {
         id: pageFlickable
         anchors.fill: parent
+        anchors.topMargin: 1
         clip: true
         contentWidth: width
         contentHeight: contentColumn.implicitHeight + 24

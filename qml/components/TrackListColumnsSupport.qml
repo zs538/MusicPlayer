@@ -453,6 +453,14 @@ QtObject {
         if (!key.length)
             return ""
         let value = valueForTrack(trackData, key)
+        if (key === "trackNumber") {
+            if (value === undefined || value === null)
+                return "-"
+            if (typeof value === "number")
+                return value > 0 ? String(value) : "-"
+            let text = String(value).trim()
+            return text.length > 0 && text !== "0" ? text : "-"
+        }
         if (value === undefined || value === null)
             return ""
         if (key === "durationMs")

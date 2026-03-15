@@ -1,5 +1,6 @@
 #include <QCoreApplication>
 #include <QGuiApplication>
+#include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
@@ -14,6 +15,7 @@ int main(int argc, char *argv[])
     QCoreApplication::setApplicationVersion(QStringLiteral(APP_VERSION));
     
     QQuickStyle::setStyle("Fusion");
+    app.setWindowIcon(QIcon(QStringLiteral(":/qt/qml/MusicPlayer/logo-icon-256.png")));
     
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("AppVersion", QCoreApplication::applicationVersion());
