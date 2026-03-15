@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- Qt 6.5 or higher
+- Qt 6.10
 - CMake 3.16 or higher
 - FFmpeg development libraries (libavformat, libavcodec, libavutil, libswresample)
 - TagLib development libraries
@@ -20,7 +20,7 @@ make
 
 ### Windows
 ```bash
-# Install Qt 6.5+, CMake, FFmpeg dev libraries, TagLib
+# Install Qt 6.10, CMake, FFmpeg dev libraries, TagLib
 cd MusicPlayer
 mkdir build && cd build
 cmake ..

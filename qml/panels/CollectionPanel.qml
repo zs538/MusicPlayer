@@ -7,6 +7,8 @@ Rectangle {
     id: root
     color: Theme.background
 
+    signal addLibraryRequested()
+
     readonly property alias focusWithinBrowser: browserContent.focusWithinBrowser
 
     function focusBrowser() {
@@ -25,5 +27,6 @@ Rectangle {
         id: browserContent
         anchors.fill: parent
         initialGroupBy: Settings.groupTypeNextGroupBy("all")
+        onAddLibraryRequested: root.addLibraryRequested()
     }
 }

@@ -29,7 +29,7 @@ void updateStoredValue(QSettings &settings, T &member, const T &value, const QSt
 
 Settings::Settings(QObject *parent)
     : QObject(parent)
-    , m_settings("MusicPlayer", "MusicPlayer-")
+    , m_settings("MusicPlayer", "MusicPlayer")
 {
     s_instance = this;
     load();
@@ -166,15 +166,15 @@ void Settings::load()
     m_volume = m_settings.value("playback/volume", 1.0).toDouble();
     m_outputDevice = m_settings.value("audio/outputDevice", "").toString();
     m_bufferSizeMs = m_settings.value("audio/bufferSizeMs", 100).toInt();
-    m_gaplessLeadInMs = qBound(100, m_settings.value("audio/gaplessLeadInMs", 2000).toInt(), 10000);
+    m_gaplessLeadInMs = qBound(100, m_settings.value("audio/gaplessLeadInMs", 500).toInt(), 10000);
     m_restoreSession = m_settings.value("session/restore", true).toBool();
-    m_addTracksPolicy = m_settings.value("behavior/addTracksPolicy", AddNeverStart).toInt();
-    m_previousButtonAction = m_settings.value("behavior/previousButtonAction", RestartThenJump).toInt();
+    m_addTracksPolicy = m_settings.value("behavior/addTracksPolicy", AddStartIfStopped).toInt();
+    m_previousButtonAction = m_settings.value("behavior/previousButtonAction", JumpToPrevious).toInt();
     m_openingTracksAction = m_settings.value("behavior/openingTracksAction", OpeningAppendToViewed).toInt();
     m_generatedPlaylistsEnabled = m_settings.value("behavior/generatedPlaylistsEnabled", true).toBool();
     m_generatedPlaylistCount = m_settings.value("behavior/generatedPlaylistCount", 5).toInt();
-    m_gridCellMinWidth = qBound(60, m_settings.value("appearance/gridCellMinWidth", 100).toInt(), 300);
-    m_gridCellMaxWidth = qBound(80, m_settings.value("appearance/gridCellMaxWidth", 200).toInt(), 400);
+    m_gridCellMinWidth = qBound(60, m_settings.value("appearance/gridCellMinWidth", 120).toInt(), 300);
+    m_gridCellMaxWidth = qBound(80, m_settings.value("appearance/gridCellMaxWidth", 140).toInt(), 400);
     if (m_gridCellMaxWidth < m_gridCellMinWidth)
         m_gridCellMaxWidth = m_gridCellMinWidth;
     m_watcherEnabled = m_settings.value("library/watcherEnabled", true).toBool();

@@ -10,6 +10,15 @@
 
 SessionManager *SessionManager::s_instance = nullptr;
 
+namespace {
+
+QString appDataDirectoryPath()
+{
+    return QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + "/MusicPlayer";
+}
+
+}
+
 SessionManager::SessionManager(ConstructionTag, QObject *parent)
     : QObject(parent)
 {
@@ -77,7 +86,7 @@ void SessionManager::initialize(PlaylistStore *playlistStore)
 
 QString SessionManager::sessionFilePath() const
 {
-    QString dataPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    const QString dataPath = appDataDirectoryPath();
     QDir().mkpath(dataPath);
     return dataPath + "/session.json";
 }

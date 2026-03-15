@@ -55,7 +55,7 @@ QtObject {
         }
 
         let meta = {
-            trackNumber: { title: "#", weight: 42 / 354, minWidth: 36, alignment: "right", tone: "secondary" },
+            trackNumber: { title: "#", weight: 42 / 354, minWidth: 36, alignment: "center", tone: "secondary" },
             title: { title: "Title", weight: 240 / 354, minWidth: 72, alignment: "left", tone: "primary" },
             durationMs: { title: "Duration", weight: 72 / 354, minWidth: 48, alignment: "right", tone: "secondary" },
             artist: { title: "Artist", weight: 160 / 354, minWidth: 64, alignment: "left", tone: "primary" },

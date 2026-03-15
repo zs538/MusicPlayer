@@ -11,7 +11,7 @@ int main(int argc, char *argv[])
     QGuiApplication app(argc, argv);
     
     QCoreApplication::setOrganizationName("MusicPlayer");
-    QCoreApplication::setApplicationName("MusicPlayer-");
+    QCoreApplication::setApplicationName("MusicPlayer");
     QCoreApplication::setApplicationVersion(QStringLiteral(APP_VERSION));
     
     QQuickStyle::setStyle("Fusion");

@@ -21,6 +21,11 @@ QString baseTrackSelectSql()
         "file_name, file_type, file_size, modified_time FROM tracks");
 }
 
+QString appDataDirectoryPath()
+{
+    return QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + "/MusicPlayer";
+}
+
 }
 
 LibraryDatabase::LibraryDatabase(QObject *parent)
@@ -38,7 +43,7 @@ bool LibraryDatabase::open(const QString &path)
 {
     m_dbPath = path;
     if (m_dbPath.isEmpty()) {
-        QString dataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+        const QString dataDir = appDataDirectoryPath();
         QDir().mkpath(dataDir);
         m_dbPath = dataDir + "/library.db";
     }

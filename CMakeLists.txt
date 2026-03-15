@@ -11,7 +11,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 set(MSYS2_MINGW_PREFIX "C:/msys64/mingw64")
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Quick QuickControls2 Multimedia Concurrent Sql Svg)
+find_package(Qt6 6.10 REQUIRED COMPONENTS Quick QuickControls2 Multimedia Concurrent Sql Svg)
 
 set(THIRD_PARTY_INCLUDE_DIRS "")
 set(THIRD_PARTY_LIBRARIES "")
@@ -127,7 +127,7 @@ else()
     endif()
 endif()
 
-qt_standard_project_setup(REQUIRES 6.5)
+qt_standard_project_setup(REQUIRES 6.10)
 
 set(app_icon_resource_windows "")
 if(WIN32)
@@ -242,6 +242,7 @@ qt_add_qml_module(appmusicplayer
     RESOURCES
         qml/logo-image-t.png
         qml/logo-icon-256.png
+        qml/logo-welcome-t.png
         qml/icons/skip_previous.svg
         qml/icons/play_arrow.svg
         qml/icons/pause.svg
