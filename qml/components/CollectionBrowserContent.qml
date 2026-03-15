@@ -10,8 +10,6 @@ import MusicPlayer
 Item {
     id: root
 
-    signal addLibraryRequested()
-
     // Initial state (set once by parent)
     property var initialFilter: []
     property string initialGroupBy: "albumartist"
@@ -26,7 +24,6 @@ Item {
     readonly property alias model: browserModel
     readonly property real _scrollY: gridView.contentY
     readonly property bool focusWithinBrowser: root.activeFocus || topStrip.searchField.activeFocus || gridView.activeFocus
-    readonly property bool showWelcomePlaceholder: AppViewModel.watchFolders.length === 0
 
     function currentSelectedEntryId() {
         return gridView && gridView.selectedIndex >= 0 ? browserModel.entryIdAt(gridView.selectedIndex) : ""
@@ -551,71 +548,6 @@ Item {
                     contentY = originY
             }
             onVisibleChanged: if (visible) contentY = originY
-
-            Item {
-                id: welcomePlaceholder
-                anchors.fill: parent
-                z: 2
-                visible: root.showWelcomePlaceholder
-
-                Column {
-                    id: welcomeTextBlock
-                    anchors.centerIn: parent
-                    width: Math.max(0, Math.min(240, gridView.width - 48))
-                    spacing: 2
-
-                    property int textPixelSize: Math.max(10, Math.min(13, Math.min(gridView.width * 0.022, gridView.height * 0.032)))
-                    property int secondaryTextPixelSize: Math.max(9, textPixelSize - 1)
-
-                    Text {
-                        width: parent.width
-                        text: "Welcome to <b>MusicPlayer</b>"
-                        textFormat: Text.RichText
-                        horizontalAlignment: Text.AlignRight
-                        wrapMode: Text.Wrap
-                        color: Theme.textSecondary
-                        font.pixelSize: parent.textPixelSize
-                    }
-
-                    Item {
-                        width: parent.width
-                        height: lineTwoRow.height
-
-                        Row {
-                            id: lineTwoRow
-                            anchors.right: parent.right
-                            spacing: 0
-
-                            Text {
-                                text: "add your collection "
-                                color: Theme.textSecondary
-                                font.pixelSize: welcomeTextBlock.secondaryTextPixelSize
-                            }
-
-                            Item {
-                                width: hereText.width
-                                height: hereText.height
-
-                                Text {
-                                    id: hereText
-                                    text: "here"
-                                    color: hereMouseArea.pressed ? Theme.textPrimary : (hereMouseArea.containsMouse ? Theme.textPrimary : Theme.textSecondary)
-                                    font.pixelSize: welcomeTextBlock.secondaryTextPixelSize
-                                    font.underline: true
-                                }
-
-                                MouseArea {
-                                    id: hereMouseArea
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: root.addLibraryRequested()
-                                }
-                            }
-                        }
-                    }
-                }
-            }
 
             Keys.onLeftPressed: (event) => {
                 if ((event.modifiers & Qt.AltModifier) !== 0) {

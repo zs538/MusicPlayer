@@ -242,7 +242,6 @@ qt_add_qml_module(appmusicplayer
     RESOURCES
         qml/logo-image-t.png
         qml/logo-icon-256.png
-        qml/logo-welcome-t.png
         qml/icons/skip_previous.svg
         qml/icons/play_arrow.svg
         qml/icons/pause.svg

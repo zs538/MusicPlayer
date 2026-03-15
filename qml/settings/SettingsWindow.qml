@@ -135,18 +135,6 @@ Window {
             folderModel.append({ path: folders[i] })
     }
 
-    function openLibraryFolderDialog(referenceWindow) {
-        if (!visible) {
-            resetGeometry(referenceWindow)
-            show()
-        }
-        raise()
-        requestActivate()
-        Qt.callLater(function() {
-            folderDialog.open()
-        })
-    }
-
     ListModel {
         id: folderModel
     }

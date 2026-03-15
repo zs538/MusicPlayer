@@ -827,12 +827,6 @@ Rectangle {
                 Rectangle { anchors.fill: parent; color: Theme.accent; opacity: parent.containsDrag ? 0.2 : 0 }
             }
 
-            Label {
-                anchors.centerIn: parent
-                text: "Empty playlist"
-                color: Theme.textMuted
-                visible: listView.count === 0
-            }
         }
 
     } // end ColumnLayout

@@ -85,7 +85,6 @@ ApplicationWindow {
                 id: collectionPanel
                 SplitView.fillWidth: true
                 SplitView.minimumWidth: 120
-                onAddLibraryRequested: openAddLibraryFlow()
             }
         }
 
@@ -123,10 +122,6 @@ ApplicationWindow {
         settingsWindow.show()
         settingsWindow.raise()
         settingsWindow.requestActivate()
-    }
-
-    function openAddLibraryFlow() {
-        settingsWindow.openLibraryFolderDialog(root)
     }
 
     // Keyboard shortcuts
