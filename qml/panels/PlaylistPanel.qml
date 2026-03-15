@@ -386,7 +386,7 @@ Rectangle {
                     icon.source: isActive && AppViewModel.playbackState === AppViewModel.Playing
                         ? Qt.resolvedUrl("../icons/play_arrow.svg")
                         : ""
-                    icon.color: Theme.textPrimary
+                    icon.color: highlighted ? palette.highlightedText : palette.text
                     icon.width: 12
                     icon.height: 12
                     PointingCursor {}
