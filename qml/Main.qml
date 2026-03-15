@@ -16,6 +16,12 @@ ApplicationWindow {
         anchors.fill: parent
         spacing: 0
 
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 1
+            color: Theme.border
+        }
+
         // Main content area: 2-column layout
         SplitView {
             id: mainSplitView
@@ -24,10 +30,13 @@ ApplicationWindow {
             orientation: Qt.Horizontal
 
             handle: Item {
-                implicitWidth: 10
+                implicitWidth: 12
                 implicitHeight: parent ? parent.height : 0
 
-                HoverHandler {
+                MouseArea {
+                    anchors.fill: parent
+                    acceptedButtons: Qt.NoButton
+                    hoverEnabled: true
                     cursorShape: Qt.SizeHorCursor
                 }
 
@@ -40,7 +49,7 @@ ApplicationWindow {
 
                     containmentMask: Item {
                         x: (splitHandleLine.width - width) / 2
-                        width: 12
+                        width: parent ? parent.width : 12
                         height: mainSplitView.height
                     }
                 }

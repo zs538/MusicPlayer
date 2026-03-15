@@ -7,8 +7,6 @@
 #include "Settings.h"
 #include "library/LibraryDatabase.h"
 #include "TrackFilter.h"
-#include <QFileInfo>
-
 BrowseActivationService::BrowseActivationService(QObject *parent)
     : QObject(parent)
 {
@@ -493,9 +491,13 @@ void BrowseActivationService::openCollectionEntryInNewPlaylist(const QString &en
     if (!track.isValid())
         return;
     
-    QString playlistName = track.title;
-    if (playlistName.isEmpty())
-        playlistName = QFileInfo(filePath).baseName();
+    const QString artistName = track.artist.trimmed().isEmpty()
+        ? QStringLiteral("Unknown")
+        : track.artist.trimmed();
+    const QString trackTitle = track.title.trimmed().isEmpty()
+        ? QStringLiteral("Unknown")
+        : track.title.trimmed();
+    const QString playlistName = artistName + QStringLiteral(" - ") + trackTitle;
     
     const bool hadExisting = !m_store->findGeneratedPlaylistByName(playlistName).isEmpty();
     QString targetId = m_store->getOrCreateGeneratedPlaylist(playlistName);
